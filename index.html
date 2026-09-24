@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Seeing with Electrons</title>
+<meta name="description" content="An interactive transmission electron microscope: TEM, STEM, 4D-STEM, diffraction, EDS and EELS, computed from wave optics in your browser.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<canvas id="gl" aria-label="3D cutaway of a transmission electron microscope column"></canvas>
+<div id="labels"></div>
+
+<header class="hero">
+  <p class="eyebrow">Interactive exhibit · Electron optics</p>
+  <h1>Seeing <em>with Electrons</em></h1>
+  <p class="lede">A working transmission electron microscope. Every detector image is computed from the physics: an electron wave passing through a real arrangement of atoms.</p>
+</header>
+
+<nav class="modes" aria-label="Operating mode"></nav>
+
+
+
+<div id="tourCap" class="tourcap" hidden></div>
+
+<section class="card explain">
+  <p class="eyebrow">What you are looking at</p>
+  <h2 id="infoTitle"></h2>
+  <div id="infoBody" class="body"></div>
+  <div id="change" class="change" hidden></div>
+  <div id="infoStats" class="stats"></div>
+</section>
+
+<section class="card detector">
+  <div class="dhead">
+    <span class="dot"></span><span id="detTitle"></span><span id="status" class="status"></span>
+    <span class="sp"></span><span id="secTitle" class="muted"></span>
+  </div>
+  <div class="dbody">
+    <canvas id="detMain" aria-label="Detector image"></canvas>
+    <canvas id="detSec" aria-label="Secondary detector view"></canvas>
+  </div>
+</section>
+
+<aside class="card controls">
+  <div class="chead"><p class="eyebrow">Controls</p><div class="icons">
+  <button id="btnLabels" title="Labels (L)" aria-label="Toggle labels"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button>
+  <button id="btnFull" title="Fullscreen" aria-label="Fullscreen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+  <button id="btnHelp" title="About" aria-label="About this exhibit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9.5"/><path d="M9.6 9.3a2.5 2.5 0 1 1 3.4 2.3c-.7.3-1 .8-1 1.5v.6"/><circle cx="12" cy="16.8" r=".6" fill="currentColor"/></svg></button>
+</div></div>
+  <div class="clarity">
+    <button data-v="edu"><b>Educational clarity</b><small>Labels, colour, no noise</small></button>
+    <button data-v="real"><b>Physically realistic</b><small>Shot noise, real detectors</small></button>
+  </div>
+  <div id="controlsBody"></div>
+</aside>
+
+
+<div id="help" class="modal" hidden>
+  <div class="card">
+    <button class="close" aria-label="Close">×</button>
+    <p class="eyebrow">About this exhibit</p>
+    <h2>How to <em>drive it</em></h2>
+    <ul>
+      <li><b>Drag</b> the 3D column to orbit, scroll to zoom. Keys <kbd>1</kbd>–<kbd>6</kbd> switch modes, <kbd>Space</kbd> pauses, <kbd>L</kbd> labels, <kbd>C</kbd> clarity, <kbd>R</kbd> resets the view.</li>
+      <li><b>Drag the detector image</b> to move the specimen stage; scroll it to change magnification. In diffraction, dragging the pattern tilts the crystal. Try to find the zone axis by following the Kikuchi lines.</li>
+      <li><b>4D-STEM:</b> hover the virtual image to read individual diffraction patterns; drag on the pattern to reshape the virtual detector.</li>
+      <li><b>EDS:</b> click a peak to map that element. <b>EELS:</b> drag on the spectrum to move the energy window.</li>
+    </ul>
+    <p class="eyebrow">What is computed, and how</p>
+    <p>The three specimens are real atomic structures: Au nanoparticles (FCC, [110]) on amorphous carbon; Si [110] against amorphous SiO₂; and a SrTiO₃ Σ5 (310) tilt boundary. Their projected potential is built atom by atom.</p>
+    <p><b>TEM</b> and <b>diffraction</b> treat the specimen as a phase object, then apply the full objective-lens transfer function: defocus, C<sub>s</sub>, aperture, and temporal and spatial coherence envelopes. <b>STEM</b> convolves the aberrated probe with a Z<sup>n</sup> scattering map. <b>4D-STEM</b> computes a real convergent-beam pattern (probe × transmission function, then FFT) at each of 1,600 probe positions. <b>EDS</b> uses real line energies, a Fano-limited detector response and Kramers bremsstrahlung. <b>EELS</b> uses Drude plasmons with Poisson plural scattering and real edge onsets.</p>
+    <p class="muted">Simplifications: thick-crystal dynamical scattering (channelling) is approximated by a saturating phase rather than full multislice, and cross-sections are schematic. Trends and length scales are right; absolute intensities are illustrative.</p>
+  </div>
+</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
