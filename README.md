@@ -1,5 +1,7 @@
 # Seeing with Electrons
 
+**Live exhibit: https://advanced-em.github.io/TEM-view/**
+
 An interactive transmission electron microscope in the browser, built as a small science-museum exhibit.
 
 - **3D cutaway column:** gun, condensers, scan coils, objective, apertures, projector, fluorescent screen, direct electron detector, ADF/BF detectors, EDS detector, EELS prism. The beam path reconfigures for each mode.
