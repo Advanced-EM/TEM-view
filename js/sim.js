@@ -1,5 +1,6 @@
 // Simulation engine: turns the instrument state into detector signals.
 import * as P from './physics.js';
+import { Ronch, CBED, MicroED, Tomo } from './techniques.js';
 
 const SP = P.SPECIMENS;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -52,12 +53,25 @@ export class Sim {
     this.version = 0;
     this.raster = 0;
     this.frameNoise = 0;
+    this.ronch = new Ronch(this);
+    this.cbed = new CBED(this);
+    this._med = null; this._tomo = null;
   }
+  get med() { return (this._med ||= new MicroED(this)); }
+  get tomo() { return (this._tomo ||= new Tomo(this)); }
 
   get spec() { return SP[this.S.spec]; }
   get lam() { return P.wavelength(this.S.kV); }
   CsA() { return this.S.corrector ? this.S.csCor * 1e4 : this.S.csUnc * 1e7; } // Å
-  alpha() { return (this.S.mode === '4d' ? this.S.alpha4d : this.S.alpha) * 1e-3; }
+  alpha() {
+    const S = this.S;
+    return ({ '4d': S.alpha4d, ronch: S.ronchAp, cbed: S.cbedKind === 'lacbed' ? S.alphaLA : S.alphaCB }[S.mode] ?? S.alpha) * 1e-3;
+  }
+  // residual axial aberrations from the corrector, in Å (A1, B2, A2 in nm; A3 in µm)
+  abA() {
+    const a = this.S.ab;
+    return { A1: a.A1 * 10, A1a: a.A1a, B2: a.B2 * 10, B2a: a.B2a, A2: a.A2 * 10, A2a: a.A2a, A3: a.A3 * 1e4, A3a: a.A3a };
+  }
 
   invalidate(key) {
     const all = ['tem', 'stem', 'diff', 'fd', 'vimg', 'si', 'eels', 'probe'];
@@ -67,6 +81,7 @@ export class Sim {
       dose: ['si'], edsSel: [], mode: [],
     };
     for (const k of map[key] ?? all) this.stale[k] = 1;
+    if (!['mode', 'edsSel', 'camera', 'beamStop', 'vdet', 'bgsub', 'eelsWin', 'eelsRange', 'tomoView', 'tomoSlice'].includes(key)) { this.ronch.stale = true; this.cbed.stale = true; }
     if (!['vdet', 'edsSel', 'mode', 'camera'].includes(key)) this.resetSingle();
     this.version++;
   }
@@ -89,7 +104,7 @@ export class Sim {
   // ------------------------------------------------------------ coherent imaging core
   // Apply the objective-lens transfer function to an exit wave and return |ψ|².
   lensImage(maps, { apK, apCenter = [0, 0], envelopes = true }) {
-    const n = maps.n, dx = maps.dx, lam = this.lam, df = this.S.df * 10, Cs = this.CsA();
+    const n = maps.n, dx = maps.dx, lam = this.lam, df = this.S.df * 10, Cs = this.CsA(), ab = this.abA();
     const { re, im } = P.transmission(maps.phase, this.S.kV);
     P.fft2(re, im, n);
     const D = FOCAL_SPREAD, ac = CONV_TEM;
@@ -108,7 +123,7 @@ export class Sim {
           const Es = Math.exp(-Math.pow((Math.PI * ac) / lam, 2) * g * g);
           H = Et * Es;
         }
-        const c = P.chi(k2, lam, df, Cs), cc = Math.cos(c), ss = Math.sin(c);
+        const c = P.chiFull(kx, ky, lam, df, Cs, ab), cc = Math.cos(c), ss = Math.sin(c);
         const a = re[i], b = im[i];
         re[i] = H * (a * cc + b * ss);
         im[i] = H * (b * cc - a * ss);
@@ -155,14 +170,14 @@ export class Sim {
   // Probe at fine sampling (for display and size readouts)
   computeProbe() {
     const n = 128, dx = 0.1, lam = this.lam, a = this.alpha(), kAp = a / lam;
-    const df = this.S.df * 10, Cs = this.CsA();
+    const df = this.S.df * 10, Cs = this.CsA(), ab = this.abA();
     const re = new Float64Array(n * n), im = new Float64Array(n * n);
     for (let y = 0; y < n; y++)
       for (let x = 0; x < n; x++) {
         const kx = P.freq(x, n, dx), ky = P.freq(y, n, dx), k2 = kx * kx + ky * ky;
         const A = clamp((kAp - Math.sqrt(k2)) / 0.03 + 0.5, 0, 1);
         if (!A) continue;
-        const c = P.chi(k2, lam, df, Cs);
+        const c = P.chiFull(kx, ky, lam, df, Cs, ab);
         re[y * n + x] = A * Math.cos(-c);
         im[y * n + x] = A * Math.sin(-c);
       }
@@ -204,14 +219,14 @@ export class Sim {
       img = this.lensImage(maps, { apK: a / lam });
     } else {
       // Probe intensity on this grid, then convolve with the scattering-power map.
-      const kAp = a / lam, df = S.df * 10, Cs = this.CsA();
+      const kAp = a / lam, df = S.df * 10, Cs = this.CsA(), ab = this.abA();
       const pr = new Float64Array(n * n), pi = new Float64Array(n * n);
       for (let y = 0; y < n; y++)
         for (let x = 0; x < n; x++) {
           const kx = P.freq(x, n, dx), ky = P.freq(y, n, dx), k2 = kx * kx + ky * ky;
           const A = clamp((kAp - Math.sqrt(k2)) * n * dx + 0.5, 0, 1);
           if (!A) continue;
-          const ch = P.chi(k2, lam, df, Cs);
+          const ch = P.chiFull(kx, ky, lam, df, Cs, ab);
           pr[y * n + x] = A * Math.cos(-ch);
           pi[y * n + x] = A * Math.sin(-ch);
         }
@@ -318,14 +333,14 @@ export class Sim {
     const gridN = Math.ceil(scan / dx) + n4 + 8;
     const maps = this.maps({ n: gridN, dx });
     const { re, im } = P.transmission(maps.phase, S.kV);
-    const kAp = (S.alpha4d * 1e-3) / lam, df = S.df * 10, Cs = this.CsA();
+    const kAp = (S.alpha4d * 1e-3) / lam, df = S.df * 10, Cs = this.CsA(), ab = this.abA();
     const pr = new Float64Array(n4 * n4), pi = new Float64Array(n4 * n4);
     for (let y = 0; y < n4; y++)
       for (let x = 0; x < n4; x++) {
         const kx = P.freq(x, n4, dx), ky = P.freq(y, n4, dx), k2 = kx * kx + ky * ky;
         const A = clamp((kAp - Math.sqrt(k2)) * n4 * dx + 0.5, 0, 1);
         if (!A) continue;
-        const c = P.chi(k2, lam, df, Cs);
+        const c = P.chiFull(kx, ky, lam, df, Cs, ab);
         pr[y * n4 + x] = A * Math.cos(-c); pi[y * n4 + x] = A * Math.sin(-c);
       }
     P.fft2(pr, pi, n4, true);
@@ -696,7 +711,7 @@ export class Sim {
       const arr = this.cbedAt(S.fdSel >= 0 ? S.fdSel : f.done - 1);
       return { arr, w: f.n4, h: f.n4, key: `4d${S.fdSel}` };
     }
-    if (S.mode === 'eds' || S.mode === 'eels') return null;
+    if (['eds', 'eels', 'microed', 'tomo'].includes(S.mode)) return null;
     return this.main ? { ...this.main, key: S.mode + this.version } : null;
   }
   stepSingle(dt) {
@@ -763,6 +778,12 @@ export class Sim {
       if (m === 'eels' && this.stale.eels) { this.buildEELS(); this.stale.eels = 0; this.version++; }
       if (!S.paused) this.accumulate(dt * S.speed);
     }
+    if (m === 'ronch' && this.ronch.stale) { this.ronch.compute(); this.version++; }
+    if (m === 'cbed' && this.cbed.stale) { this.cbed.compute(); this.version++; }
+    if (m === 'microed' && this.med.update(dt)) this.version++;
+    if (m === 'tomo' && this.tomo.update(dt)) this.version++;
+    if (m === 'ronch') this.main = this.ronch.disp ? { arr: this.ronch.disp.arr, w: this.ronch.disp.W, h: this.ronch.disp.W } : null;
+    if (m === 'cbed') this.main = this.cbed.disp ? { arr: this.cbed.disp.arr, w: this.cbed.disp.W, h: this.cbed.disp.W } : null;
     if (m === 'tem') this.main = this.tem ? { arr: this.tem.img, w: this.tem.c, h: this.tem.c } : null;
     if (m === 'stem') this.main = this.stemImg ? { arr: this.stemImg.img, w: this.stemImg.c, h: this.stemImg.c } : null;
     if (m === 'diff') this.main = this.diffDisp ? { arr: this.diffDisp.arr, w: this.diffDisp.W, h: this.diffDisp.W } : null;

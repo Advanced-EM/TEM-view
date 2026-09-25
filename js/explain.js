@@ -1,6 +1,7 @@
 // Plain-English explanations of what each mode shows and what each control physically changes.
 import * as P from './physics.js';
 import { stemDetType, AP_MRAD } from './sim.js';
+import { tomoStats } from './techniques.js';
 
 const f1 = (v) => v.toFixed(1), f2 = (v) => v.toFixed(2);
 const sgn = (v, d = 1) => (v > 0 ? '+' : '') + v.toFixed(d);
@@ -73,6 +74,54 @@ export function modeInfo(S, sim) {
         ['Probe size', probe ? `${f2(probe)} Å` : '—', 'sets the map resolution'],
       ],
     };
+    case 'ronch': {
+      const R = sim.ronch;
+      return {
+        title: 'Tuning the <em>corrector</em>',
+        body: `With the probe parked on thin amorphous carbon and a <b>large aperture</b>, the camera records a <b>Ronchigram</b>: a shadow image of the specimen whose local magnification is set by the lens’s aberrations. Where the aberration phase is flat, the shadow is infinitely magnified into a smooth, featureless <b>“sweet spot”</b>; outside it, streaks and rings reveal each aberration’s symmetry: 2-fold stretch (A1), comet-like coma (B2), triangles (A2), squares (A3). A corrector’s job is to make that sweet spot as large and round as possible. The <b>π/4 criterion</b> (phase error below π/4) sets the usable probe aperture, and the aperture sets resolution. Scramble the aberrations and try it by hand, or let the corrector software do it. Residual aberrations carry into every STEM and TEM image.`,
+        stats: [
+          ['Flat-phase angle', R.flat ? `${(R.flat * 1000).toFixed(1)} mrad` : '—', 'π/4 criterion'],
+          ['Best probe', R.flat ? `${((0.61 * o.lam) / R.flat).toFixed(2)} Å` : '—', 'diffraction limit at that angle'],
+          ['Ronchigram aperture', `${S.ronchAp} mrad`, 'deliberately oversized'],
+        ],
+      };
+    }
+    case 'cbed': {
+      const cb = sim.cbed, f = cb.fit?.best, lac = S.cbedKind === 'lacbed';
+      return {
+        title: lac ? 'Lines that map <em>defects and strain</em>' : 'Diffraction with a <em>cone</em> of electrons',
+        body: lac
+          ? `<b>Large-angle CBED</b> (Tanaka): the probe is defocused above the specimen so the cone can be huge (tens of mrad) without the disks overlapping; a selected-area aperture passes one disk. Every point in that disk is a different incident direction, so it’s crossed by <b>Bragg lines</b> (where a ZOLZ reflection is excited) and very fine <b>HOLZ lines</b>. HOLZ lines come from reflections far out in reciprocal space, so their positions shift measurably with a <b>0.1% lattice change</b> or a small voltage change. They are a classic tool for local strain and voltage calibration. The faint shadow image shows where on the specimen each part of the pattern comes from; lines bend or break at defects and boundaries.`
+          : `Instead of a parallel beam, a <b>cone</b> of electrons (semi-angle α) is focused to a nm-sized spot, so every Bragg spot becomes a <b>disk</b>. Inside each disk, the incident direction varies from point to point, so you see the rocking curve directly: dynamical <b>Kossel–Möllenstedt fringes</b> whose spacing measures the specimen <b>thickness</b> and the <b>extinction distance</b>. The disks’ symmetry gives the crystal’s <b>point and space group</b>. The fine dark lines in the central disk are <b>HOLZ lines</b> from higher-order Laue zones, sensitive to lattice parameter. When α exceeds half the Bragg angle the disks overlap (a Kossel pattern).`,
+        stats: lac
+          ? [['Convergence α', `${S.alphaLA} mrad`, 'large-angle'], ['Lattice strain', `${S.strain >= 0 ? '+' : ''}${S.strain.toFixed(2)} %`, 'moves HOLZ lines'], ['Wavelength', `${f2(o.lam * 100)} pm`, 'HOLZ lines also calibrate kV']]
+          : [['Convergence α', `${S.alphaCB} mrad`, 'disk radius'], ['Fitted thickness', f ? `${(f.t / 10).toFixed(1)} nm` : '—', `true ${S.thick} nm`], ['Extinction distance', f ? `${(f.xi / 10).toFixed(0)} nm` : '—', 'from the same fit']],
+      };
+    }
+    case 'microed': {
+      const M = sim.med, allowed = M.refl.filter((r) => r.allowed).length;
+      return {
+        title: 'Crystal structures from <em>nanocrystals</em>',
+        body: `<b>3D electron diffraction</b> (MicroED / continuous-rotation ED): a single nanocrystal, far too small for X-rays, is rotated continuously in a nearly parallel, very low-dose beam while a fast <b>direct electron detector</b> records diffraction frames, like a movie. Each frame catches the reflections crossing the Ewald sphere during that slice of rotation. Put back into the crystal’s frame, the frames fill a <b>3D reciprocal lattice</b> (right), from which the unit cell and <b>systematic absences</b> (lattice centring, glide planes) are read, then intensities are used to solve the structure. The goniometer can’t rotate a full 180°, leaving a <b>missing wedge</b> of unmeasured reflections. Dynamical scattering in thick crystals perturbs intensities, which is why MicroED works best on crystals thinner than ~200 nm.`,
+        stats: [
+          ['Completeness', `${Math.round((100 * M.obs.size) / Math.max(1, allowed))} %`, `±${S.medRange}° rotation`],
+          ['Frames', `${M.frames}`, `${S.medOsc}° each`],
+          ['Lattice', M.result ? M.result.lattice.split(' ')[0] : '…', M.result ? `a = ${M.result.a.toFixed(3)} Å` : 'after the sweep'],
+        ],
+      };
+    }
+    case 'tomo': {
+      const st = tomoStats(S, sim.tomo);
+      return {
+        title: 'Seeing in <em>three dimensions</em>',
+        body: `An electron image is a <b>projection</b>: everything along the beam is summed. <b>Tomography</b> tilts the specimen step by step and records a projection at each angle; HAADF-STEM is ideal because its intensity is (nearly) a linear projection of mass and Z. Mathematically each projection is a slice of the object’s 3D Fourier transform (the <b>central-slice theorem</b>), so combining them fills 3D Fourier space. It’s reconstructed by <b>weighted back-projection</b> (smearing each filtered projection back through the volume) or iterative <b>SIRT</b>. The holder can’t tilt to ±90°, so a <b>missing wedge</b> of information elongates features along the beam, clearly visible in the YZ slice. Compare it with the ground truth.`,
+        stats: [
+          ['Projections', `${st.nP}`, `±${S.tomoRange}° every ${S.tomoStep}°`],
+          ['Crowther resolution', `${st.crowther.toFixed(1)} nm`, 'd = πD/N for a 46 nm object'],
+          ['Elongation (beam axis)', `${st.elong.toFixed(2)}×`, 'from the missing wedge'],
+        ],
+      };
+    }
     case 'eels': {
       const imfp = P.imfp(S.kV, spec.zeff);
       return {
@@ -177,6 +226,30 @@ export function changeText(key, S, sim) {
     case 'single': return sim.single
       ? ['One electron at a time', 'The beam is now so faint that only one electron is in the column at a time. Each lands as a single dot at a random spot, yet the <b>pattern emerges</b>. Each electron’s wave passed through the whole specimen and interfered with itself; the image is the probability map of where it lands. This is the double-slit experiment, done with a microscope.']
       : ['Normal beam', 'Back to ~10⁸ electrons per second. The pattern is the same, formed instantly.'];
+    case 'ab': {
+      const R = sim.ronch;
+      return ['Residual aberrations', `A1 ${S.ab.A1} nm, B2 ${S.ab.B2} nm, A2 ${S.ab.A2} nm, A3 ${S.ab.A3} µm. Each aberration adds a phase that grows as a power of angle (θ², θ³, θ⁴), so higher orders only matter at large angles, which is why correctors null them in order: first C1 and A1, then B2 and A2, then C3 and A3. ${R.flat ? `The phase is flat (< π/4) out to <b>${(R.flat * 1000).toFixed(1)} mrad</b>, allowing a probe of about <b>${((0.61 * o.lam) / R.flat).toFixed(2)} Å</b>.` : ''} These residuals also blur the STEM and TEM images.`];
+    }
+    case 'scramble': return ['Aberrations scrambled', 'The corrector has drifted: astigmatism, coma, 3-fold and 4-fold terms are all present, and the sweet spot has shrunk and distorted. Look at the <b>shape</b> of the Ronchigram: two-fold stretching means A1, a one-sided comet means B2, a triangle means A2. Null them one at a time with the sliders, watching the flat-phase circle grow. Or press Auto-tune.'];
+    case 'autotuned': return ['Corrector tuned', `The corrector software measured the aberrations from Ronchigrams and cancelled them order by order. The flat-phase region now reaches <b>${sim.ronch.flat ? (sim.ronch.flat * 1000).toFixed(1) : '—'} mrad</b>. Real systems iterate the same loop: measure (Ronchigram or Zemlin tableau fitting), correct, re-measure. The residuals left are set by measurement noise and instabilities.`];
+    case 'ronchAp': return ['Ronchigram aperture', `A deliberately oversized <b>${S.ronchAp} mrad</b> aperture shows where the aberration-free region ends. For imaging you would then choose a probe aperture about the size of the flat-phase circle.`];
+    case 'cbedKind': return S.cbedKind === 'lacbed'
+      ? ['LACBED', 'Large-angle CBED: a defocused probe and a selected-area aperture give one huge disk full of Bragg and HOLZ lines, with a shadow image of the specimen. Drag the pattern to move the boundary through the field and watch the lines break.']
+      : ['CBED', 'A focused nanoprobe. Keep α below half the Bragg angle to separate the disks; tilt slightly off the zone axis so one reflection is strongly excited, then read the thickness from its fringes.'];
+    case 'alphaCB': return ['Convergence angle', `Disk radius is α = <b>${S.alphaCB} mrad</b>. Larger α shows more of the rocking curve (more fringes, more HOLZ lines) until the disks overlap. For SrTiO₃ that happens above ~3.2 mrad at 200 kV, for Au above ~5 mrad.`];
+    case 'alphaLA': return ['LACBED angle', `A <b>${S.alphaLA} mrad</b> cone. The wider it is, the more lines and the larger the area of specimen seen in the shadow image.`];
+    case 'strain': return ['Lattice strain', `Lattice parameter changed by <b>${S.strain >= 0 ? '+' : ''}${S.strain.toFixed(2)} %</b>. HOLZ lines come from reflections with large g, where the Bragg condition is extremely sensitive to d-spacing, so they shift visibly for 0.1 % strain. That’s how CBED measures local strain in transistors. The same shift results from a change in accelerating voltage, which is why HOLZ lines also calibrate kV.`];
+    case 'holz': return ['HOLZ lines', S.holz ? 'Showing higher-order Laue zone lines: fine deficiency lines where a reflection in the next reciprocal-lattice layer is exactly excited.' : 'HOLZ lines hidden: only zero-order (ZOLZ) dynamical contrast remains.'];
+    case 'medRange': return ['Rotation range', `Rotating over <b>±${S.medRange}°</b>. Anything the rotation never brings through the Ewald sphere stays unmeasured: the missing wedge. Wider ranges raise completeness, but holders, grid bars and crystal shadowing limit it in practice (typically ±60–70°).`];
+    case 'medRate': return ['Rotation speed', `<b>${S.medRate}°/s</b>. Real MicroED rotates slowly (~0.2–1°/s) at a dose rate of ~0.01 e⁻/Å²/s so a whole dataset uses only a few e⁻/Å², low enough for proteins.`];
+    case 'medOsc': return ['Frame oscillation', `Each frame integrates <b>${S.medOsc}°</b> of rotation. Fine slicing samples each reflection’s rocking curve (partiality) more accurately; coarse slicing is faster but merges neighbouring reflections.`];
+    case 'microed': return ['New rotation', 'Starting a fresh continuous-rotation dataset from the most negative angle.'];
+    case 'tomoRange': return ['Tilt range', `<b>±${S.tomoRange}°</b>. The unmeasured wedge of Fourier space stretches features along the beam by about <b>${tomoStats(S, sim.tomo).elong.toFixed(2)}×</b>. Needle-shaped specimens on on-axis holders can reach ±90° and remove it.`];
+    case 'tomoStep': return ['Tilt increment', `Every <b>${S.tomoStep}°</b> gives ${tomoStats(S, sim.tomo).nP} projections. By the Crowther criterion the resolution is ~πD/N ≈ <b>${tomoStats(S, sim.tomo).crowther.toFixed(1)} nm</b>: finer steps help, but every projection adds dose.`];
+    case 'tomoAlg': return ['Reconstruction', S.tomoAlg === 'sirt' ? '<b>SIRT</b>: start from nothing, simulate projections of the current guess, compare with the data, and back-project the difference; repeat. It suppresses streaks and handles noise and the missing wedge better, at the cost of iterations.' : '<b>Weighted back-projection</b>: each projection is ramp-filtered (to undo the 1/|k| over-weighting of low frequencies) and smeared back through the volume. It’s fast and linear, but it shows streaks from sparse angles.'];
+    case 'tomoIter': return ['SIRT iterations', `<b>${S.tomoIter}</b> iterations. Too few leaves the volume blurry; too many starts fitting the noise.`];
+    case 'tomoView': return ['Compare', S.tomoView === 'truth' ? 'Showing the <b>ground-truth</b> object. Compare its YZ slice with the reconstruction to see the missing-wedge elongation.' : 'Showing the <b>reconstruction</b> from the tilt series.'];
+    case 'tomoSlice': return null;
     case 'mode': return null;
   }
   return null;
@@ -199,6 +272,8 @@ export function dataRows(S, sim) {
     rows.push(['Depth of field', `${(o.lam / (a * a) / 10).toFixed(1)} nm`]);
   }
   if (S.mode === 'diff') rows.push(['Camera constant λL', `${(o.lam * S.camL).toFixed(1)} Å·mm`]);
+  rows.push(['Residual A1 / B2 / A2', `${S.ab.A1} / ${S.ab.B2} / ${S.ab.A2} nm`]);
+  rows.push(['Residual A3', `${S.ab.A3} µm`]);
   rows.push(['Dose', `${Math.round(S.dose).toLocaleString()} e⁻/Å²`]);
   rows.push(['Inelastic mean free path', `${Math.round(P.imfp(S.kV, sim.spec.zeff))} nm`]);
   rows.push(['Knock-on damage (C)', S.kV > 86 ? 'above threshold' : 'below threshold']);

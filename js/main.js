@@ -17,8 +17,12 @@ const S = {
   vdet: 'adf', vdIn: 14, vdOut: 60, vdX: 0, vdY: 0, vdR: 4, fdSel: -1,
   edsSel: 'all', eelsRange: 'core', eelsWin: 462, eelsWidth: 16, bgsub: true,
   speed: 1, paused: false, showLabels: true, showElectrons: true, showGlass: true, autoRotate: false,
+  ab: { A1: 0, A1a: 0, B2: 0, B2a: 0, A2: 0, A2a: 0, A3: 0, A3a: 0 }, ronchAp: 45,
+  cbedKind: 'cbed', alphaCB: 3, alphaLA: 40, strain: 0, holz: true,
+  medRange: 60, medRate: 6, medOsc: 0.5,
+  tomoRange: 70, tomoStep: 2, tomoAlg: 'wbp', tomoIter: 20, tomoSlice: 0.5, tomoView: 'recon',
 };
-const fam = (m) => (m === 'tem' || m === 'diff' ? 'tem' : 'probe');
+const fam = (m) => (m === 'tem' || m === 'diff' || m === 'microed' ? 'tem' : 'probe');
 S.df = S.dfFam[fam(S.mode)];
 
 const sim = new Sim(S);
@@ -27,19 +31,26 @@ const mainCv = $('#detMain'), secCv = $('#detSec');
 
 // ------------------------------------------------------------------ controls definition
 const MODES = [
-  ['tem', 'TEM', 'parallel beam'], ['stem', 'STEM', 'scanned probe'], ['4d', '4D-STEM', 'pattern per pixel'],
-  ['diff', 'Diffraction', 'reciprocal space'], ['eds', 'EDS', 'X-ray spectra'], ['eels', 'EELS', 'energy loss'],
+  ['tem', 'TEM', 'parallel-beam imaging', 'Imaging'], ['stem', 'STEM', 'scanned probe', 'Imaging'], ['4d', '4D-STEM', 'pattern per pixel', 'Imaging'], ['tomo', 'Tomography', '3D from tilts', 'Imaging'],
+  ['diff', 'SAED', 'selected-area diffraction', 'Diffraction'], ['cbed', 'CBED', 'convergent beam', 'Diffraction'], ['microed', '3D-ED', 'MicroED rotation', 'Diffraction'],
+  ['eds', 'EDS', 'X-ray spectra', 'Spectroscopy'], ['eels', 'EELS', 'energy loss', 'Spectroscopy'],
+  ['ronch', 'Ronchigram', 'corrector tuning', 'Alignment'],
 ];
+const KEYS = '1234567890';
 const logMap = (min, max) => ({ to: (v) => (Math.log(v / min) / Math.log(max / min)) * 1000, from: (t) => min * Math.pow(max / min, t / 1000) });
 
+const NOT_TOMO = 'tem stem 4d diff eds eels ronch cbed microed';
+const NOT_TOMO_R = 'tem stem 4d diff eds eels cbed microed';
+const TILTABLE = 'tem stem 4d diff eds eels cbed';
 const CONTROLS = [
   { sec: 'The specimen' },
-  { chips: 'spec', opts: [['au', 'Gold on carbon'], ['si', 'Si / SiO₂'], ['sto', 'SrTiO₃ boundary']] },
-  { slider: 'thick', label: 'Thickness', min: 3, max: 120, step: 1, fmt: (v) => `${v} nm`, ends: ['thin', '', 'thick'] },
+  { chips: 'spec', modes: NOT_TOMO, opts: [['au', 'Gold on carbon'], ['si', 'Si / SiO₂'], ['sto', 'SrTiO₃ boundary']] },
+  { slider: 'thick', label: 'Thickness', min: 3, max: 150, step: 1, fmt: (v) => `${v} nm`, ends: ['thin', '', 'thick'], modes: NOT_TOMO_R },
   { slider: 'fov', label: 'Field of view', min: 1.5, max: 30, log: true, fmt: (v) => `${v.toFixed(1)} nm`, modes: 'tem stem 4d eds eels', note: 'Drag the detector image to move the stage; scroll to zoom.' },
-  { slider: 'tiltX', inv: 'tilt', label: 'Tilt α', min: -3, max: 3, step: 0.02, fmt: (v) => `${v.toFixed(2)}°` },
-  { slider: 'tiltY', inv: 'tilt', label: 'Tilt β', min: -3, max: 3, step: 0.02, fmt: (v) => `${v.toFixed(2)}°`, ends: ['', 'zone axis', ''] },
-  { buttons: [['zone', 'Return to zone axis']] },
+  { slider: 'tiltX', inv: 'tilt', label: 'Tilt α', min: -3, max: 3, step: 0.02, fmt: (v) => `${v.toFixed(2)}°`, modes: TILTABLE },
+  { slider: 'tiltY', inv: 'tilt', label: 'Tilt β', min: -3, max: 3, step: 0.02, fmt: (v) => `${v.toFixed(2)}°`, ends: ['', 'zone axis', ''], modes: TILTABLE },
+  { buttons: [['zone', 'Return to zone axis']], modes: TILTABLE },
+  { p: 'Phantom: a porous oxide catalyst support (~45 nm) decorated with Au nanoparticles, voxel = 1 nm.', modes: 'tomo' },
 
   { sec: 'The electron gun' },
   { slider: 'kV', label: 'Accelerating voltage', min: 60, max: 300, step: 10, fmt: (v) => `${v} kV` },
@@ -49,17 +60,53 @@ const CONTROLS = [
   { sec: 'The lenses' },
   { chips: 'corrector', opts: [[false, 'Uncorrected'], [true, 'Aberration corrector']] },
   { slider: 'cs', label: 'Spherical aberration Cₛ', dyn: () => S.corrector ? { key: 'csCor', min: -40, max: 40, step: 1, fmt: (v) => `${v} µm` } : { key: 'csUnc', min: 0.5, max: 2.5, step: 0.05, fmt: (v) => `${v.toFixed(2)} mm` } },
-  { slider: 'df', label: 'Defocus', dyn: () => (S.corrector ? { min: -30, max: 30, step: 0.2 } : { min: -150, max: 150, step: 1 }), fmt: (v) => `${v > 0 ? '+' : ''}${v.toFixed(1)} nm`, ends: ['under', 'focus', 'over'], modes: 'tem stem 4d eds eels' },
-  { buttons: [['optfocus', 'Optimal focus']], modes: 'tem stem 4d eds eels' },
+  { slider: 'df', label: 'Defocus', dyn: () => (S.corrector ? { min: -30, max: 30, step: 0.2 } : { min: -150, max: 150, step: 1 }), fmt: (v) => `${v > 0 ? '+' : ''}${v.toFixed(1)} nm`, ends: ['under', 'focus', 'over'], modes: 'tem stem 4d eds eels ronch' },
+  { buttons: [['optfocus', 'Optimal focus']], modes: 'tem stem 4d eds eels ronch' },
   { chips: 'objAp', label: 'Objective aperture', modes: 'tem', opts: [['none', 'Open'], ['40', '40 µm'], ['20', '20 µm'], ['10', '10 µm'], ['df', 'Dark field']] },
   { slider: 'alpha', label: 'Convergence semi-angle', dyn: () => ({ key: S.mode === '4d' ? 'alpha4d' : 'alpha' }), min: 3, max: 40, step: 0.5, fmt: (v) => `${v} mrad`, modes: 'stem 4d eds eels', ends: ['parallel-ish', '', 'wide cone'] },
+
+  { sec: 'Aberration corrector', modes: 'ronch' },
+  { p: 'Tune on amorphous carbon: make the flat central "sweet spot" of the Ronchigram as large and round as possible. C1 and C3 are the defocus and Cₛ controls above.', modes: 'ronch' },
+  { buttons: [['scramble', 'Scramble aberrations'], ['autotune', 'Auto-tune']], modes: 'ronch' },
+  { slider: 'ronchAp', label: 'Ronchigram aperture', min: 20, max: 70, step: 1, fmt: (v) => `${v} mrad`, modes: 'ronch' },
+  { slider: 'A1', ab: true, label: 'A1 · 2-fold astigmatism', min: 0, max: 100, step: 0.5, fmt: (v) => `${v.toFixed(1)} nm`, modes: 'ronch' },
+  { slider: 'A1a', ab: true, label: 'A1 angle', min: 0, max: 180, step: 1, fmt: (v) => `${v}°`, modes: 'ronch' },
+  { slider: 'B2', ab: true, label: 'B2 · axial coma', min: 0, max: 1500, step: 5, fmt: (v) => `${v} nm`, modes: 'ronch' },
+  { slider: 'B2a', ab: true, label: 'B2 angle', min: 0, max: 360, step: 1, fmt: (v) => `${v}°`, modes: 'ronch' },
+  { slider: 'A2', ab: true, label: 'A2 · 3-fold astigmatism', min: 0, max: 1500, step: 5, fmt: (v) => `${v} nm`, modes: 'ronch' },
+  { slider: 'A2a', ab: true, label: 'A2 angle', min: 0, max: 120, step: 1, fmt: (v) => `${v}°`, modes: 'ronch' },
+  { slider: 'A3', ab: true, label: 'A3 · 4-fold astigmatism', min: 0, max: 20, step: 0.1, fmt: (v) => `${v.toFixed(1)} µm`, modes: 'ronch' },
+  { slider: 'A3a', ab: true, label: 'A3 angle', min: 0, max: 90, step: 1, fmt: (v) => `${v}°`, modes: 'ronch' },
+
+  { sec: 'Convergent-beam diffraction', modes: 'cbed' },
+  { chips: 'cbedKind', modes: 'cbed', opts: [['cbed', 'CBED (focused probe)'], ['lacbed', 'LACBED (large angle)']] },
+  { slider: 'alphaCB', label: 'Convergence semi-angle', min: 0.5, max: 15, step: 0.1, fmt: (v) => `${v.toFixed(1)} mrad`, modes: 'cbed', show: () => S.cbedKind === 'cbed', ends: ['separate disks', '', 'overlapping'] },
+  { slider: 'alphaLA', label: 'Convergence semi-angle', min: 15, max: 70, step: 1, fmt: (v) => `${v} mrad`, modes: 'cbed', show: () => S.cbedKind === 'lacbed' },
+  { slider: 'strain', label: 'Lattice strain', min: -1, max: 1, step: 0.02, fmt: (v) => `${v >= 0 ? '+' : ''}${v.toFixed(2)} %`, modes: 'cbed', ends: ['compressed', '', 'expanded'] },
+  { toggles: [['holz', 'HOLZ lines']], modes: 'cbed' },
+  { p: 'Drag the pattern to move the probe across the specimen. In LACBED the shadow image shows where each line comes from.', modes: 'cbed' },
+
+  { sec: '3D electron diffraction', modes: 'microed' },
+  { slider: 'medRange', label: 'Rotation range', min: 20, max: 80, step: 1, fmt: (v) => `±${v}°`, modes: 'microed', ends: ['', '', 'missing wedge shrinks'] },
+  { slider: 'medRate', label: 'Rotation speed', min: 0.5, max: 20, step: 0.5, fmt: (v) => `${v}°/s`, modes: 'microed' },
+  { slider: 'medOsc', label: 'Frame oscillation', min: 0.1, max: 2, step: 0.05, fmt: (v) => `${v.toFixed(2)}° / frame`, modes: 'microed' },
+  { buttons: [['medStart', 'Restart rotation']], modes: 'microed' },
+
+  { sec: 'Tilt series & reconstruction', modes: 'tomo' },
+  { slider: 'tomoRange', label: 'Tilt range', min: 30, max: 90, step: 1, fmt: (v) => `±${v}°`, modes: 'tomo', ends: ['big wedge', '', 'no wedge'] },
+  { slider: 'tomoStep', label: 'Tilt increment', min: 1, max: 10, step: 0.5, fmt: (v) => `${v}°`, modes: 'tomo' },
+  { chips: 'tomoAlg', label: 'Reconstruction', modes: 'tomo', opts: [['wbp', 'Weighted back-projection'], ['sirt', 'SIRT (iterative)']] },
+  { slider: 'tomoIter', label: 'SIRT iterations', min: 5, max: 60, step: 1, fmt: (v) => `${v}`, modes: 'tomo', show: () => S.tomoAlg === 'sirt' },
+  { slider: 'tomoSlice', label: 'Slice position', min: 0.1, max: 0.9, step: 0.01, fmt: (v) => `${Math.round(v * 64)} / 64`, modes: 'tomo' },
+  { chips: 'tomoView', modes: 'tomo', opts: [['recon', 'Reconstruction'], ['truth', 'Ground truth']] },
+  { buttons: [['tomoStart', 'Acquire new tilt series']], modes: 'tomo' },
 
   { sec: 'Detectors', modes: 'tem stem diff 4d eds eels' },
   { chips: 'camera', label: 'Camera', modes: 'tem diff', opts: [['screen', 'Fluorescent screen'], ['ded', 'Direct electron detector']] },
   { chips: 'detPreset', modes: 'stem', opts: [['bf', 'BF'], ['abf', 'ABF'], ['adf', 'ADF'], ['haadf', 'HAADF']] },
   { slider: 'detIn', inv: 'det', label: 'Inner angle', min: 0, max: 150, step: 1, fmt: (v) => `${v} mrad`, modes: 'stem' },
   { slider: 'detOut', inv: 'det', label: 'Outer angle', min: 5, max: 250, step: 1, fmt: (v) => `${v} mrad`, modes: 'stem' },
-  { slider: 'camL', label: 'Camera length', min: 80, max: 2000, log: true, fmt: (v) => `${Math.round(v)} mm`, modes: 'diff', ends: ['wide angle', '', 'zoomed'] },
+  { slider: 'camL', label: 'Camera length', min: 80, max: 2000, log: true, fmt: (v) => `${Math.round(v)} mm`, modes: 'diff cbed', show: () => S.mode !== 'cbed' || S.cbedKind === 'cbed', ends: ['wide angle', '', 'zoomed'] },
   { slider: 'sa', label: 'Selected area', min: 2, max: 12, step: 0.2, fmt: (v) => `${v.toFixed(1)} nm`, modes: 'diff' },
   { toggles: [['beamStop', 'Beam stop']], modes: 'diff' },
   { chips: 'vdet', label: 'Virtual detector', modes: '4d', opts: [['bf', 'BF'], ['abf', 'ABF'], ['adf', 'ADF'], ['disk', 'Disk (DF)'], ['dpc', 'DPC'], ['com', 'Centre of mass'], ['ptycho', 'Ptychography']] },
@@ -96,6 +143,7 @@ function build() {
       el = document.createElement('h3');
       el.className = 'sec';
       el.textContent = c.sec;
+      bound.push({ c, el });
     } else if (c.slider) {
       el = document.createElement('div');
       el.className = 'ctl slider';
@@ -105,6 +153,7 @@ function build() {
       input.addEventListener('input', () => {
         const d = sliderDef(c);
         const v = d.log ? logMap(d.min, d.max).from(+input.value) : +input.value;
+        if (c.ab) { S.ab[c.slider] = +v; sim.invalidate('ab'); refreshControls(); explainChange('ab'); return; }
         set(d.key, d.log ? v : +v.toFixed(4), c.inv ?? (c.slider === 'cs' ? 'cs' : c.slider === 'alpha' ? 'alpha' : d.key));
       });
       bound.push({ c, el, input, val: el.querySelector('.val') });
@@ -142,6 +191,11 @@ function build() {
       el.dataset.exp = c.exp;
       el.innerHTML = `<span class="ico">${ICONS[c.icon]}</span><span><b>${c.title}</b><small>${c.desc}</small></span>`;
       el.addEventListener('click', () => action(c.exp, el));
+      bound.push({ c, el });
+    } else if (c.p) {
+      el = document.createElement('p');
+      el.className = 'ctl note';
+      el.textContent = c.p;
       bound.push({ c, el });
     } else if (c.table) {
       el = document.createElement('table');
@@ -185,14 +239,14 @@ function renderChips({ c, box }) {
 function refreshControls() {
   document.body.dataset.mode = S.mode;
   for (const b of bound) {
-    const vis = !b.el.dataset.modes || b.el.dataset.modes.split(' ').includes(S.mode);
+    const vis = (!b.el.dataset.modes || b.el.dataset.modes.split(' ').includes(S.mode)) && (!b.c.show || b.c.show());
     b.el.hidden = !vis;
     if (!vis) continue;
     if (b.input) {
       const d = sliderDef(b.c);
       const lm = d.log ? logMap(d.min, d.max) : null;
       b.input.min = d.log ? 0 : d.min; b.input.max = d.log ? 1000 : d.max; b.input.step = d.log ? 1 : d.step;
-      const v = S[d.key];
+      const v = b.c.ab ? S.ab[d.key] : S[d.key];
       b.input.value = lm ? lm.to(v) : v;
       const p = ((+b.input.value - +b.input.min) / (+b.input.max - +b.input.min)) * 100;
       b.input.style.setProperty('--p', `${clamp(p, 0, 100)}%`);
@@ -205,7 +259,7 @@ function refreshControls() {
   document.querySelectorAll('.exp').forEach((e) => e.classList.toggle('on', (e.dataset.exp === 'single' && !!sim.single) || (e.dataset.exp === 'tour' && !!scene.tour)));
   document.querySelectorAll('.modes button').forEach((b) => b.classList.toggle('on', b.dataset.mode === S.mode));
   document.querySelectorAll('.clarity button').forEach((b) => b.classList.toggle('on', b.dataset.v === S.clarity));
-  const singleOk = !['eds', 'eels'].includes(S.mode);
+  const singleOk = !['eds', 'eels', 'microed', 'tomo'].includes(S.mode);
   const se = $('.exp[data-exp="single"]');
   if (se) se.classList.toggle('disabled', !singleOk);
   if ($('#infoTitle')) { renderInfo(); updateDetectorHeader(); }
@@ -290,7 +344,7 @@ function setMode(m) {
   S.mode = m;
   S.df = S.dfFam[fam(m)];
   S.fdSel = -1;
-  if (m === 'eds' || m === 'eels') { if (sim.single) sim.startSingle(false); }
+  if (['eds', 'eels', 'microed', 'tomo'].includes(m)) { if (sim.single) sim.startSingle(false); }
   sim.invalidate('mode');
   sim.stale.probe = 1;
   refreshControls();
@@ -309,9 +363,21 @@ function action(id, el) {
     set('df', +df.toFixed(1), 'df');
   }
   if (id === 'pause') { S.paused = !S.paused; refreshControls(); }
+  if (id === 'scramble') {
+    const r = () => Math.random();
+    S.ab = { A1: 15 + 45 * r(), A1a: Math.round(180 * r()), B2: 150 + 500 * r(), B2a: Math.round(360 * r()), A2: 100 + 500 * r(), A2a: Math.round(120 * r()), A3: 2 + 6 * r(), A3a: Math.round(90 * r()) };
+    for (const k of ['A1', 'B2', 'A2']) S.ab[k] = Math.round(S.ab[k]);
+    S.ab.A3 = +S.ab.A3.toFixed(1);
+    if (S.corrector) { S.csCor = Math.round(-25 + 50 * r()); }
+    S.df = S.dfFam.probe = +(-40 + 80 * r()).toFixed(1);
+    sim.invalidate('ab'); refreshControls(); explainChange('scramble');
+  }
+  if (id === 'autotune') autoTune();
+  if (id === 'medStart') { sim.med.reset(); sim.version++; explainChange('microed'); }
+  if (id === 'tomoStart') { sim.tomo.start(); sim.version++; }
   if (id === 'resetView') scene.resetView();
   if (id === 'single') {
-    if (['eds', 'eels'].includes(S.mode)) return;
+    if (['eds', 'eels', 'microed', 'tomo'].includes(S.mode)) return;
     sim.startSingle(!sim.single);
     refreshControls();
     explainChange('single');
@@ -328,6 +394,45 @@ function action(id, el) {
     });
     refreshControls();
   }
+}
+
+// Corrector software: measure, then null aberrations order by order (as real correctors do).
+let tuning = null;
+function autoTune() {
+  if (tuning) return;
+  if (!S.corrector) chip('corrector', true);
+  const steps = [
+    ['Measuring aberrations from Ronchigram…', {}],
+    ['1st order: defocus C1 and 2-fold astigmatism A1', { df: 0, A1: 0 }],
+    ['2nd order: axial coma B2 and 3-fold astigmatism A2', { B2: 0, A2: 0 }],
+    ['3rd order: spherical aberration C3 and 4-fold A3', { csCor: 1, A3: 0 }],
+    ['Fine-tuning residuals', { df: 0, A1: 0, B2: 0, A2: 0, A3: 0, csCor: 1 }],
+  ];
+  let i = 0;
+  const log = [];
+  const next = () => {
+    if (i >= steps.length) { tuning = null; explainChange('autotuned'); return; }
+    const [msg, target] = steps[i++];
+    log.push(msg);
+    $('#change').hidden = false;
+    $('#change').innerHTML = `<small>Corrector software</small><p>${log.map((l, k) => `${k === log.length - 1 ? '▸' : '✓'} ${l}`).join('<br>')}</p>`;
+    const from = { df: S.df, csCor: S.csCor, ...S.ab }, t0 = performance.now();
+    const anim = () => {
+      const f = Math.min(1, (performance.now() - t0) / 900), e = 1 - Math.pow(1 - f, 3);
+      for (const [k, v] of Object.entries(target)) {
+        const res = (Math.random() - 0.5) * (k === 'df' ? 0.4 : k === 'csCor' ? 0.6 : k === 'A3' ? 0.1 : 2);
+        const goal = v + (f === 1 ? res * 0.3 : 0);
+        const val = from[k] + (goal - from[k]) * e;
+        if (k === 'df') { S.df = S.dfFam.probe = +val.toFixed(1); }
+        else if (k === 'csCor') S.csCor = Math.round(val);
+        else S.ab[k] = k === 'A3' ? +Math.max(0, val).toFixed(1) : Math.max(0, Math.round(val));
+      }
+      sim.invalidate('ab'); refreshControls();
+      if (f < 1) requestAnimationFrame(anim); else setTimeout(next, 350);
+    };
+    tuning = requestAnimationFrame(anim);
+  };
+  next();
 }
 
 function tourStops() {
@@ -380,6 +485,10 @@ function updateDetectorHeader() {
     diff: [S.camera === 'screen' ? 'Fluorescent screen · pattern' : 'Direct electron detector · pattern', 'Ring profile & d-spacings'],
     eds: ['EDS element map', 'X-ray spectrum'],
     eels: ['Energy-filtered map', 'Electron energy-loss spectrum'],
+    ronch: ['Ronchigram · direct electron detector', 'Aberration phase & budget'],
+    cbed: [S.cbedKind === 'lacbed' ? 'LACBED pattern' : 'CBED pattern', S.cbedKind === 'lacbed' ? 'HOLZ lines & strain sensitivity' : 'Kossel–Möllenstedt thickness fit'],
+    microed: ['Diffraction frame · continuous rotation', '3D reciprocal lattice'],
+    tomo: ['Tilt series · HAADF projection', 'Reconstruction: slices & volume'],
   }[S.mode];
   $('#detTitle').textContent = names[0];
   $('#secTitle').textContent = names[1];
@@ -393,12 +502,20 @@ function updateTable() {
 // ------------------------------------------------------------------ static UI wiring
 function wire() {
   const nav = $('.modes');
-  MODES.forEach(([m, name, sub], i) => {
+  let grp = null;
+  MODES.forEach(([m, name, sub, g], i) => {
+    if (!grp || grp.dataset.g !== g) {
+      grp = document.createElement('div');
+      grp.className = 'grp'; grp.dataset.g = g;
+      grp.innerHTML = `<small>${g}</small><div></div>`;
+      nav.appendChild(grp);
+    }
     const b = document.createElement('button');
     b.dataset.mode = m;
-    b.innerHTML = `<b>${name}</b><small>${sub}</small><kbd>${i + 1}</kbd>`;
+    b.title = `${sub} (key ${KEYS[i]})`;
+    b.innerHTML = `${name}<kbd>${KEYS[i]}</kbd>`;
     b.addEventListener('click', () => setMode(m));
-    nav.appendChild(b);
+    grp.lastChild.appendChild(b);
   });
   document.querySelectorAll('.clarity button').forEach((b) => b.addEventListener('click', () => { S.clarity = b.dataset.v; sim.invalidate('clarity'); refreshControls(); explainChange('clarity'); }));
   $('#btnLabels').addEventListener('click', () => set('showLabels', !S.showLabels));
@@ -420,12 +537,13 @@ function wire() {
     }
     if (!drag) return;
     const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
-    if (S.mode === 'diff') {
+    if (S.mode === 'diff' || S.mode === 'microed' || S.mode === 'tomo' || S.mode === 'ronch') {
+      if (S.mode !== 'diff') return;
       S.tiltX = clamp(+(drag.tx - dx * 0.006).toFixed(2), -3, 3); S.tiltY = clamp(+(drag.ty - dy * 0.006).toFixed(2), -3, 3);
       sim.invalidate('tilt'); refreshControls(); explainChange('tilt');
       return;
     }
-    const sc = (S.fov * 10) / w;
+    const sc = (S.mode === 'cbed' ? (S.cbedKind === 'lacbed' ? 440 : 60) : S.fov * 10) / w;
     S.cx = drag.cx - dx * sc; S.cy = drag.cy - dy * sc;
     sim.invalidate('stage');
   });
@@ -484,8 +602,8 @@ function wire() {
 
   window.addEventListener('keydown', (e) => {
     if (e.target.tagName === 'INPUT') return;
-    const i = +e.key;
-    if (i >= 1 && i <= 6) setMode(MODES[i - 1][0]);
+    const i = KEYS.indexOf(e.key);
+    if (e.key.length === 1 && i >= 0 && !e.metaKey && !e.ctrlKey) setMode(MODES[i][0]);
     else if (e.key === ' ') { e.preventDefault(); action('pause'); }
     else if (e.key === 'l' || e.key === 'L') set('showLabels', !S.showLabels);
     else if (e.key === 'e' || e.key === 'E') set('showElectrons', !S.showElectrons);
@@ -522,13 +640,13 @@ function frame(now) {
   last = now;
   try {
     sim.update(dt);
-    const live = S.clarity === 'real' && ['tem', 'stem', 'diff'].includes(S.mode) && !S.paused;
-    if (sim.version !== lastVer || (live && now - lastDraw > 90)) {
+    const live = (S.clarity === 'real' && ['tem', 'stem', 'diff', 'ronch', 'cbed'].includes(S.mode) && !S.paused) || ['microed', 'tomo'].includes(S.mode);
+    if (sim.version !== lastVer || (live && now - lastDraw > 70)) {
       R2.draw(sim, S, mainCv, secCv);
       lastVer = sim.version;
       lastDraw = now;
       scene.screenTex.image = mainCv; scene.screenTex.needsUpdate = true;
-      if ((S.mode === 'tem' || S.mode === 'diff') && S.camera === 'ded') { scene.camTex.image = mainCv; scene.camTex.needsUpdate = true; }
+      if (((S.mode === 'tem' || S.mode === 'diff') && S.camera === 'ded') || ['ronch', 'cbed', 'microed'].includes(S.mode)) { scene.camTex.image = mainCv; scene.camTex.needsUpdate = true; }
       if (S.mode === '4d' && R2.layout.cbed) {
         const L = R2.layout.cbed;
         camCv.getContext('2d').drawImage(secCv, 0, 0, L.sz, L.sz, 0, 0, 256, 256);
@@ -545,7 +663,7 @@ function frame(now) {
   if (now - lastSlow > 300) {
     lastSlow = now;
     updateTable();
-    if (S.mode === 'eds' || S.mode === '4d' || S.mode === 'eels' || S.mode === 'stem') renderInfo();
+    if (['eds', '4d', 'eels', 'stem', 'microed', 'tomo', 'ronch', 'cbed'].includes(S.mode)) renderInfo();
     $('#status').textContent = `· ${fps} fps`;
   }
   requestAnimationFrame(frame);

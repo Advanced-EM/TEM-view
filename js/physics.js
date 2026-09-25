@@ -126,6 +126,61 @@ export const freq = (i, n, dx) => (i < n / 2 ? i : i - n) / (n * dx);
 // Aberration phase χ(k): defocus (negative = underfocus) and spherical aberration.
 export const chi = (k2, lam, df, Cs) => Math.PI * lam * df * k2 + 0.5 * Math.PI * Cs * lam * lam * lam * k2 * k2;
 
+// Full axial aberration function (Krivanek/Haider notation) in Å, angles in degrees:
+// χ(θ,φ) = 2π/λ [ ½θ²(C1 + A1 cos2(φ−φ11)) + ⅓θ³(A2 cos3(φ−φ22) + 3B2 cos(φ−φ21)) + ¼θ⁴(C3 + A3 cos4(φ−φ33)) ]
+const DEG = Math.PI / 180;
+export function chiFull(kx, ky, lam, C1, C3, ab) {
+  const t2 = lam * lam * (kx * kx + ky * ky);
+  if (!ab) return (2 * Math.PI / lam) * (0.5 * t2 * C1 + 0.25 * t2 * t2 * C3);
+  const th = Math.sqrt(t2), ph = Math.atan2(ky, kx);
+  const v = 0.5 * t2 * (C1 + ab.A1 * Math.cos(2 * (ph - ab.A1a * DEG)))
+    + (th * t2 / 3) * (ab.A2 * Math.cos(3 * (ph - ab.A2a * DEG)) + 3 * ab.B2 * Math.cos(ph - ab.B2a * DEG))
+    + 0.25 * t2 * t2 * (C3 + ab.A3 * Math.cos(4 * (ph - ab.A3a * DEG)));
+  return (2 * Math.PI / lam) * v;
+}
+// Same, taking the scattering angle directly (θ in rad, φ in rad).
+export function chiAngle(th, ph, lam, C1, C3, ab) {
+  const t2 = th * th;
+  const v = 0.5 * t2 * (C1 + ab.A1 * Math.cos(2 * (ph - ab.A1a * DEG)))
+    + (th * t2 / 3) * (ab.A2 * Math.cos(3 * (ph - ab.A2a * DEG)) + 3 * ab.B2 * Math.cos(ph - ab.B2a * DEG))
+    + 0.25 * t2 * t2 * (C3 + ab.A3 * Math.cos(4 * (ph - ab.A3a * DEG)));
+  return (2 * Math.PI / lam) * v;
+}
+
+// ---------------------------------------------------------------- 3D crystal structures (for CBED and 3D-ED)
+const fcc = [[0, 0, 0], [0.5, 0.5, 0], [0.5, 0, 0.5], [0, 0.5, 0.5]];
+export const CRYST = {
+  sto: { a: 3.905, sg: 'Pm3̄m', name: 'SrTiO₃ (perovskite)', basis: [[0, 0, 0, 38], [0.5, 0.5, 0.5, 22], [0.5, 0.5, 0, 8], [0.5, 0, 0.5, 8], [0, 0.5, 0.5, 8]], xAx: [1, 0, 0], yAx: [0, 1, 0] },
+  au: { a: 4.078, sg: 'Fm3̄m', name: 'Au (fcc)', basis: fcc.map((p) => [...p, 79]), xAx: [1, -1, 0], yAx: [0, 0, 1] },
+  si: { a: 5.431, sg: 'Fd3̄m', name: 'Si (diamond)', basis: [...fcc, ...fcc.map((p) => p.map((v) => v + 0.25))].map((p) => [...p, 14]), xAx: [1, -1, 0], yAx: [0, 0, 1] },
+};
+for (const c of Object.values(CRYST)) {
+  const n = (v) => { const l = Math.hypot(...v); return v.map((x) => x / l); };
+  c.x = n(c.xAx); c.y = n(c.yAx);
+  c.z = [c.x[1] * c.y[2] - c.x[2] * c.y[1], c.x[2] * c.y[0] - c.x[0] * c.y[2], c.x[0] * c.y[1] - c.x[1] * c.y[0]];
+  c.Vc = c.a ** 3;
+}
+// Electron scattering factor (Å): screened core at low s plus the Mott–Bethe ~Z/s² tail at high s,
+// damped by a Debye–Waller factor (B ≈ 0.4 Å²). Adequate for trends, extinction distances and HOLZ visibility.
+export const fElec = (Z, s) => (0.3 * Math.pow(Z, 0.8) * Math.exp(-3.5 * s * s) + (0.0239 * Z) / (s * s + 1)) * Math.exp(-0.4 * s * s);
+export function structF(cr, h, k, l, scale = 1) {
+  const a = cr.a * scale, s = Math.hypot(h, k, l) / (2 * a);
+  let re = 0, im = 0;
+  for (const [x, y, z, Z] of cr.basis) {
+    const f = fElec(Z, s), p = 2 * Math.PI * (h * x + k * y + l * z);
+    re += f * Math.cos(p); im += f * Math.sin(p);
+  }
+  return Math.hypot(re, im);
+}
+// Extinction distance (Å), two-beam theory: ξ_g = π V_c / (λ γ F_g), calibrated to Au(111) ≈ 18 nm at 200 kV.
+export const extinction = (cr, F, kV) => (3.7 * cr.Vc) / (wavelength(kV) * gammaOf(kV) * Math.max(F, 1e-6));
+// Reciprocal vector of hkl in the zone frame (gx, gy in-plane, gz along the beam), before grain rotation.
+export function zoneG(cr, h, k, l, scale = 1) {
+  const a = cr.a * scale, G = [h / a, k / a, l / a];
+  const d = (u) => G[0] * u[0] + G[1] * u[1] + G[2] * u[2];
+  return [d(cr.x), d(cr.y), d(cr.z)];
+}
+
 // ---------------------------------------------------------------- elements
 export const EL = [
   { sym: 'C', Z: 6, name: 'Carbon', color: '#b5bfcc' },
@@ -225,6 +280,8 @@ function makeGold() {
   const grains = parts.map((p) => ({ a1: rot([ax, 0], p.rot), a2: rot([0, ay], p.rot), label: (m, n) => `${bar(m)}${bar(-m)}${bar(n)}` }));
   return {
     id: 'au', name: 'Gold nanoparticles on carbon', short: 'Au on C',
+    grainRot: parts.map((p) => p.rot),
+    grainAt(x, y) { for (let i = 0; i < parts.length; i++) { const p = parts[i]; if ((x - p.x) ** 2 + (y - p.y) ** 2 < p.r * p.r) return i; } return -1; },
     atoms: A, parts, grains, period: ax, poly: true, center: [0, 0], fov: 8, zone: '[110]',
     elements: [EI.Au, EI.C],
     amorph(x, y) { return 'C'; },
@@ -259,6 +316,8 @@ function makeSilicon() {
   A.finalize();
   return {
     id: 'si', name: 'Silicon / SiO₂ interface', short: 'Si / SiO₂',
+    grainRot: [0],
+    grainAt(x, y) { return x < bnd(y) ? 0 : -1; },
     atoms: A, grains: [{ a1: [ax, 0], a2: [0, ay], label: (m, n) => `${bar(m)}${bar(-m)}${bar(n)}` }],
     period: ax, center: [0, 0], fov: 6, zone: '[110]',
     elements: [EI.Si, EI.SiOx, EI.O],
@@ -298,6 +357,8 @@ function makeSTO() {
   const lab = (m, n) => `${bar(m)}${bar(n)}0`;
   return {
     id: 'sto', name: 'SrTiO₃ grain boundary', short: 'SrTiO₃ Σ5',
+    grainRot: [th, -th],
+    grainAt(x) { return x < 0 ? 0 : 1; },
     atoms: A, grains: [{ a1: rot([a, 0], th), a2: rot([0, a], th), label: lab }, { a1: rot([a, 0], -th), a2: rot([0, a], -th), label: lab }],
     period: a, center: [0, 0], fov: 5, zone: '[001]',
     elements: [EI.Sr, EI.Ti, EI.O],

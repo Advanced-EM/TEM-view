@@ -53,6 +53,15 @@ export const COMPONENTS = {
     limits: 'Contamination on the edge charges up and adds astigmatism; a smaller aperture means less current.',
     live: (S, sim) => [['α now', `${S.mode === '4d' ? S.alpha4d : S.alpha} mrad`], ['Optimum α for this Cₛ', `${Math.round(1.27 * Math.pow(lamOf(S) / Math.max(1, Math.abs(sim.CsA())), 0.25) * 1000)} mrad`]],
   },
+  'Aberration corrector': {
+    kicker: 'Resolution',
+    role: 'A stack of multipole lenses that cancels the unavoidable aberrations of round lenses. Here it’s a probe corrector above the objective, so the STEM probe can reach sub-ångström size.',
+    physics: 'Round magnetic lenses always have positive C<sub>s</sub> and C<sub>c</sub> (Scherzer’s theorem). Breaking rotational symmetry escapes it: two <b>hexapoles</b> joined by a transfer doublet produce a rotationally symmetric <b>negative</b> third-order aberration that cancels C<sub>s</sub> (Rose/Haider design); quadrupole–octupole correctors (Krivanek) do the same and also reach fifth order. Dozens of power supplies must hold ppm stability.',
+    specs: [['Corrected order', '3rd (C3) routinely, 5th in advanced designs'], ['Residual targets', 'A1 < 1 nm, B2 < 20 nm, A2 < 20 nm, C3 ~ µm'], ['Flat-phase angle', '25–40 mrad at 200–300 kV']],
+    metrology: 'Aberrations are <b>measured</b>, not assumed: from Ronchigrams (STEM) by fitting local magnification in a grid of sub-regions, or from a <b>Zemlin tableau</b> (TEM) of diffractograms at tilted illumination. The software then applies corrections order by order and re-measures, iterating until residuals fall below π/4 at the chosen aperture.',
+    limits: 'Chromatic aberration (unless Cc-corrected), higher-order residuals (C5, A5, S5), and instabilities: power-supply noise, temperature drift, magnetic fields, vibration.',
+    live: (S, sim) => [['On', S.corrector ? 'yes' : 'no (Cₛ uncorrected)'], ['C3', S.corrector ? `${S.csCor} µm` : `${S.csUnc} mm`], ['A1 / B2 / A2', `${S.ab.A1} / ${S.ab.B2} / ${S.ab.A2} nm`], ['Flat phase', sim.ronch.flat ? `${(sim.ronch.flat * 1000).toFixed(1)} mrad` : 'open Ronchigram mode']],
+  },
   'Scan coils': {
     kicker: 'Scanning',
     role: 'Pairs of deflection coils <b>raster</b> the probe across the sample in STEM, and pivot the beam for alignments.',

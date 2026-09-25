@@ -1,6 +1,7 @@
 // Draws the detector views (main image + secondary panel) for each mode.
 import * as P from './physics.js';
 import { stemDetType, AP_MRAD } from './sim.js';
+import { drawRonch, drawCBED, drawMicroED, drawTomo } from './techniques.js';
 
 const C = {
   accent: '#6fd6ff', warm: '#ffb45e', text: '#e9edf2', muted: '#8a94a3', dim: '#566070',
@@ -55,7 +56,7 @@ export function fit(canvas) {
   return { ctx, W: w, H: h, dpr };
 }
 
-function range(arr, pLo = 0.005, pHi = 0.995, fn = null) {
+export function range(arr, pLo = 0.005, pHi = 0.995, fn = null) {
   const n = arr.length, m = Math.min(n, 5000), s = new Float32Array(m);
   for (let i = 0; i < m; i++) { const v = arr[Math.floor((i * n) / m)]; s[i] = fn ? fn(v) : v; }
   s.sort();
@@ -63,7 +64,7 @@ function range(arr, pLo = 0.005, pHi = 0.995, fn = null) {
 }
 
 // Paint a scalar field. noise: electrons per pixel at mean intensity (Poisson shot noise).
-function paint(ctx, arr, w, h, dst, o = {}) {
+export function paint(ctx, arr, w, h, dst, o = {}) {
   const { lo, hi, lut = LUT.gray, log = false, noise = 0, gamma = 1, rows = h, rowsFill = null } = o;
   const { c, ctx: oc, id } = off(w, h);
   const d = id.data;
@@ -88,9 +89,9 @@ function paint(ctx, arr, w, h, dst, o = {}) {
   ctx.drawImage(c, 0, 0, w, h, dst[0], dst[1], dst[2], dst[3]);
 }
 
-function font(ctx, px, dpr, weight = 400) { ctx.font = `${weight} ${Math.round(px * dpr)}px ${MONO}`; }
+export function font(ctx, px, dpr, weight = 400) { ctx.font = `${weight} ${Math.round(px * dpr)}px ${MONO}`; }
 
-function label(ctx, text, x, y, dpr, { color = C.text, bg = 'rgba(5,7,10,0.62)', size = 10, align = 'left' } = {}) {
+export function label(ctx, text, x, y, dpr, { color = C.text, bg = 'rgba(5,7,10,0.62)', size = 10, align = 'left' } = {}) {
   font(ctx, size, dpr);
   const w = ctx.measureText(text).width, p = 4 * dpr, h = size * dpr + 2 * p;
   const bx = align === 'center' ? x - w / 2 - p : align === 'right' ? x - w - 2 * p : x;
@@ -111,7 +112,7 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
-function scaleBar(ctx, dst, fovA, dpr) {
+export function scaleBar(ctx, dst, fovA, dpr) {
   const nice = [1, 2, 5, 10, 20, 50, 100, 200];
   const target = fovA * 0.22;
   let L = nice[0];
@@ -170,9 +171,9 @@ export function draw(sim, S, mainCv, secCv, hover) {
   const m = fit(mainCv), s = fit(secCv);
   m.ctx.fillStyle = C.bg; m.ctx.fillRect(0, 0, m.W, m.H);
   s.ctx.fillStyle = C.bg; s.ctx.fillRect(0, 0, s.W, s.H);
-  const fn = { tem: drawTEM, stem: drawSTEM, diff: drawDiff, '4d': draw4D, eds: drawEDS, eels: drawEELS }[S.mode];
-  fn(sim, S, m, s, hover);
-  if (sim.single?.hits && sim.single.count && S.mode !== '4d' && S.mode !== 'eds' && S.mode !== 'eels') {
+  const fn = { tem: drawTEM, stem: drawSTEM, diff: drawDiff, '4d': draw4D, eds: drawEDS, eels: drawEELS, ronch: drawRonch, cbed: drawCBED, microed: drawMicroED, tomo: drawTomo }[S.mode];
+  fn(sim, S, m, s, performance.now() / 1000);
+  if (sim.single?.hits && sim.single.count && !['4d', 'eds', 'eels', 'microed', 'tomo'].includes(S.mode)) {
     m.ctx.fillStyle = C.bg; m.ctx.fillRect(0, 0, m.W, m.H);
     drawHits(m.ctx, sim.single, [0, 0, m.W, m.H], m.dpr);
   }
@@ -559,7 +560,7 @@ function draw4D(sim, S, m, s, hover) {
   }
 }
 
-function hsv(h, s, v) {
+export function hsv(h, s, v) {
   const i = Math.floor(h * 6), f = h * 6 - i, p = v * (1 - s), q = v * (1 - f * s), t = v * (1 - (1 - f) * s);
   const [r, g, b] = [[v, t, p], [q, v, p], [p, v, t], [p, q, v], [t, p, v], [v, p, q]][i % 6];
   return [r * 255, g * 255, b * 255];

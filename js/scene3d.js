@@ -286,6 +286,19 @@ export class Scene3D {
       this.scanCoils.add(t);
     }
     col.add(this.scanCoils);
+    // probe aberration corrector: two hexapoles with transfer doublet between them
+    this.corrector = new THREE.Group();
+    for (const yc of [2.26, 1.58]) {
+      for (let i = 0; i < 6; i++) {
+        const ang = (i / 6) * Math.PI * 2 + Math.PI / 6;
+        const mat = new THREE.MeshStandardMaterial({ color: 0xb36d3a, metalness: 0.85, roughness: 0.35, emissive: 0x3dff7a, emissiveIntensity: 0.05 });
+        const pole = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.12, 0.07), mat);
+        pole.position.set(Math.cos(ang) * 0.34, yc, Math.sin(ang) * 0.34);
+        pole.rotation.y = -ang;
+        this.corrector.add(pole);
+      }
+    }
+    col.add(this.corrector);
     // specimen holder
     this.holder = new THREE.Group();
     this.holder.position.y = Y.spec;
@@ -437,19 +450,20 @@ export class Scene3D {
       ['Condenser lens 1', [1.18, Y.c1, 0], null],
       ['Condenser lens 2', [1.18, Y.c2, 0], null],
       ['Condenser aperture', [-0.5, Y.cap, 0], null, 'left'],
-      ['Scan coils', [-0.4, Y.scan, 0], ['stem', '4d', 'eds', 'eels'], 'left'],
+      ['Scan coils', [-0.4, Y.scan, 0], ['stem', '4d', 'eds', 'eels', 'tomo'], 'left'],
+      ['Aberration corrector', [0.55, 2.22, 0], ['corr']],
       ['Objective lens', [1.6, Y.objTop - 0.1, 0], null],
       ['Specimen', [0.9, Y.spec + 0.1, 0.1], null],
       ['EDS X-ray detector', [-1.3, Y.spec + 0.9, -0.8], ['eds'], 'left'],
       ['Objective aperture', [-0.5, Y.bfp, 0], ['tem'], 'left'],
-      ['Back focal plane', [-0.5, Y.bfp, 0], ['diff', 'stem', '4d', 'eds', 'eels'], 'left'],
-      ['Selected-area aperture', [0.5, Y.sa, 0], ['diff']],
+      ['Back focal plane', [-0.5, Y.bfp, 0], ['diff', 'stem', '4d', 'eds', 'eels', 'ronch', 'cbed', 'microed', 'tomo'], 'left'],
+      ['Selected-area aperture', [0.5, Y.sa, 0], ['diff', 'microed']],
       ['Intermediate lens', [1.12, Y.int, 0], null],
       ['Projector lens', [1.12, Y.proj, 0], null],
       ['Fluorescent screen', [1.2, Y.screen, 0], ['tem:screen', 'diff:screen']],
-      ['Annular dark-field detector', [1.0, Y.adf, 0], ['stem', 'eds', 'eels']],
+      ['Annular dark-field detector', [1.0, Y.adf, 0], ['stem', 'eds', 'eels', 'tomo']],
       ['Bright-field detector', [-0.35, Y.bfdet, 0], ['stem', 'eds'], 'left'],
-      ['Direct electron detector', [0.7, Y.cam, 0], ['4d', 'tem:ded', 'diff:ded']],
+      ['Direct electron detector', [0.7, Y.cam, 0], ['4d', 'tem:ded', 'diff:ded', 'ronch', 'cbed', 'microed']],
       ['Magnetic prism', [1.2, Y.prism, 0.2], ['eels']],
       ['Energy-loss spectrum', [2.6, Y.prism - 1.0, 0], ['eels']],
     ];
@@ -496,7 +510,8 @@ export class Scene3D {
     const cyan = 0x3dff7a, pale = 0xb4ffc8, warm = 0xffb45e, violet = 0x9dffb0;
     const V = (keys, off = () => [0, 0]) => keys.map(([y, r]) => { const [x, z] = off(y); return [x, y, z, r]; });
     const upperTEM = [[Y.gun, 0], [Y.anode, 0.09], [Y.c1, 0.26], [3.35, 0], [Y.c2, -0.2], [Y.cap, -0.18], [Y.objTop, -0.18], [Y.spec, -0.18]];
-    if (m === 'tem' || m === 'diff') {
+    if (m === 'tem' || m === 'diff' || m === 'microed') {
+      const yEnd = m === 'microed' || S.camera === 'ded' ? Y.cam : Y.screen;
       B.push({ id: 'up', keys: V(upperTEM), color: cyan, I: 1, kids: [] });
       const gs = this.gvecs(S);
       const apMrad = AP_MRAD[S.objAp];
@@ -506,7 +521,7 @@ export class Scene3D {
       this.anim.objApT = m === 'tem' && S.objAp !== 'none' ? apR : null;
       this.anim.objApC = apC;
       const saR = m === 'diff' ? clamp(S.sa * 0.028, 0.06, 0.34) : 0.34;
-      this.anim.saT = m === 'diff' ? saR : null;
+      this.anim.saT = m === 'diff' || m === 'microed' ? saR : null;
       const mainBlocked = m === 'tem' && S.objAp === 'df';
       if (m === 'tem') {
         const lowA = V([[Y.spec, -0.18], [Y.bfp, 0], [Y.sa, 0.3]]);
@@ -525,11 +540,11 @@ export class Scene3D {
         B[0].kids = [['lowA', mainBlocked ? 0.4 : 0.62], ...gs.map((_, i) => ['g' + i, 0.38 / gs.length])];
       } else {
         const camF = (S.camL / 400) * 5.2;
-        const lowKeys = [[Y.spec, -0.18], [Y.bfp, 0], [Y.sa, Math.min(0.3, saR)], [Y.int, 0.34], [Y.proj, 0.18], [Y.screen, 0.025]];
+        const lowKeys = [[Y.spec, -0.18], [Y.bfp, 0], [Y.sa, Math.min(0.3, saR)], [Y.int, 0.34], [Y.proj, 0.18], [yEnd, 0.025]];
         B.push({ id: 'lowA', keys: V(lowKeys), color: cyan, I: 1, kids: [] });
         gs.forEach((g, i) => {
           const d = [g.x * kScale, g.z * kScale];
-          const k = [[Y.spec, 0], [Y.bfp, 1], [Y.sa, 1.35], [Y.int, 1.7], [Y.proj, 2.3], [Y.screen, camF]];
+          const k = [[Y.spec, 0], [Y.bfp, 1], [Y.sa, 1.35], [Y.int, 1.7], [Y.proj, 2.3], [yEnd, camF]];
           const f = (y) => {
             for (let j = 0; j < k.length - 1; j++) if (y <= k[j][0] && y >= k[j + 1][0]) { const t = (k[j][0] - y) / (k[j][0] - k[j + 1][0]); return lerp(k[j][1], k[j + 1][1], t); }
             return camF;
@@ -540,7 +555,8 @@ export class Scene3D {
         B[0].kids = [['lowA', 0.55], ...gs.map((_, i) => ['g' + i, 0.45 / gs.length])];
       }
     } else {
-      const aS = clamp((m === '4d' ? S.alpha4d : S.alpha) / 22, 0.3, 1.6);
+      const aS = clamp((sim.alpha() * 1000) / 22, 0.3, 1.6);
+      const camMode = m === '4d' || m === 'ronch' || m === 'cbed';
       const dfS = clamp(S.df * 0.004, -0.38, 0.38);
       const yc = Y.spec + dfS;
       const sp = this.scanPos(S, sim);
@@ -558,11 +574,11 @@ export class Scene3D {
       B.push({ id: 'up', keys: V(up, scanOff), color: cyan, I: 1, kids: [], dyn: true });
       const r0 = Math.abs(rSpec);
       const bfKeys = [[Y.spec, r0], [Y.objBot, 0.07 * aS + r0], [Y.bfp, 0.1 * aS], [Y.int, 0.15 * aS], [Y.proj, 0.2 * aS]];
-      if (m === '4d') bfKeys.push([Y.cam, 0.36 * aS]);
+      if (camMode) bfKeys.push([Y.cam, 0.36 * aS]);
       else if (m === 'eels') bfKeys.push([-3.6, 0.12 * aS], [Y.prism + 0.02, 0.05]);
       else bfKeys.push([Y.adf, 0.28 * aS], [Y.bfdet, 0.3 * aS]);
       B.push({ id: 'bf', keys: V(bfKeys, scanOff), color: cyan, I: 0.9, kids: [], dyn: true });
-      const adfKeys = [[Y.spec, 0.0], [Y.objBot, 0.2], [Y.bfp, 0.3], [Y.int, 0.52], [Y.proj, 0.6], [m === '4d' ? Y.cam : Y.adf, m === '4d' ? 0.62 : 0.72]];
+      const adfKeys = [[Y.spec, 0.0], [Y.objBot, 0.2], [Y.bfp, 0.3], [Y.int, 0.52], [Y.proj, 0.6], [camMode ? Y.cam : Y.adf, camMode ? 0.62 : 0.72]];
       B.push({ id: 'adf', keys: V(adfKeys, scanOff), color: violet, I: 0.3, kids: [], dyn: true });
       B[0].kids = [['bf', 0.8], ['adf', 0.2]];
       if (m === 'eels') {
@@ -596,12 +612,13 @@ export class Scene3D {
       const f = sim.fd, k = S.fdSel >= 0 ? S.fdSel : Math.max(0, f.done - 1);
       return [(((k % f.N) + 0.5) / f.N - 0.5) * 0.22, ((((k / f.N) | 0) + 0.5) / f.N - 0.5) * 0.22];
     }
+    if (S.mode === 'ronch' || S.mode === 'cbed') return [0, 0];
     const t = this.time * 0.9;
     return [Math.sin(t * 3.1) * 0.08, Math.sin(t * 0.37) * 0.08];
   }
 
   applyLayout(S, sim, force) {
-    const key = [S.mode, S.spec, S.kV, S.objAp, S.camL, S.sa, S.alpha, S.alpha4d, S.df, S.eelsWin, S.camera].join('|');
+    const key = [S.mode, S.spec, S.kV, S.objAp, S.camL, S.sa, S.alpha, S.alpha4d, S.df, S.eelsWin, S.camera, S.ronchAp, S.alphaCB, S.alphaLA, S.cbedKind].join('|');
     if (key !== this.layoutKey) {
       const modeChanged = !this.layoutKey || this.layoutKey.split('|')[0] !== S.mode;
       this.layoutKey = key;
@@ -658,11 +675,11 @@ export class Scene3D {
       this.beamGroups[slot].visible = w > 0.01;
     });
     // mechanical parts
-    const stemLike = m !== 'tem' && m !== 'diff';
-    const ded = m === '4d' || (!stemLike && S.camera === 'ded');
+    const stemLike = !['tem', 'diff', 'microed'].includes(m);
+    const ded = ['4d', 'ronch', 'cbed', 'microed'].includes(m) || (!stemLike && S.camera === 'ded');
     A.screenLift = lerp(A.screenLift, stemLike || ded ? 1 : 0, k);
     this.screenPivot.rotation.x = -A.screenLift * 1.35;
-    A.adf = lerp(A.adf, m === 'stem' || m === 'eds' || m === 'eels' ? 1 : 0, k);
+    A.adf = lerp(A.adf, ['stem', 'eds', 'eels', 'tomo'].includes(m) ? 1 : 0, k);
     this.adf.position.set((1 - A.adf) * -2.6, Y.adf, 0);
     this.adf.visible = A.adf > 0.02;
     A.bf = lerp(A.bf, m === 'stem' || m === 'eds' ? 1 : 0, k);
@@ -697,8 +714,12 @@ export class Scene3D {
       setAp(this.saAp, this.anim.saT, null, 'sar', 'saX', Y.sa, 1);
     }
     // holder tilt (exaggerated ×6 so it reads)
-    this.holder.rotation.x = (S.tiltY * Math.PI / 180) * 6;
-    this.holder.rotation.z = (S.tiltX * Math.PI / 180) * 6;
+    // MicroED and tomography rotate the real holder about its own axis; otherwise small tilts are exaggerated ×6
+    const rotHolder = m === 'microed' ? sim.med.phi : m === 'tomo' ? sim.tomo.theta : null;
+    this.holder.rotation.x = rotHolder !== null ? rotHolder * Math.PI / 180 : (S.tiltY * Math.PI / 180) * 6;
+    this.holder.rotation.z = rotHolder !== null ? 0 : (S.tiltX * Math.PI / 180) * 6;
+    this.corrector.visible = S.corrector;
+    this.corrector.children.forEach((c, i) => { c.material.emissiveIntensity = m === 'ronch' ? 0.35 + 0.25 * Math.sin(this.time * 4 + i) : 0.05; });
     // glows
     const sp = this.scanPos(S, sim);
     const onSpec = stemLike ? sp : [0, 0];
@@ -795,7 +816,7 @@ export class Scene3D {
     const show = S.showLabels, v = new THREE.Vector3();
     const w = this.W, h = this.H;
     for (const L of this.labels) {
-      const on = show && (!L.modes || L.modes.includes(S.mode) || L.modes.includes(`${S.mode}:${S.camera}`));
+      const on = show && (!L.modes || L.modes.includes(S.mode) || L.modes.includes(`${S.mode}:${S.camera}`) || (L.modes.includes('corr') && S.corrector));
       if (!on) { L.el.style.opacity = 0; L.el.classList.add('off'); continue; }
       v.copy(L.pos).project(this.camera);
       if (v.z > 1) { L.el.style.opacity = 0; L.el.classList.add('off'); continue; }
