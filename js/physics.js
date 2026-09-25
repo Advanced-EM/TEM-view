@@ -17,7 +17,10 @@ export function sigmaOf(kV) {
   const V = kV * 1e3;
   return ((2 * Math.PI) / (wavelength(kV) * V)) * (MC2 + V) / (2 * MC2 + V);
 }
-export const scherzerDefocus = (CsA, lam) => -1.2 * Math.sqrt(CsA * lam);
+// Optimum defocus mirrors the sign of Cs: positive Cs wants underfocus (atoms dark), negative Cs wants
+// overfocus (negative-Cs imaging, atoms bright). Cs = 0 gives no phase contrast at any single optimum.
+export const scherzerDefocus = (CsA, lam) => -1.2 * Math.sign(CsA) * Math.sqrt(Math.abs(CsA) * lam);
+export const probeDefocus = (CsA, lam) => -0.75 * Math.sign(CsA) * Math.sqrt(Math.abs(CsA) * lam);
 export const pointResolution = (CsA, lam) => 0.66 * Math.pow(Math.abs(CsA), 0.25) * Math.pow(lam, 0.75);
 export const infoLimit = (lam, focalSpread) => Math.sqrt((Math.PI * lam * focalSpread) / 2);
 

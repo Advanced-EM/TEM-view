@@ -3,6 +3,7 @@ import { Sim, stemDetType } from './sim.js';
 import * as R2 from './render2d.js';
 import { Scene3D, Y } from './scene3d.js';
 import { modeInfo, changeText, dataRows } from './explain.js';
+import { renderComponent } from './components.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -231,7 +232,7 @@ function chip(key, v) {
     S.df = clamp(S.df, -lim, lim);
     if (!v && fam(S.mode) === 'tem') S.df = +(P.scherzerDefocus(sim.CsA(), sim.lam) / 10).toFixed(1);
     S.dfFam[fam(S.mode)] = S.df;
-    if (!v && S.mode !== 'tem' && S.mode !== 'diff') { S.alpha = Math.min(S.alpha, 10); S.df = S.dfFam.probe = +(-0.75 * Math.sqrt(sim.CsA() * sim.lam) / 10).toFixed(1); }
+    if (!v && S.mode !== 'tem' && S.mode !== 'diff') { S.alpha = Math.min(S.alpha, 10); S.df = S.dfFam.probe = +(P.probeDefocus(sim.CsA(), sim.lam) / 10).toFixed(1); }
     if (v) { S.alpha = 22; S.dfFam.probe = 0; if (fam(S.mode) === 'probe') S.df = 0; }
     sim.invalidate('corrector');
     refreshControls();
@@ -304,8 +305,7 @@ function action(id, el) {
   if (id === 'optfocus') {
     const Cs = sim.CsA(), lam = sim.lam;
     let df;
-    if (fam(S.mode) === 'tem') df = Cs > 0 ? P.scherzerDefocus(Cs, lam) / 10 : 0;
-    else df = Cs > 0 ? (-0.75 * Math.sqrt(Cs * lam)) / 10 : 0;
+    df = (fam(S.mode) === 'tem' ? P.scherzerDefocus(Cs, lam) : P.probeDefocus(Cs, lam)) / 10;
     set('df', +df.toFixed(1), 'df');
   }
   if (id === 'pause') { S.paused = !S.paused; refreshControls(); }
@@ -550,6 +550,42 @@ function frame(now) {
   }
   requestAnimationFrame(frame);
 }
+
+// ------------------------------------------------------------------ component cards
+let openComp = null;
+function showComponent(name, el) {
+  const card = $('#comp');
+  document.querySelectorAll('.lbl.active').forEach((l) => l.classList.remove('active'));
+  if (openComp === name && !card.hidden) { closeComponent(); return; }
+  openComp = name;
+  el.classList.add('active');
+  card.querySelector('.compBody').innerHTML = renderComponent(name, S, sim);
+  card.hidden = false;
+  card.scrollTop = 0;
+  if (!document.body.classList.contains('stacked')) {
+    const r = el.getBoundingClientRect(), W = 360, H = Math.min(card.offsetHeight, window.innerHeight - 40);
+    const right = r.right + 14 + W < window.innerWidth - 360;
+    const x = right ? r.right + 14 : Math.max(16, r.left - W - 14);
+    const y = Math.max(16, Math.min(window.innerHeight - H - 16, r.top - 40));
+    card.style.left = `${x}px`; card.style.top = `${y}px`;
+  }
+}
+function closeComponent() {
+  $('#comp').hidden = true;
+  openComp = null;
+  document.querySelectorAll('.lbl.active').forEach((l) => l.classList.remove('active'));
+}
+scene.onLabel = showComponent;
+$('#comp .close').addEventListener('click', closeComponent);
+document.addEventListener('pointerdown', (e) => { if (openComp && !e.target.closest('#comp') && !e.target.closest('.lbl')) closeComponent(); });
+window.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeComponent(); });
+// keep "Right now" values current while a card is open
+setInterval(() => {
+  if (!openComp) return;
+  const body = $('#comp .compBody'), st = body.parentElement.scrollTop;
+  body.innerHTML = renderComponent(openComp, S, sim);
+  body.parentElement.scrollTop = st;
+}, 700);
 
 build();
 wire();

@@ -456,7 +456,10 @@ export class Scene3D {
     this.labels = L.map(([text, p, modes, side]) => {
       const el = document.createElement('div');
       el.className = 'lbl' + (side === 'left' ? ' left' : '');
-      el.innerHTML = `<i></i><span>${text}</span>`;
+      el.innerHTML = `<i></i><span role="button" tabindex="0">${text}</span>`;
+      const open = (e) => { e.stopPropagation(); this.onLabel?.(text, el); };
+      el.querySelector('span').addEventListener('click', open);
+      el.querySelector('span').addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') open(e); });
       this.labelLayer.appendChild(el);
       return { el, pos: new THREE.Vector3(...p), modes };
     });
@@ -793,9 +796,10 @@ export class Scene3D {
     const w = this.W, h = this.H;
     for (const L of this.labels) {
       const on = show && (!L.modes || L.modes.includes(S.mode) || L.modes.includes(`${S.mode}:${S.camera}`));
-      if (!on) { L.el.style.opacity = 0; continue; }
+      if (!on) { L.el.style.opacity = 0; L.el.classList.add('off'); continue; }
       v.copy(L.pos).project(this.camera);
-      if (v.z > 1) { L.el.style.opacity = 0; continue; }
+      if (v.z > 1) { L.el.style.opacity = 0; L.el.classList.add('off'); continue; }
+      L.el.classList.remove('off');
       const x = (v.x * 0.5 + 0.5) * w, y = (-v.y * 0.5 + 0.5) * h;
       L.el.style.opacity = 1;
       L.el.style.transform = `translate(${x}px, ${y}px)`;
