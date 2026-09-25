@@ -1,7 +1,6 @@
 // Plain-English explanations of what each mode shows and what each control physically changes.
 import * as P from './physics.js';
 import { stemDetType, AP_MRAD } from './sim.js';
-import { tomoStats } from './techniques.js';
 
 const f1 = (v) => v.toFixed(1), f2 = (v) => v.toFixed(2);
 const sgn = (v, d = 1) => (v > 0 ? '+' : '') + v.toFixed(d);
@@ -96,30 +95,6 @@ export function modeInfo(S, sim) {
         stats: lac
           ? [['Convergence α', `${S.alphaLA} mrad`, 'large-angle'], ['Lattice strain', `${S.strain >= 0 ? '+' : ''}${S.strain.toFixed(2)} %`, 'moves HOLZ lines'], ['Wavelength', `${f2(o.lam * 100)} pm`, 'HOLZ lines also calibrate kV']]
           : [['Convergence α', `${S.alphaCB} mrad`, 'disk radius'], ['Fitted thickness', f ? `${(f.t / 10).toFixed(1)} nm` : '—', `true ${S.thick} nm`], ['Extinction distance', f ? `${(f.xi / 10).toFixed(0)} nm` : '—', 'from the same fit']],
-      };
-    }
-    case 'microed': {
-      const M = sim.med, allowed = M.refl.filter((r) => r.allowed).length;
-      return {
-        title: 'Crystal structures from <em>nanocrystals</em>',
-        body: `<b>3D electron diffraction</b> (MicroED / continuous-rotation ED): a single nanocrystal, far too small for X-rays, is rotated continuously in a nearly parallel, very low-dose beam while a fast <b>direct electron detector</b> records diffraction frames, like a movie. Each frame catches the reflections crossing the Ewald sphere during that slice of rotation. Put back into the crystal’s frame, the frames fill a <b>3D reciprocal lattice</b> (right), from which the unit cell and <b>systematic absences</b> (lattice centring, glide planes) are read, then intensities are used to solve the structure. The goniometer can’t rotate a full 180°, leaving a <b>missing wedge</b> of unmeasured reflections. Dynamical scattering in thick crystals perturbs intensities, which is why MicroED works best on crystals thinner than ~200 nm.`,
-        stats: [
-          ['Completeness', `${Math.round((100 * M.obs.size) / Math.max(1, allowed))} %`, `±${S.medRange}° rotation`],
-          ['Frames', `${M.frames}`, `${S.medOsc}° each`],
-          ['Lattice', M.result ? M.result.lattice.split(' ')[0] : '…', M.result ? `a = ${M.result.a.toFixed(3)} Å` : 'after the sweep'],
-        ],
-      };
-    }
-    case 'tomo': {
-      const st = tomoStats(S, sim.tomo);
-      return {
-        title: 'Seeing in <em>three dimensions</em>',
-        body: `An electron image is a <b>projection</b>: everything along the beam is summed. <b>Tomography</b> tilts the specimen step by step and records a projection at each angle; HAADF-STEM is ideal because its intensity is (nearly) a linear projection of mass and Z. Mathematically each projection is a slice of the object’s 3D Fourier transform (the <b>central-slice theorem</b>), so combining them fills 3D Fourier space. It’s reconstructed by <b>weighted back-projection</b> (smearing each filtered projection back through the volume) or iterative <b>SIRT</b>. The holder can’t tilt to ±90°, so a <b>missing wedge</b> of information elongates features along the beam, clearly visible in the YZ slice. Compare it with the ground truth.`,
-        stats: [
-          ['Projections', `${st.nP}`, `±${S.tomoRange}° every ${S.tomoStep}°`],
-          ['Crowther resolution', `${st.crowther.toFixed(1)} nm`, 'd = πD/N for a 46 nm object'],
-          ['Elongation (beam axis)', `${st.elong.toFixed(2)}×`, 'from the missing wedge'],
-        ],
       };
     }
     case 'eels': {
@@ -240,16 +215,6 @@ export function changeText(key, S, sim) {
     case 'alphaLA': return ['LACBED angle', `A <b>${S.alphaLA} mrad</b> cone. The wider it is, the more lines and the larger the area of specimen seen in the shadow image.`];
     case 'strain': return ['Lattice strain', `Lattice parameter changed by <b>${S.strain >= 0 ? '+' : ''}${S.strain.toFixed(2)} %</b>. HOLZ lines come from reflections with large g, where the Bragg condition is extremely sensitive to d-spacing, so they shift visibly for 0.1 % strain. That’s how CBED measures local strain in transistors. The same shift results from a change in accelerating voltage, which is why HOLZ lines also calibrate kV.`];
     case 'holz': return ['HOLZ lines', S.holz ? 'Showing higher-order Laue zone lines: fine deficiency lines where a reflection in the next reciprocal-lattice layer is exactly excited.' : 'HOLZ lines hidden: only zero-order (ZOLZ) dynamical contrast remains.'];
-    case 'medRange': return ['Rotation range', `Rotating over <b>±${S.medRange}°</b>. Anything the rotation never brings through the Ewald sphere stays unmeasured: the missing wedge. Wider ranges raise completeness, but holders, grid bars and crystal shadowing limit it in practice (typically ±60–70°).`];
-    case 'medRate': return ['Rotation speed', `<b>${S.medRate}°/s</b>. Real MicroED rotates slowly (~0.2–1°/s) at a dose rate of ~0.01 e⁻/Å²/s so a whole dataset uses only a few e⁻/Å², low enough for proteins.`];
-    case 'medOsc': return ['Frame oscillation', `Each frame integrates <b>${S.medOsc}°</b> of rotation. Fine slicing samples each reflection’s rocking curve (partiality) more accurately; coarse slicing is faster but merges neighbouring reflections.`];
-    case 'microed': return ['New rotation', 'Starting a fresh continuous-rotation dataset from the most negative angle.'];
-    case 'tomoRange': return ['Tilt range', `<b>±${S.tomoRange}°</b>. The unmeasured wedge of Fourier space stretches features along the beam by about <b>${tomoStats(S, sim.tomo).elong.toFixed(2)}×</b>. Needle-shaped specimens on on-axis holders can reach ±90° and remove it.`];
-    case 'tomoStep': return ['Tilt increment', `Every <b>${S.tomoStep}°</b> gives ${tomoStats(S, sim.tomo).nP} projections. By the Crowther criterion the resolution is ~πD/N ≈ <b>${tomoStats(S, sim.tomo).crowther.toFixed(1)} nm</b>: finer steps help, but every projection adds dose.`];
-    case 'tomoAlg': return ['Reconstruction', S.tomoAlg === 'sirt' ? '<b>SIRT</b>: start from nothing, simulate projections of the current guess, compare with the data, and back-project the difference; repeat. It suppresses streaks and handles noise and the missing wedge better, at the cost of iterations.' : '<b>Weighted back-projection</b>: each projection is ramp-filtered (to undo the 1/|k| over-weighting of low frequencies) and smeared back through the volume. It’s fast and linear, but it shows streaks from sparse angles.'];
-    case 'tomoIter': return ['SIRT iterations', `<b>${S.tomoIter}</b> iterations. Too few leaves the volume blurry; too many starts fitting the noise.`];
-    case 'tomoView': return ['Compare', S.tomoView === 'truth' ? 'Showing the <b>ground-truth</b> object. Compare its YZ slice with the reconstruction to see the missing-wedge elongation.' : 'Showing the <b>reconstruction</b> from the tilt series.'];
-    case 'tomoSlice': return null;
     case 'mode': return null;
   }
   return null;

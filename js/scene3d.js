@@ -450,20 +450,20 @@ export class Scene3D {
       ['Condenser lens 1', [1.18, Y.c1, 0], null],
       ['Condenser lens 2', [1.18, Y.c2, 0], null],
       ['Condenser aperture', [-0.5, Y.cap, 0], null, 'left'],
-      ['Scan coils', [-0.4, Y.scan, 0], ['stem', '4d', 'eds', 'eels', 'tomo'], 'left'],
+      ['Scan coils', [-0.4, Y.scan, 0], ['stem', '4d', 'eds', 'eels'], 'left'],
       ['Aberration corrector', [0.55, 2.22, 0], ['corr']],
       ['Objective lens', [1.6, Y.objTop - 0.1, 0], null],
       ['Specimen', [0.9, Y.spec + 0.1, 0.1], null],
       ['EDS X-ray detector', [-1.3, Y.spec + 0.9, -0.8], ['eds'], 'left'],
       ['Objective aperture', [-0.5, Y.bfp, 0], ['tem'], 'left'],
-      ['Back focal plane', [-0.5, Y.bfp, 0], ['diff', 'stem', '4d', 'eds', 'eels', 'ronch', 'cbed', 'microed', 'tomo'], 'left'],
-      ['Selected-area aperture', [0.5, Y.sa, 0], ['diff', 'microed']],
+      ['Back focal plane', [-0.5, Y.bfp, 0], ['diff', 'stem', '4d', 'eds', 'eels', 'ronch', 'cbed'], 'left'],
+      ['Selected-area aperture', [0.5, Y.sa, 0], ['diff']],
       ['Intermediate lens', [1.12, Y.int, 0], null],
       ['Projector lens', [1.12, Y.proj, 0], null],
       ['Fluorescent screen', [1.2, Y.screen, 0], ['tem:screen', 'diff:screen']],
-      ['Annular dark-field detector', [1.0, Y.adf, 0], ['stem', 'eds', 'eels', 'tomo']],
+      ['Annular dark-field detector', [1.0, Y.adf, 0], ['stem', 'eds', 'eels']],
       ['Bright-field detector', [-0.35, Y.bfdet, 0], ['stem', 'eds'], 'left'],
-      ['Direct electron detector', [0.7, Y.cam, 0], ['4d', 'tem:ded', 'diff:ded', 'ronch', 'cbed', 'microed']],
+      ['Direct electron detector', [0.7, Y.cam, 0], ['4d', 'tem:ded', 'diff:ded', 'ronch', 'cbed']],
       ['Magnetic prism', [1.2, Y.prism, 0.2], ['eels']],
       ['Energy-loss spectrum', [2.6, Y.prism - 1.0, 0], ['eels']],
     ];
@@ -510,8 +510,8 @@ export class Scene3D {
     const cyan = 0x3dff7a, pale = 0xb4ffc8, warm = 0xffb45e, violet = 0x9dffb0;
     const V = (keys, off = () => [0, 0]) => keys.map(([y, r]) => { const [x, z] = off(y); return [x, y, z, r]; });
     const upperTEM = [[Y.gun, 0], [Y.anode, 0.09], [Y.c1, 0.26], [3.35, 0], [Y.c2, -0.2], [Y.cap, -0.18], [Y.objTop, -0.18], [Y.spec, -0.18]];
-    if (m === 'tem' || m === 'diff' || m === 'microed') {
-      const yEnd = m === 'microed' || S.camera === 'ded' ? Y.cam : Y.screen;
+    if (m === 'tem' || m === 'diff') {
+      const yEnd = S.camera === 'ded' ? Y.cam : Y.screen;
       B.push({ id: 'up', keys: V(upperTEM), color: cyan, I: 1, kids: [] });
       const gs = this.gvecs(S);
       const apMrad = AP_MRAD[S.objAp];
@@ -521,7 +521,7 @@ export class Scene3D {
       this.anim.objApT = m === 'tem' && S.objAp !== 'none' ? apR : null;
       this.anim.objApC = apC;
       const saR = m === 'diff' ? clamp(S.sa * 0.028, 0.06, 0.34) : 0.34;
-      this.anim.saT = m === 'diff' || m === 'microed' ? saR : null;
+      this.anim.saT = m === 'diff' ? saR : null;
       const mainBlocked = m === 'tem' && S.objAp === 'df';
       if (m === 'tem') {
         const lowA = V([[Y.spec, -0.18], [Y.bfp, 0], [Y.sa, 0.3]]);
@@ -675,11 +675,11 @@ export class Scene3D {
       this.beamGroups[slot].visible = w > 0.01;
     });
     // mechanical parts
-    const stemLike = !['tem', 'diff', 'microed'].includes(m);
-    const ded = ['4d', 'ronch', 'cbed', 'microed'].includes(m) || (!stemLike && S.camera === 'ded');
+    const stemLike = !['tem', 'diff'].includes(m);
+    const ded = ['4d', 'ronch', 'cbed'].includes(m) || (!stemLike && S.camera === 'ded');
     A.screenLift = lerp(A.screenLift, stemLike || ded ? 1 : 0, k);
     this.screenPivot.rotation.x = -A.screenLift * 1.35;
-    A.adf = lerp(A.adf, ['stem', 'eds', 'eels', 'tomo'].includes(m) ? 1 : 0, k);
+    A.adf = lerp(A.adf, ['stem', 'eds', 'eels'].includes(m) ? 1 : 0, k);
     this.adf.position.set((1 - A.adf) * -2.6, Y.adf, 0);
     this.adf.visible = A.adf > 0.02;
     A.bf = lerp(A.bf, m === 'stem' || m === 'eds' ? 1 : 0, k);
@@ -714,10 +714,9 @@ export class Scene3D {
       setAp(this.saAp, this.anim.saT, null, 'sar', 'saX', Y.sa, 1);
     }
     // holder tilt (exaggerated ×6 so it reads)
-    // MicroED and tomography rotate the real holder about its own axis; otherwise small tilts are exaggerated ×6
-    const rotHolder = m === 'microed' ? sim.med.phi : m === 'tomo' ? sim.tomo.theta : null;
-    this.holder.rotation.x = rotHolder !== null ? rotHolder * Math.PI / 180 : (S.tiltY * Math.PI / 180) * 6;
-    this.holder.rotation.z = rotHolder !== null ? 0 : (S.tiltX * Math.PI / 180) * 6;
+    // holder tilt (exaggerated ×6 so it reads)
+    this.holder.rotation.x = (S.tiltY * Math.PI / 180) * 6;
+    this.holder.rotation.z = (S.tiltX * Math.PI / 180) * 6;
     this.corrector.visible = S.corrector;
     this.corrector.children.forEach((c, i) => { c.material.emissiveIntensity = m === 'ronch' ? 0.35 + 0.25 * Math.sin(this.time * 4 + i) : 0.05; });
     // glows

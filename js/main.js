@@ -19,10 +19,8 @@ const S = {
   speed: 1, paused: false, showLabels: true, showElectrons: true, showGlass: true, autoRotate: false,
   ab: { A1: 0, A1a: 0, B2: 0, B2a: 0, A2: 0, A2a: 0, A3: 0, A3a: 0 }, ronchAp: 45,
   cbedKind: 'cbed', alphaCB: 3, alphaLA: 40, strain: 0, holz: true,
-  medRange: 60, medRate: 6, medOsc: 0.5,
-  tomoRange: 70, tomoStep: 2, tomoAlg: 'wbp', tomoIter: 20, tomoSlice: 0.5, tomoView: 'recon',
 };
-const fam = (m) => (m === 'tem' || m === 'diff' || m === 'microed' ? 'tem' : 'probe');
+const fam = (m) => (m === 'tem' || m === 'diff' ? 'tem' : 'probe');
 S.df = S.dfFam[fam(S.mode)];
 
 const sim = new Sim(S);
@@ -31,26 +29,24 @@ const mainCv = $('#detMain'), secCv = $('#detSec');
 
 // ------------------------------------------------------------------ controls definition
 const MODES = [
-  ['tem', 'TEM', 'parallel-beam imaging', 'Imaging'], ['stem', 'STEM', 'scanned probe', 'Imaging'], ['4d', '4D-STEM', 'pattern per pixel', 'Imaging'], ['tomo', 'Tomography', '3D from tilts', 'Imaging'],
-  ['diff', 'SAED', 'selected-area diffraction', 'Diffraction'], ['cbed', 'CBED', 'convergent beam', 'Diffraction'], ['microed', '3D-ED', 'MicroED rotation', 'Diffraction'],
+  ['tem', 'TEM', 'parallel-beam imaging', 'Imaging'], ['stem', 'STEM', 'scanned probe', 'Imaging'], ['4d', '4D-STEM', 'pattern per pixel', 'Imaging'],
+  ['diff', 'SAED', 'selected-area diffraction', 'Diffraction'], ['cbed', 'CBED', 'convergent beam', 'Diffraction'],
   ['eds', 'EDS', 'X-ray spectra', 'Spectroscopy'], ['eels', 'EELS', 'energy loss', 'Spectroscopy'],
   ['ronch', 'Ronchigram', 'corrector tuning', 'Alignment'],
 ];
-const KEYS = '1234567890';
+const KEYS = '12345678';
 const logMap = (min, max) => ({ to: (v) => (Math.log(v / min) / Math.log(max / min)) * 1000, from: (t) => min * Math.pow(max / min, t / 1000) });
 
-const NOT_TOMO = 'tem stem 4d diff eds eels ronch cbed microed';
-const NOT_TOMO_R = 'tem stem 4d diff eds eels cbed microed';
+const NOT_RONCH = 'tem stem 4d diff eds eels cbed';
 const TILTABLE = 'tem stem 4d diff eds eels cbed';
 const CONTROLS = [
   { sec: 'The specimen' },
-  { chips: 'spec', modes: NOT_TOMO, opts: [['au', 'Gold on carbon'], ['si', 'Si / SiO₂'], ['sto', 'SrTiO₃ boundary']] },
-  { slider: 'thick', label: 'Thickness', min: 3, max: 150, step: 1, fmt: (v) => `${v} nm`, ends: ['thin', '', 'thick'], modes: NOT_TOMO_R },
+  { chips: 'spec', opts: [['au', 'Gold on carbon'], ['si', 'Si / SiO₂'], ['sto', 'SrTiO₃ boundary']] },
+  { slider: 'thick', label: 'Thickness', min: 3, max: 150, step: 1, fmt: (v) => `${v} nm`, ends: ['thin', '', 'thick'], modes: NOT_RONCH },
   { slider: 'fov', label: 'Field of view', min: 1.5, max: 30, log: true, fmt: (v) => `${v.toFixed(1)} nm`, modes: 'tem stem 4d eds eels', note: 'Drag the detector image to move the stage; scroll to zoom.' },
   { slider: 'tiltX', inv: 'tilt', label: 'Tilt α', min: -3, max: 3, step: 0.02, fmt: (v) => `${v.toFixed(2)}°`, modes: TILTABLE },
   { slider: 'tiltY', inv: 'tilt', label: 'Tilt β', min: -3, max: 3, step: 0.02, fmt: (v) => `${v.toFixed(2)}°`, ends: ['', 'zone axis', ''], modes: TILTABLE },
   { buttons: [['zone', 'Return to zone axis']], modes: TILTABLE },
-  { p: 'Phantom: a porous oxide catalyst support (~45 nm) decorated with Au nanoparticles, voxel = 1 nm.', modes: 'tomo' },
 
   { sec: 'The electron gun' },
   { slider: 'kV', label: 'Accelerating voltage', min: 60, max: 300, step: 10, fmt: (v) => `${v} kV` },
@@ -85,21 +81,6 @@ const CONTROLS = [
   { slider: 'strain', label: 'Lattice strain', min: -1, max: 1, step: 0.02, fmt: (v) => `${v >= 0 ? '+' : ''}${v.toFixed(2)} %`, modes: 'cbed', ends: ['compressed', '', 'expanded'] },
   { toggles: [['holz', 'HOLZ lines']], modes: 'cbed' },
   { p: 'Drag the pattern to move the probe across the specimen. In LACBED the shadow image shows where each line comes from.', modes: 'cbed' },
-
-  { sec: '3D electron diffraction', modes: 'microed' },
-  { slider: 'medRange', label: 'Rotation range', min: 20, max: 80, step: 1, fmt: (v) => `±${v}°`, modes: 'microed', ends: ['', '', 'missing wedge shrinks'] },
-  { slider: 'medRate', label: 'Rotation speed', min: 0.5, max: 20, step: 0.5, fmt: (v) => `${v}°/s`, modes: 'microed' },
-  { slider: 'medOsc', label: 'Frame oscillation', min: 0.1, max: 2, step: 0.05, fmt: (v) => `${v.toFixed(2)}° / frame`, modes: 'microed' },
-  { buttons: [['medStart', 'Restart rotation']], modes: 'microed' },
-
-  { sec: 'Tilt series & reconstruction', modes: 'tomo' },
-  { slider: 'tomoRange', label: 'Tilt range', min: 30, max: 90, step: 1, fmt: (v) => `±${v}°`, modes: 'tomo', ends: ['big wedge', '', 'no wedge'] },
-  { slider: 'tomoStep', label: 'Tilt increment', min: 1, max: 10, step: 0.5, fmt: (v) => `${v}°`, modes: 'tomo' },
-  { chips: 'tomoAlg', label: 'Reconstruction', modes: 'tomo', opts: [['wbp', 'Weighted back-projection'], ['sirt', 'SIRT (iterative)']] },
-  { slider: 'tomoIter', label: 'SIRT iterations', min: 5, max: 60, step: 1, fmt: (v) => `${v}`, modes: 'tomo', show: () => S.tomoAlg === 'sirt' },
-  { slider: 'tomoSlice', label: 'Slice position', min: 0.1, max: 0.9, step: 0.01, fmt: (v) => `${Math.round(v * 64)} / 64`, modes: 'tomo' },
-  { chips: 'tomoView', modes: 'tomo', opts: [['recon', 'Reconstruction'], ['truth', 'Ground truth']] },
-  { buttons: [['tomoStart', 'Acquire new tilt series']], modes: 'tomo' },
 
   { sec: 'Detectors', modes: 'tem stem diff 4d eds eels' },
   { chips: 'camera', label: 'Camera', modes: 'tem diff', opts: [['screen', 'Fluorescent screen'], ['ded', 'Direct electron detector']] },
@@ -259,7 +240,7 @@ function refreshControls() {
   document.querySelectorAll('.exp').forEach((e) => e.classList.toggle('on', (e.dataset.exp === 'single' && !!sim.single) || (e.dataset.exp === 'tour' && !!scene.tour)));
   document.querySelectorAll('.modes button').forEach((b) => b.classList.toggle('on', b.dataset.mode === S.mode));
   document.querySelectorAll('.clarity button').forEach((b) => b.classList.toggle('on', b.dataset.v === S.clarity));
-  const singleOk = !['eds', 'eels', 'microed', 'tomo'].includes(S.mode);
+  const singleOk = !['eds', 'eels'].includes(S.mode);
   const se = $('.exp[data-exp="single"]');
   if (se) se.classList.toggle('disabled', !singleOk);
   if ($('#infoTitle')) { renderInfo(); updateDetectorHeader(); }
@@ -344,7 +325,7 @@ function setMode(m) {
   S.mode = m;
   S.df = S.dfFam[fam(m)];
   S.fdSel = -1;
-  if (['eds', 'eels', 'microed', 'tomo'].includes(m)) { if (sim.single) sim.startSingle(false); }
+  if (m === 'eds' || m === 'eels') { if (sim.single) sim.startSingle(false); }
   sim.invalidate('mode');
   sim.stale.probe = 1;
   refreshControls();
@@ -373,11 +354,9 @@ function action(id, el) {
     sim.invalidate('ab'); refreshControls(); explainChange('scramble');
   }
   if (id === 'autotune') autoTune();
-  if (id === 'medStart') { sim.med.reset(); sim.version++; explainChange('microed'); }
-  if (id === 'tomoStart') { sim.tomo.start(); sim.version++; }
   if (id === 'resetView') scene.resetView();
   if (id === 'single') {
-    if (['eds', 'eels', 'microed', 'tomo'].includes(S.mode)) return;
+    if (['eds', 'eels'].includes(S.mode)) return;
     sim.startSingle(!sim.single);
     refreshControls();
     explainChange('single');
@@ -487,8 +466,6 @@ function updateDetectorHeader() {
     eels: ['Energy-filtered map', 'Electron energy-loss spectrum'],
     ronch: ['Ronchigram · direct electron detector', 'Aberration phase & budget'],
     cbed: [S.cbedKind === 'lacbed' ? 'LACBED pattern' : 'CBED pattern', S.cbedKind === 'lacbed' ? 'HOLZ lines & strain sensitivity' : 'Kossel–Möllenstedt thickness fit'],
-    microed: ['Diffraction frame · continuous rotation', '3D reciprocal lattice'],
-    tomo: ['Tilt series · HAADF projection', 'Reconstruction: slices & volume'],
   }[S.mode];
   $('#detTitle').textContent = names[0];
   $('#secTitle').textContent = names[1];
@@ -537,7 +514,7 @@ function wire() {
     }
     if (!drag) return;
     const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
-    if (S.mode === 'diff' || S.mode === 'microed' || S.mode === 'tomo' || S.mode === 'ronch') {
+    if (S.mode === 'diff' || S.mode === 'ronch') {
       if (S.mode !== 'diff') return;
       S.tiltX = clamp(+(drag.tx - dx * 0.006).toFixed(2), -3, 3); S.tiltY = clamp(+(drag.ty - dy * 0.006).toFixed(2), -3, 3);
       sim.invalidate('tilt'); refreshControls(); explainChange('tilt');
@@ -640,13 +617,13 @@ function frame(now) {
   last = now;
   try {
     sim.update(dt);
-    const live = (S.clarity === 'real' && ['tem', 'stem', 'diff', 'ronch', 'cbed'].includes(S.mode) && !S.paused) || ['microed', 'tomo'].includes(S.mode);
+    const live = S.clarity === 'real' && ['tem', 'stem', 'diff', 'ronch', 'cbed'].includes(S.mode) && !S.paused;
     if (sim.version !== lastVer || (live && now - lastDraw > 70)) {
       R2.draw(sim, S, mainCv, secCv);
       lastVer = sim.version;
       lastDraw = now;
       scene.screenTex.image = mainCv; scene.screenTex.needsUpdate = true;
-      if (((S.mode === 'tem' || S.mode === 'diff') && S.camera === 'ded') || ['ronch', 'cbed', 'microed'].includes(S.mode)) { scene.camTex.image = mainCv; scene.camTex.needsUpdate = true; }
+      if (((S.mode === 'tem' || S.mode === 'diff') && S.camera === 'ded') || ['ronch', 'cbed'].includes(S.mode)) { scene.camTex.image = mainCv; scene.camTex.needsUpdate = true; }
       if (S.mode === '4d' && R2.layout.cbed) {
         const L = R2.layout.cbed;
         camCv.getContext('2d').drawImage(secCv, 0, 0, L.sz, L.sz, 0, 0, 256, 256);
@@ -663,7 +640,7 @@ function frame(now) {
   if (now - lastSlow > 300) {
     lastSlow = now;
     updateTable();
-    if (['eds', '4d', 'eels', 'stem', 'microed', 'tomo', 'ronch', 'cbed'].includes(S.mode)) renderInfo();
+    if (['eds', '4d', 'eels', 'stem', 'ronch', 'cbed'].includes(S.mode)) renderInfo();
     $('#status').textContent = `· ${fps} fps`;
   }
   requestAnimationFrame(frame);

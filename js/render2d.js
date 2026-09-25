@@ -1,7 +1,7 @@
 // Draws the detector views (main image + secondary panel) for each mode.
 import * as P from './physics.js';
 import { stemDetType, AP_MRAD } from './sim.js';
-import { drawRonch, drawCBED, drawMicroED, drawTomo } from './techniques.js';
+import { drawRonch, drawCBED } from './techniques.js';
 
 const C = {
   accent: '#6fd6ff', warm: '#ffb45e', text: '#e9edf2', muted: '#8a94a3', dim: '#566070',
@@ -171,9 +171,9 @@ export function draw(sim, S, mainCv, secCv, hover) {
   const m = fit(mainCv), s = fit(secCv);
   m.ctx.fillStyle = C.bg; m.ctx.fillRect(0, 0, m.W, m.H);
   s.ctx.fillStyle = C.bg; s.ctx.fillRect(0, 0, s.W, s.H);
-  const fn = { tem: drawTEM, stem: drawSTEM, diff: drawDiff, '4d': draw4D, eds: drawEDS, eels: drawEELS, ronch: drawRonch, cbed: drawCBED, microed: drawMicroED, tomo: drawTomo }[S.mode];
+  const fn = { tem: drawTEM, stem: drawSTEM, diff: drawDiff, '4d': draw4D, eds: drawEDS, eels: drawEELS, ronch: drawRonch, cbed: drawCBED }[S.mode];
   fn(sim, S, m, s, performance.now() / 1000);
-  if (sim.single?.hits && sim.single.count && !['4d', 'eds', 'eels', 'microed', 'tomo'].includes(S.mode)) {
+  if (sim.single?.hits && sim.single.count && !['4d', 'eds', 'eels'].includes(S.mode)) {
     m.ctx.fillStyle = C.bg; m.ctx.fillRect(0, 0, m.W, m.H);
     drawHits(m.ctx, sim.single, [0, 0, m.W, m.H], m.dpr);
   }

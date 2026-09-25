@@ -1,6 +1,6 @@
 // Simulation engine: turns the instrument state into detector signals.
 import * as P from './physics.js';
-import { Ronch, CBED, MicroED, Tomo } from './techniques.js';
+import { Ronch, CBED } from './techniques.js';
 
 const SP = P.SPECIMENS;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -55,10 +55,7 @@ export class Sim {
     this.frameNoise = 0;
     this.ronch = new Ronch(this);
     this.cbed = new CBED(this);
-    this._med = null; this._tomo = null;
   }
-  get med() { return (this._med ||= new MicroED(this)); }
-  get tomo() { return (this._tomo ||= new Tomo(this)); }
 
   get spec() { return SP[this.S.spec]; }
   get lam() { return P.wavelength(this.S.kV); }
@@ -81,7 +78,7 @@ export class Sim {
       dose: ['si'], edsSel: [], mode: [],
     };
     for (const k of map[key] ?? all) this.stale[k] = 1;
-    if (!['mode', 'edsSel', 'camera', 'beamStop', 'vdet', 'bgsub', 'eelsWin', 'eelsRange', 'tomoView', 'tomoSlice'].includes(key)) { this.ronch.stale = true; this.cbed.stale = true; }
+    if (!['mode', 'edsSel', 'camera', 'beamStop', 'vdet', 'bgsub', 'eelsWin', 'eelsRange'].includes(key)) { this.ronch.stale = true; this.cbed.stale = true; }
     if (!['vdet', 'edsSel', 'mode', 'camera'].includes(key)) this.resetSingle();
     this.version++;
   }
@@ -711,7 +708,7 @@ export class Sim {
       const arr = this.cbedAt(S.fdSel >= 0 ? S.fdSel : f.done - 1);
       return { arr, w: f.n4, h: f.n4, key: `4d${S.fdSel}` };
     }
-    if (['eds', 'eels', 'microed', 'tomo'].includes(S.mode)) return null;
+    if (S.mode === 'eds' || S.mode === 'eels') return null;
     return this.main ? { ...this.main, key: S.mode + this.version } : null;
   }
   stepSingle(dt) {
@@ -780,8 +777,6 @@ export class Sim {
     }
     if (m === 'ronch' && this.ronch.stale) { this.ronch.compute(); this.version++; }
     if (m === 'cbed' && this.cbed.stale) { this.cbed.compute(); this.version++; }
-    if (m === 'microed' && this.med.update(dt)) this.version++;
-    if (m === 'tomo' && this.tomo.update(dt)) this.version++;
     if (m === 'ronch') this.main = this.ronch.disp ? { arr: this.ronch.disp.arr, w: this.ronch.disp.W, h: this.ronch.disp.W } : null;
     if (m === 'cbed') this.main = this.cbed.disp ? { arr: this.cbed.disp.arr, w: this.cbed.disp.W, h: this.cbed.disp.W } : null;
     if (m === 'tem') this.main = this.tem ? { arr: this.tem.img, w: this.tem.c, h: this.tem.c } : null;
