@@ -85,7 +85,7 @@ export class Sim {
 
   maps(opts) {
     const S = this.S;
-    const key = [S.spec, S.cx.toFixed(2), S.cy.toFixed(2), S.thick, S.tiltX, S.tiltY, opts.n, opts.dx.toFixed(4), !!opts.elements, !!opts.noTilt].join('|');
+    const key = [S.spec, this.spec.damageVer ?? 0, S.cx.toFixed(2), S.cy.toFixed(2), S.thick, S.tiltX, S.tiltY, opts.n, opts.dx.toFixed(4), !!opts.elements, !!opts.noTilt].join('|');
     let m = this.mapCache.get(key);
     if (!m) {
       m = P.projectMaps(this.spec, {
@@ -138,7 +138,7 @@ export class Sim {
     const lam = this.lam;
     let apK = AP_MRAD[S.objAp] * 1e-3 / lam, apCenter = [0, 0];
     if (S.objAp === 'df') {
-      const g = this.spec.grains[0], [m, k] = this.spec.id === 'sto' ? [1, 0] : [1, 1];
+      const g = this.spec.grains[0], [m, k] = this.spec.id === 'sto' || this.spec.twoD ? [1, 0] : [1, 1];
       apCenter = [m * g.b[0][0] + k * g.b[1][0], m * g.b[0][1] + k * g.b[1][1]];
       apK = 0.13;
     }
@@ -283,7 +283,7 @@ export class Sim {
         const i = y * n + x, j = ((y + n / 2) % n) * n + ((x + n / 2) % n);
         const kx = P.freq(x, n, dx), ky = P.freq(y, n, dx);
         let v = re[i] * re[i] + im[i] * im[i];
-        if (!spec.poly) {
+        if (!spec.poly && !spec.twoD) {
           // Excitation error: distance of the reflection from the Ewald sphere.
           const s = 0.5 * lam * (kx * kx + ky * ky) + kx * tx + ky * ty;
           v *= Math.exp(-Math.pow(1.6 * tEff * s, 2));
@@ -749,11 +749,50 @@ export class Sim {
   }
 
   // ------------------------------------------------------------ main update
+  // Knock-on damage in graphene: above ~86 kV a head-on collision can displace a carbon atom from the
+  // lattice; edge atoms (fewer bonds) go at lower voltage. Holes nucleate at defects and grow from their edges.
+  sputter(dt) {
+    const S = this.S, spec = this.spec;
+    if (!spec.twoD || S.paused || !['tem', 'stem'].includes(S.mode)) return;
+    const relP = Math.pow(Math.max(0, (S.kV - 86) / 114), 1.5), relE = Math.pow(Math.max(0, (S.kV - 55) / 145), 1.3) * 5;
+    const rMax = Math.max(relP, relE);
+    if (!rMax) return;
+    const A = spec.atoms, half = (S.fov * 10) / 2, ids = [];
+    A.query(S.cx - half, S.cy - half, S.cx + half, S.cy + half, (i) => { if (!A.dead[i] && Math.abs(A.x[i] - S.cx) < half && Math.abs(A.y[i] - S.cy) < half) ids.push(i); });
+    if (!ids.length) return;
+    // scaled so pristine graphene at 200 kV loses ~1 atom/s from a 6 nm field at the default dose
+    const attempts = P.poisson(ids.length * rMax * (S.dose / 400) * (dt * S.speed) / 1200);
+    let hit = 0;
+    for (let a = 0; a < attempts; a++) {
+      const i = ids[(Math.random() * ids.length) | 0];
+      if (A.dead[i]) continue;
+      let nb = 0;
+      A.query(A.x[i] - 1.7, A.y[i] - 1.7, A.x[i] + 1.7, A.y[i] + 1.7, (j) => { if (j !== i && !A.dead[j] && A.g[j] === A.g[i] && (A.x[j] - A.x[i]) ** 2 + (A.y[j] - A.y[i]) ** 2 < 2.4) nb++; });
+      const r = nb >= 3 ? relP : relE;
+      if (Math.random() < r / rMax) { A.dead[i] = 1; hit++; }
+    }
+    if (hit) { spec.sputtered += hit; spec.damageVer++; this.invalidate('damage'); this._soft = true; }
+  }
+  restoreSpecimen() {
+    const spec = this.spec;
+    if (!spec.atoms.dead) return;
+    spec.atoms.dead.fill(0); spec.sputtered = 0; spec.damageVer++;
+    this.invalidate('damage');
+  }
+
   update(dt) {
+    this.sputter(dt);
     const S = this.S, m = S.mode;
     if (this.stale.probe && (m !== 'tem' && m !== 'diff')) { this.computeProbe(); this.stale.probe = 0; }
     if (m === 'tem' && this.stale.tem) { this.computeTEM(); this.stale.tem = 0; this.version++; }
-    if (m === 'stem' && this.stale.stem) { this.computeSTEM(); this.stale.stem = 0; this.raster = 0; this.version++; }
+    if (m === 'stem' && this.stale.stem) {
+      const soft = this._soft; // beam damage: keep scanning, like a live instrument
+      const pass = this._stemPass;
+      this.computeSTEM(); this.stale.stem = 0;
+      if (soft) this._stemPass = pass; else this.raster = 0;
+      this.version++;
+    }
+    this._soft = false;
     if (m === 'diff') {
       if (this.stale.diff) { this.computeDiff(); this.stale.diff = 0; this.version++; }
       else if (this.diffDisp && this._camL !== S.camL + this.lam) { this.resampleDiff(); this.version++; }

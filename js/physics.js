@@ -152,6 +152,7 @@ const fcc = [[0, 0, 0], [0.5, 0.5, 0], [0.5, 0, 0.5], [0, 0.5, 0.5]];
 export const CRYST = {
   sto: { a: 3.905, sg: 'Pm3̄m', name: 'SrTiO₃ (perovskite)', basis: [[0, 0, 0, 38], [0.5, 0.5, 0.5, 22], [0.5, 0.5, 0, 8], [0.5, 0, 0.5, 8], [0, 0.5, 0.5, 8]], xAx: [1, 0, 0], yAx: [0, 1, 0] },
   au: { a: 4.078, sg: 'Fm3̄m', name: 'Au (fcc)', basis: fcc.map((p) => [...p, 79]), xAx: [1, -1, 0], yAx: [0, 0, 1] },
+  gr: { a: 2.46, sg: 'P6/mmm (2D)', name: 'graphene (monolayer)', twoD: true, basis: [[0, 0, 0, 6], [1 / 3, 1 / 3, 0, 6]], xAx: [1, 0, 0], yAx: [0, 1, 0] },
   si: { a: 5.431, sg: 'Fd3̄m', name: 'Si (diamond)', basis: [...fcc, ...fcc.map((p) => p.map((v) => v + 0.25))].map((p) => [...p, 14]), xAx: [1, -1, 0], yAx: [0, 0, 1] },
 };
 for (const c of Object.values(CRYST)) {
@@ -159,12 +160,16 @@ for (const c of Object.values(CRYST)) {
   c.x = n(c.xAx); c.y = n(c.yAx);
   c.z = [c.x[1] * c.y[2] - c.x[2] * c.y[1], c.x[2] * c.y[0] - c.x[0] * c.y[2], c.x[0] * c.y[1] - c.x[1] * c.y[0]];
   c.Vc = c.a ** 3;
+  if (c.twoD) { // hexagonal net, one layer 3.35 Å thick
+    c.b = reciprocal([c.a, 0], [c.a / 2, (c.a * Math.sqrt(3)) / 2]);
+    c.Vc = ((c.a * c.a * Math.sqrt(3)) / 2) * 3.35;
+  }
 }
 // Electron scattering factor (Å): screened core at low s plus the Mott–Bethe ~Z/s² tail at high s,
 // damped by a Debye–Waller factor (B ≈ 0.4 Å²). Adequate for trends, extinction distances and HOLZ visibility.
 export const fElec = (Z, s) => (0.3 * Math.pow(Z, 0.8) * Math.exp(-3.5 * s * s) + (0.0239 * Z) / (s * s + 1)) * Math.exp(-0.4 * s * s);
 export function structF(cr, h, k, l, scale = 1) {
-  const a = cr.a * scale, s = Math.hypot(h, k, l) / (2 * a);
+  const a = cr.a * scale, s = cr.twoD ? Math.hypot(...zoneG(cr, h, k, 0, scale)) / 2 : Math.hypot(h, k, l) / (2 * a);
   let re = 0, im = 0;
   for (const [x, y, z, Z] of cr.basis) {
     const f = fElec(Z, s), p = 2 * Math.PI * (h * x + k * y + l * z);
@@ -176,6 +181,7 @@ export function structF(cr, h, k, l, scale = 1) {
 export const extinction = (cr, F, kV) => (3.7 * cr.Vc) / (wavelength(kV) * gammaOf(kV) * Math.max(F, 1e-6));
 // Reciprocal vector of hkl in the zone frame (gx, gy in-plane, gz along the beam), before grain rotation.
 export function zoneG(cr, h, k, l, scale = 1) {
+  if (cr.twoD) return [(h * cr.b[0][0] + k * cr.b[1][0]) / scale, (h * cr.b[0][1] + k * cr.b[1][1]) / scale, 0];
   const a = cr.a * scale, G = [h / a, k / a, l / a];
   const d = (u) => G[0] * u[0] + G[1] * u[1] + G[2] * u[2];
   return [d(cr.x), d(cr.y), d(cr.z)];
@@ -376,7 +382,76 @@ function makeSTO() {
   };
 }
 
-export const SPECIMENS = { au: makeGold(), si: makeSilicon(), sto: makeSTO() };
+
+function makeGraphene() {
+  const A = new AtomList();
+  const a = 2.46, a1 = [a, 0], a2 = [a / 2, (a * Math.sqrt(3)) / 2], LAYER = 3.35;
+  const basis = [[0, 0, [EI.C]], [1 / 3, 1 / 3, [EI.C]]]; // honeycomb: C–C bond a/√3 = 1.42 Å
+  const hole = { x: -16, y: 8, r: 9 };
+  const inHole = (x, y) => (x - hole.x) ** 2 + (y - hole.y) ** 2 < hole.r * hole.r;
+  const tw = 5 * (Math.PI / 180), bilayerX = 14;
+  fillLattice(A, { a1, a2, basis, angle: 0, origin: [0, 0], R: 250, g: 0, L: LAYER, inside: (x, y) => !inHole(x, y) });
+  // second layer, twisted by 5°, on the right: a moiré with period a / (2 sin(θ/2)) ≈ 2.8 nm
+  fillLattice(A, { a1, a2, basis, angle: tw, origin: [0.4, 0.7], R: 250, g: 1, L: LAYER, inside: (x) => x > bilayerX + 0.6 * Math.sin(x * 0.3) });
+  const nearest = (px, py, g = 0) => { let bi = -1, bd = Infinity; for (let i = 0; i < A.x.length; i++) { if (A.g[i] !== g) continue; const d = (A.x[i] - px) ** 2 + (A.y[i] - py) ** 2; if (d < bd) { bd = d; bi = i; } } return bi; };
+  const drop = new Set();
+  // substitutional Si dopant
+  A.e[nearest(4, -6)] = EI.Si;
+  // single vacancies
+  drop.add(nearest(-2, 16)); drop.add(nearest(9, 11));
+  // Stone–Wales defect: rotate one C–C bond by 90° about its centre (two pentagons + two heptagons)
+  {
+    const p = nearest(-6, -13);
+    let q = -1, bd = Infinity;
+    for (let i = 0; i < A.x.length; i++) { if (i === p || A.g[i] !== 0) continue; const d = (A.x[i] - A.x[p]) ** 2 + (A.y[i] - A.y[p]) ** 2; if (d < bd) { bd = d; q = i; } }
+    const mx = (A.x[p] + A.x[q]) / 2, my = (A.y[p] + A.y[q]) / 2;
+    for (const i of [p, q]) { const dx = A.x[i] - mx, dy = A.y[i] - my; A.x[i] = mx - dy; A.y[i] = my + dx; }
+  }
+  if (drop.size) for (const k of ['x', 'y', 'e', 'L', 'g']) A[k] = A[k].filter((_, i) => !drop.has(i));
+  A.finalize();
+  A.dead = new Uint8Array(A.count);
+  const hexLab = (m, n) => `${bar(m)}${bar(n)}${bar(-(m + n))}0`;
+  // hydrocarbon contamination: blobs on the surface, especially around the hole edge
+  const contam = (x, y) => {
+    const d = Math.hypot(x - hole.x, y - hole.y);
+    if (d > hole.r - 0.3 && d < hole.r + 1.6 + 1.2 * Math.sin(Math.atan2(y - hole.y, x - hole.x) * 5)) return true;
+    const c = 22, gx = Math.floor(x / c), gy = Math.floor(y / c);
+    for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) {
+      const h = hash2(gx + i, gy + j, 91) / 4294967296;
+      if (h > 0.35) continue;
+      const px = (gx + i + 0.5) * c + (h - 0.2) * 20, py = (gy + j + 0.5) * c - (h - 0.2) * 15, r = 3 + 9 * h;
+      if ((x - px) ** 2 + (y - py) ** 2 < r * r && !(Math.abs(px) < 22 && Math.abs(py) < 22)) return true;
+    }
+    return false;
+  };
+  const layers = (x, y) => (inHole(x, y) ? 0 : 1) + (x > bilayerX ? 1 : 0);
+  return {
+    id: 'gr', name: 'Graphene (monolayer + twisted bilayer)', short: 'Graphene',
+    twoD: true, fixedT: LAYER, amorphThick: 4,
+    grainRot: [0, tw],
+    grainAt(x, y) { return inHole(x, y) ? -1 : 0; },
+    atoms: A, grains: [{ a1, a2, label: hexLab }, { a1: rot(a1, tw), a2: rot(a2, tw), label: hexLab }],
+    // phase per C atom calibrated to ~0.07 rad at 80 kV (≈4× a bulk column's per-atom weight): each atom counts as N = 4
+    period: LAYER / 4, center: [0, 0], fov: 6, zone: '[0001]',
+    elements: [EI.C, EI.Si],
+    amorph(x, y) { return contam(x, y) ? 'C' : null; },
+    thicknessAt(x, y) { return LAYER * layers(x, y); },
+    tauAt(x, y, t, kV) { return (LAYER * layers(x, y) + (contam(x, y) ? 4 : 0)) / (10 * imfp(kV, 6)); },
+    rings: [{ d: 2.13, hkl: '10' }, { d: 1.23, hkl: '11' }, { d: 1.065, hkl: '20' }, { d: 0.805, hkl: '21' }],
+    labels: [
+      { x: hole.x, y: hole.y, text: 'hole' },
+      { x: 4, y: -9.5, text: 'Si dopant' },
+      { x: -6, y: -17, text: 'Stone–Wales' },
+      { x: 24, y: -22, text: 'twisted bilayer · moiré' },
+      { x: -2, y: 20, text: 'vacancy' },
+    ],
+    plasmon: [{ Ep: 4.8, G: 2.2, frac: 0.3 }, { Ep: 14.8, G: 7, frac: 0.7 }],
+    zeff: 6,
+    sputtered: 0, damageVer: 0,
+  };
+}
+
+export const SPECIMENS = { au: makeGold(), si: makeSilicon(), sto: makeSTO(), gr: makeGraphene() };
 for (const s of Object.values(SPECIMENS)) {
   for (const g of s.grains) g.b = reciprocal(g.a1, g.a2);
 }
@@ -416,6 +491,7 @@ export function projectMaps(spec, { cx, cy, n, dx, thick, tiltX = 0, tiltY = 0, 
 
   const A = spec.atoms, pad = 4;
   A.query(x0 - pad, y0 - pad, x0 + n * dx + pad, y0 + n * dx + pad, (i) => {
+    if (A.dead && A.dead[i]) return;
     const L = A.L[i] < 0 ? thick : A.L[i];
     const N = L / spec.period, e = A.e[i];
     const l = (L * tanT) / dx, l2 = (l * l) / 12;
@@ -438,7 +514,7 @@ export function projectMaps(spec, { cx, cy, n, dx, thick, tiltX = 0, tiltY = 0, 
         let e, dens;
         if (mat === 'C') { e = EI.C; dens = 0.1; }
         else { e = r1 < 0.333 ? EI.SiOx : EI.O; dens = 0.066; }
-        const N = ((dens * cell * cell * thick) / 1.45) * (0.75 + 0.5 * r2);
+        const N = ((dens * cell * cell * (spec.amorphThick ?? thick)) / 1.45) * (0.75 + 0.5 * r2);
         splat((x - x0) / dx - 0.5, (y - y0) / dx - 0.5, sB2, 0, e, VP[e] * N, ZH[e] * N, ZL[e] * N, N);
       }
     }

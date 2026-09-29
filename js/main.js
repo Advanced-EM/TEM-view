@@ -41,8 +41,10 @@ const NOT_RONCH = 'tem stem 4d diff eds eels cbed';
 const TILTABLE = 'tem stem 4d diff eds eels cbed';
 const CONTROLS = [
   { sec: 'The specimen' },
-  { chips: 'spec', opts: [['au', 'Gold on carbon'], ['si', 'Si / SiO₂'], ['sto', 'SrTiO₃ boundary']] },
-  { slider: 'thick', label: 'Thickness', min: 3, max: 150, step: 1, fmt: (v) => `${v} nm`, ends: ['thin', '', 'thick'], modes: NOT_RONCH },
+  { chips: 'spec', opts: [['au', 'Gold on carbon'], ['si', 'Si / SiO₂'], ['sto', 'SrTiO₃ boundary'], ['gr', 'Graphene']] },
+  { slider: 'thick', label: 'Thickness', min: 3, max: 150, step: 1, fmt: (v) => `${v} nm`, ends: ['thin', '', 'thick'], modes: NOT_RONCH, show: () => S.spec !== 'gr' },
+  { p: 'Graphene is one atom (0.335 nm) thick, so there is no thickness to set. Above ~86 kV the beam knocks carbon atoms out: watch in TEM or STEM at 200–300 kV, then compare 60–80 kV.', modes: NOT_RONCH, show: () => S.spec === 'gr' },
+  { buttons: [['restore', 'Restore pristine graphene']], modes: 'tem stem', show: () => S.spec === 'gr' },
   { slider: 'fov', label: 'Field of view', min: 1.5, max: 30, log: true, fmt: (v) => `${v.toFixed(1)} nm`, modes: 'tem stem 4d eds eels', note: 'Drag the detector image to move the stage; scroll to zoom.' },
   { slider: 'tiltX', inv: 'tilt', label: 'Tilt α', min: -3, max: 3, step: 0.02, fmt: (v) => `${v.toFixed(2)}°`, modes: TILTABLE },
   { slider: 'tiltY', inv: 'tilt', label: 'Tilt β', min: -3, max: 3, step: 0.02, fmt: (v) => `${v.toFixed(2)}°`, ends: ['', 'zone axis', ''], modes: TILTABLE },
@@ -284,7 +286,7 @@ function chip(key, v) {
   if (key === 'eelsRange') {
     S.eelsRange = v;
     const [a, b] = sim.eelsRangeBounds();
-    const def = { low: [22, 12], core: [S.spec === 'sto' ? 462 : S.spec === 'si' ? 102 : 100, S.spec === 'si' ? 5 : 16], high: [S.spec === 'au' ? 2260 : S.spec === 'si' ? 1860 : 1960, 60] }[v];
+    const def = { low: [22, 12], core: [S.spec === 'sto' ? 462 : S.spec === 'si' ? 102 : S.spec === 'gr' ? 287 : 100, S.spec === 'si' ? 5 : S.spec === 'gr' ? 6 : 16], high: [S.spec === 'au' ? 2260 : S.spec === 'si' ? 1860 : 1960, 60] }[v];
     S.eelsWin = clamp(def[0], a, b); S.eelsWidth = def[1];
     sim.invalidate('eelsRange'); refreshControls();
     return explainChange('eelsRange');
@@ -299,7 +301,7 @@ function resetVdet() {
   if (S.vdet === 'abf') { S.vdIn = a / 2; S.vdOut = a; }
   if (S.vdet === 'adf') { S.vdIn = Math.min(a * 1.15, edge * 0.6); S.vdOut = edge; }
   if (S.vdet === 'disk') {
-    const g = sim.spec.grains[0], [m, n] = S.spec === 'sto' ? [1, 0] : [1, 1];
+    const g = sim.spec.grains[0], [m, n] = S.spec === 'sto' || S.spec === 'gr' ? [1, 0] : [1, 1];
     const gx = m * g.b[0][0] + n * g.b[1][0], gy = m * g.b[0][1] + n * g.b[1][1], gm = Math.hypot(gx, gy) * sim.lam * 1000;
     const r = a + gm * 0.5;
     S.vdX = (gx / Math.hypot(gx, gy)) * r; S.vdY = (gy / Math.hypot(gx, gy)) * r; S.vdR = Math.max(1.5, gm * 0.4);
@@ -312,8 +314,8 @@ function setSpec(v) {
   S.fov = sp.fov; S.cx = sp.center[0]; S.cy = sp.center[1]; S.tiltX = 0; S.tiltY = 0;
   S.edsSel = 'all';
   S.eelsRange = 'core';
-  S.eelsWin = v === 'sto' ? 462 : v === 'si' ? 102 : 100;
-  S.eelsWidth = v === 'si' ? 5 : v === 'au' ? 24 : 16;
+  S.eelsWin = v === 'sto' ? 462 : v === 'si' ? 102 : v === 'gr' ? 287 : 100;
+  S.eelsWidth = v === 'si' ? 5 : v === 'au' ? 24 : v === 'gr' ? 6 : 16;
   resetVdet();
   sim.invalidate('spec');
   refreshControls();
@@ -344,6 +346,7 @@ function action(id, el) {
     set('df', +df.toFixed(1), 'df');
   }
   if (id === 'pause') { S.paused = !S.paused; refreshControls(); }
+  if (id === 'restore') { sim.restoreSpecimen(); explainChange('restore'); }
   if (id === 'scramble') {
     const r = () => Math.random();
     S.ab = { A1: 15 + 45 * r(), A1a: Math.round(180 * r()), B2: 150 + 500 * r(), B2a: Math.round(360 * r()), A2: 100 + 500 * r(), A2a: Math.round(120 * r()), A3: 2 + 6 * r(), A3a: Math.round(90 * r()) };

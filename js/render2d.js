@@ -196,6 +196,7 @@ function drawTEM(sim, S, m, s) {
   scaleBar(ctx, dst, S.fov * 10, dpr);
   if (!real(S)) specimenLabels(ctx, sim.spec, S, dst, S.fov * 10, dpr);
   if (S.objAp === 'df') label(ctx, 'DARK FIELD · one Bragg beam', 10 * dpr, 16 * dpr, dpr, { color: C.warm });
+  damageLabel(ctx, sim, S, W, dpr);
 
   // diffractogram
   const q = s.ctx, sz = Math.min(s.H, s.W * 0.5), d2 = [0, 0, sz, sz];
@@ -223,6 +224,12 @@ function drawTEM(sim, S, m, s) {
   drawCTF(q, sim, S, [px0, py0, pw, ph], s.dpr, t);
 }
 
+function damageLabel(ctx, sim, S, W, dpr) {
+  const sp = sim.spec;
+  if (!sp.twoD) return;
+  if (sp.sputtered) label(ctx, `knock-on: ${sp.sputtered} atom${sp.sputtered > 1 ? 's' : ''} sputtered`, W - 10 * dpr, 16 * dpr, dpr, { color: C.warm, size: 9, align: 'right' });
+  else if (S.kV > 86) label(ctx, `${S.kV} kV > 86 kV: carbon atoms can be knocked out`, W - 10 * dpr, 16 * dpr, dpr, { color: C.warm, size: 9, align: 'right' });
+}
 function drawCTF(q, sim, S, r, dpr, t) {
   const [x0, y0, w, h] = r, lam = sim.lam, df = S.df * 10, Cs = sim.CsA();
   const kmax = Math.min(t.kmax, 1.1);
@@ -291,6 +298,7 @@ function drawSTEM(sim, S, m, s) {
   ctx.fillStyle = g; ctx.fillRect(0, y - 10 * dpr, W, 12 * dpr);
   scaleBar(ctx, dst, S.fov * 10, dpr);
   if (!real(S)) specimenLabels(ctx, sim.spec, S, dst, S.fov * 10, dpr);
+  damageLabel(ctx, sim, S, W, dpr);
 
   // secondary: probe | detector geometry
   const q = s.ctx, sz = Math.min(s.H, s.W / 2 - 6 * s.dpr);
@@ -335,18 +343,19 @@ function drawDiff(sim, S, m, s) {
   const { ctx, W, H, dpr } = m, dst = [0, 0, W, H];
   let mx = 0;
   for (let i = 0; i < d.arr.length; i++) if (d.arr[i] > mx) mx = d.arr[i];
-  const scale = 1e4 / (mx || 1);
+  // a single atomic layer scatters ~10⁻⁴ of the beam into each spot: show a deeper dynamic range (longer exposure)
+  const deep = sim.spec.twoD, scale = (deep ? 1e7 : 1e4) / (mx || 1);
   const arr = new Float32Array(d.arr.length);
   for (let i = 0; i < arr.length; i++) arr[i] = d.arr[i] * scale;
   const noise = real(S) ? 0 : 0;
   const scr = S.camera === 'screen';
   if (scr) ctx.filter = `blur(${1.1 * dpr}px)`;
-  paint(ctx, arr, d.W, d.W, dst, { lo: 0.05, hi: real(S) ? 3.3 : 3.0, log: true, lut: scr ? LUT.phosphor : real(S) ? LUT.gray : LUT.magma, gamma: 1.05, noise });
+  paint(ctx, arr, d.W, d.W, dst, { lo: deep ? 0.3 : 0.05, hi: deep ? 5.4 : real(S) ? 3.3 : 3.0, log: true, lut: scr ? LUT.phosphor : real(S) ? LUT.gray : LUT.magma, gamma: 1.05, noise });
   ctx.filter = 'none';
   const kPx = W / (d.W * d.kPerPx), cx = W / 2, cy = H / 2;
   const spec = sim.spec;
-  // Kikuchi lines (fixed to the crystal, so they sweep across the screen as you tilt)
-  if (!spec.poly) {
+  // Kikuchi lines (fixed to the crystal, so they sweep across the screen as you tilt); a monolayer has none
+  if (!spec.poly && !spec.twoD) {
     const lam = sim.lam, sx = -((S.tiltX * Math.PI) / 180) / lam, sy = -((S.tiltY * Math.PI) / 180) / lam;
     ctx.save();
     ctx.beginPath(); ctx.rect(0, 0, W, H); ctx.clip();
@@ -386,7 +395,7 @@ function drawDiff(sim, S, m, s) {
       }
     } else {
       const gr = spec.grains[0];
-      const refl = spec.id === 'sto' ? [[1, 0], [0, 1], [1, 1]] : [[1, 1], [0, 2], [2, 0]];
+      const refl = spec.id === 'sto' ? [[1, 0], [0, 1], [1, 1]] : spec.twoD ? [[1, 0], [0, 1], [1, 1]] : [[1, 1], [0, 2], [2, 0]];
       for (const [a, b] of refl) {
         const gx = a * gr.b[0][0] + b * gr.b[1][0], gy = a * gr.b[0][1] + b * gr.b[1][1];
         const x = cx + gx * kPx, y = cy + gy * kPx;
@@ -397,6 +406,7 @@ function drawDiff(sim, S, m, s) {
       }
       if (spec.id === 'si') label(ctx, '002: "forbidden", appears by double diffraction', 10 * dpr, H - 16 * dpr, dpr, { color: C.muted, size: 9 });
       if (spec.id === 'sto') label(ctx, 'two grains → two square nets, 36.9° apart', 10 * dpr, H - 16 * dpr, dpr, { color: C.muted, size: 9 });
+      if (spec.twoD) label(ctx, '6-fold spots, no Kikuchi lines (one layer); the twisted layer adds a second hexagon 5° away', 10 * dpr, H - 16 * dpr, dpr, { color: C.muted, size: 9 });
     }
   }
   label(ctx, `L = ${S.camL} mm   λL = ${(sim.lam * S.camL).toFixed(1)} Å·mm`, 10 * dpr, 16 * dpr, dpr, { color: C.accent, size: 9 });

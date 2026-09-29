@@ -165,6 +165,16 @@ export class CBED {
   base(spec) {
     if (this._base?.id === spec.id) return this._base;
     const cr = P.CRYST[spec.id], zolz = [], folz = [];
+    if (cr.twoD) {
+      // a single atomic layer: reflections are continuous rods along the beam, so there are no HOLZ layers
+      for (let h = -9; h <= 9; h++) for (let k = -9; k <= 9; k++) {
+        const g = P.zoneG(cr, h, k, 0), g2 = Math.hypot(g[0], g[1]);
+        if (!g2 || g2 > 2.2) continue;
+        const F = P.structF(cr, h, k, 0);
+        if (F > 0.05) zolz.push({ h, k, l: 0, gx: g[0], gy: g[1], g: g2, F });
+      }
+      return (this._base = { id: spec.id, cr, zolz, folz, H: Infinity });
+    }
     let H = Infinity;
     for (let h = -4; h <= 4; h++) for (let k = -4; k <= 4; k++) for (let l = -4; l <= 4; l++) {
       const g = P.zoneG(cr, h, k, l);
@@ -204,7 +214,7 @@ export class CBED {
     return this._lists;
   }
   compute() {
-    const sim = this.sim, S = sim.S, spec = sim.spec, lam = sim.lam, t = S.thick * 10;
+    const sim = this.sim, S = sim.S, spec = sim.spec, lam = sim.lam, t = spec.fixedT ?? S.thick * 10;
     const L = this.lists(), lac = S.cbedKind === 'lacbed', a = sim.alpha();
     const W = lac ? 200 : 256, span = lac ? a * 1.12 : Math.max(a * 1.3, 0.022 * (1000 / S.camL));
     const tx0 = S.tiltX * DEG, ty0 = S.tiltY * DEG;
@@ -323,7 +333,8 @@ export function drawCBED(sim, S, m, s) {
   const { ctx, W, H, dpr } = m, dst = [0, 0, W, H];
   let mx = 0;
   for (let i = 0; i < d.arr.length; i++) mx = Math.max(mx, d.arr[i]);
-  paint(ctx, d.arr, d.W, d.W, dst, { lo: 0, hi: mx * (d.lac ? 1 : 0.9), lut: real(S) ? LUT.gray : d.lac ? LUT.ice : LUT.magma, gamma: d.lac ? 1.3 : 0.7, noise: real(S) ? 120 : 0 });
+  paint(ctx, d.arr, d.W, d.W, dst, { lo: 0, hi: mx * (d.lac ? 1 : 0.9), lut: real(S) ? LUT.gray : d.lac ? LUT.ice : LUT.magma, gamma: d.lac ? 1.3 : sim.spec.twoD ? 0.3 : 0.7, noise: real(S) ? 120 : 0 });
+  if (sim.spec.twoD && !d.lac) label(ctx, 'one atom thick: uniform disks, no fringes, no HOLZ lines', W / 2, H - 16 * dpr, dpr, { color: C.muted, size: 9, align: 'center' });
   const px = W / (2 * d.span), cx = W / 2, cy = H / 2;
   if (d.lac) {
     label(ctx, `LACBED · α = ${Math.round(d.a * 1000)} mrad · shadow image + Bragg/HOLZ lines`, 10 * dpr, 16 * dpr, dpr, { color: C.accent, size: 9 });
