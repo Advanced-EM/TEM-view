@@ -76,6 +76,8 @@ export class Sim {
       objAp: ['tem'], alpha: ['stem', 'fd', 'vimg', 'si', 'eels', 'probe'], det: ['stem'],
       sa: ['diff'], camL: ['diff'], beamStop: [], camera: [], vdet: ['vimg'], eelsWin: ['eels'], eelsRange: ['eels'], bgsub: ['eels'],
       dose: ['si'], edsSel: [], mode: [],
+      // progressive beam damage: refresh images and patterns in place, but don't restart 4D scans or spectrum accumulation
+      damage: ['tem', 'stem', 'diff', 'probe'],
     };
     for (const k of map[key] ?? all) this.stale[k] = 1;
     if (!['mode', 'edsSel', 'camera', 'beamStop', 'vdet', 'bgsub', 'eelsWin', 'eelsRange'].includes(key)) { this.ronch.stale = true; this.cbed.stale = true; }
@@ -140,7 +142,7 @@ export class Sim {
     if (S.objAp === 'df') {
       const g = this.spec.grains[0], [m, k] = this.spec.id === 'sto' || this.spec.twoD ? [1, 0] : [1, 1];
       apCenter = [m * g.b[0][0] + k * g.b[1][0], m * g.b[0][1] + k * g.b[1][1]];
-      apK = 0.13;
+      apK = Math.min(0.13, 0.45 * Math.hypot(apCenter[0], apCenter[1]));
     }
     const I = this.lensImage(maps, { apK, apCenter });
     // Diffractogram: |FFT| of the (windowed) image shows the lens's transfer rings.
@@ -773,6 +775,21 @@ export class Sim {
     }
     if (hit) { spec.sputtered += hit; spec.damageVer++; this.invalidate('damage'); this._soft = true; }
   }
+  // Radiolysis in beam-sensitive crystals (MOFs): the dose set per image accumulates while the beam is on.
+  // Critical dose Dc ∝ β² (inelastic cross-section ∝ 1/β²), so lower voltage destroys the crystal faster.
+  critDose() { return this.spec.Dc300 * Math.pow(P.betaOf(this.S.kV) / P.betaOf(300), 2); }
+  radiolysis(dt) {
+    const S = this.S, spec = this.spec;
+    if (!spec.beamSensitive || S.paused || S.mode === 'ronch') return;
+    this.doseAcc = (this.doseAcc || 0) + S.dose * 0.5 * dt * S.speed;
+    const q = 1 - Math.exp(-this.doseAcc / this.critDose()), qs = Math.round(q * 40) / 40;
+    if (qs !== spec.dmg) { spec.dmg = qs; spec.damageVer++; this.invalidate('damage'); this._soft = true; }
+  }
+  freshArea() {
+    const spec = this.spec;
+    this.doseAcc = 0;
+    if (spec.beamSensitive) { spec.dmg = 0; spec.damageVer++; this.invalidate('damage'); this.stale.fd = 1; this.stale.si = 1; }
+  }
   restoreSpecimen() {
     const spec = this.spec;
     if (!spec.atoms.dead) return;
@@ -782,6 +799,7 @@ export class Sim {
 
   update(dt) {
     this.sputter(dt);
+    this.radiolysis(dt);
     const S = this.S, m = S.mode;
     if (this.stale.probe && (m !== 'tem' && m !== 'diff')) { this.computeProbe(); this.stale.probe = 0; }
     if (m === 'tem' && this.stale.tem) { this.computeTEM(); this.stale.tem = 0; this.version++; }

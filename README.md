@@ -5,7 +5,7 @@
 An interactive transmission electron microscope in the browser, built as a small science-museum exhibit.
 
 - **3D cutaway column:** gun, condensers, scan coils, objective, apertures, projector, fluorescent screen, direct electron detector, ADF/BF detectors, EDS detector, EELS prism. The beam path reconfigures for each mode.
-- **Four specimens:** gold nanoparticles on carbon, a Si/SiO₂ interface, a SrTiO₃ Σ5 grain boundary, and **graphene** (monolayer with a hole, a single Si dopant, a Stone–Wales defect, vacancies and a 5° twisted-bilayer moiré). Above ~86 kV the beam knocks carbon atoms out of graphene in TEM/STEM: watch holes nucleate and grow, then compare 60–80 kV.
+- **Five specimens:** gold nanoparticles on carbon, a Si/SiO₂ interface, a SrTiO₃ Σ5 grain boundary, the metal–organic framework **UiO-66**, and **graphene** (monolayer with a hole, a single Si dopant, a Stone–Wales defect, vacancies and a 5° twisted-bilayer moiré). Above ~86 kV the beam knocks carbon atoms out of graphene in TEM/STEM: watch holes nucleate and grow, then compare 60–80 kV. **UiO-66** (Zr₆ clusters + BDC linkers, Fm3̄m, a = 20.7 Å, viewed along [110], with a missing-cluster defect patch) is destroyed by radiolysis: the dose accumulates while the beam is on, the critical dose (~12 e⁻/Å² at 300 kV) falls as β² at lower voltage, and high-order diffraction spots fade first. It opens with low-dose settings and a *Move to a fresh area* button.
 - **Eight modes:** TEM, STEM, 4D-STEM, SAED, CBED/LACBED, EDS, EELS and Ronchigram/corrector tuning. Each detector image is computed from a real atomic model: phase-object wave optics with a full contrast-transfer function, aberrated probes, CBED patterns per probe position, Bragg diffraction with Kikuchi lines, Fano-limited X-ray spectra, and Drude plasmons with core-loss edges.
 - **Direct electron detector:** record images and patterns in counting mode instead of on the phosphor screen, and synthesise virtual BF/ABF/ADF/dark-field, **DPC**, **centre-of-mass**, and live **ePIE ptychography** from the 4D dataset.
 - **Aberration correction:** a Ronchigram computed from the aberrated probe on amorphous carbon; tune C1, A1, B2, A2, C3, A3 by hand (with a π/4 flat-phase readout) or run Auto-tune. Residual aberrations propagate to every probe and image.
@@ -33,7 +33,7 @@ Drag the column to orbit and scroll to zoom. Keys `1`–`8` switch modes, `Space
 
 | File | Role |
 | --- | --- |
-| `js/physics.js` | Electron optics, FFT, specimen models (Au/C, Si/SiO₂, SrTiO₃ Σ5, graphene), X-ray and EELS tables |
+| `js/physics.js` | Electron optics, FFT, specimen models (Au/C, Si/SiO₂, SrTiO₃ Σ5, graphene, UiO-66), X-ray and EELS tables |
 | `js/sim.js` | Per-mode signal computation, 4D acquisition, DPC, ptychography, spectrum-image accumulation |
 | `js/techniques.js` | Ronchigram & corrector, CBED/LACBED |
 | `js/components.js` | Instrument-physics cards for the column labels |

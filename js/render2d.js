@@ -177,6 +177,10 @@ export function draw(sim, S, mainCv, secCv, hover) {
     m.ctx.fillStyle = C.bg; m.ctx.fillRect(0, 0, m.W, m.H);
     drawHits(m.ctx, sim.single, [0, 0, m.W, m.H], m.dpr);
   }
+  if (sim.spec.beamSensitive && S.mode !== 'ronch') {
+    const D = sim.doseAcc || 0, c = Math.exp(-D / sim.critDose());
+    label(m.ctx, `dose ${D < 10 ? D.toFixed(1) : Math.round(D)} e⁻/Å² · crystallinity ${Math.round(100 * c)} %`, 10 * m.dpr, m.H - 34 * m.dpr, m.dpr, { color: c < 0.5 ? C.warm : C.accent, size: 9 });
+  }
 }
 
 const real = (S) => S.clarity === 'real';

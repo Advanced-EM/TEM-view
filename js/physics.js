@@ -196,8 +196,9 @@ export const EL = [
   { sym: 'Ti', Z: 22, name: 'Titanium', color: '#c99bff' },
   { sym: 'Sr', Z: 38, name: 'Strontium', color: '#5fe3a8' },
   { sym: 'Au', Z: 79, name: 'Gold', color: '#ffcf5a' },
+  { sym: 'Zr', Z: 40, name: 'Zirconium', color: '#7fe3ff' },
 ];
-export const EI = { C: 0, O: 1, Si: 2, SiOx: 3, Ti: 4, Sr: 5, Au: 6 };
+export const EI = { C: 0, O: 1, Si: 2, SiOx: 3, Ti: 4, Sr: 5, Au: 6, Zr: 7 };
 export const VP = EL.map((e) => Math.pow(e.Z, 0.75)); // projected-potential weight per atom
 export const ZH = EL.map((e) => Math.pow(e.Z, 1.7)); // high-angle (Rutherford-like) weight
 export const ZL = EL.map((e) => Math.pow(e.Z, 1.2)); // low-angle ADF weight
@@ -451,7 +452,79 @@ function makeGraphene() {
   };
 }
 
-export const SPECIMENS = { au: makeGold(), si: makeSilicon(), sto: makeSTO(), gr: makeGraphene() };
+// UiO-66: Zr6O4(OH)4(BDC)6, Fm-3m, a = 20.7 Å. Zr6 octahedra on fcc sites, each linked to 12 neighbours by
+// terephthalate (BDC) linkers along <110>. Built from one 3D conventional cell, then projected along [110].
+function makeUiO66() {
+  const A = new AtomList();
+  const a = 20.7, ax = a / Math.SQRT2, ay = a; // [110] projection cell; repeat along the beam = a/√2
+  const n3 = (v) => { const l = Math.hypot(...v); return v.map((x) => x / l); };
+  const x3 = (p, q) => [p[1] * q[2] - p[2] * q[1], p[2] * q[0] - p[0] * q[2], p[0] * q[1] - p[1] * q[0]];
+  const fccS = [[0, 0, 0], [0.5, 0.5, 0], [0.5, 0, 0.5], [0, 0.5, 0.5]];
+  const dirs = [[1, 1, 0], [1, -1, 0], [1, 0, 1], [1, 0, -1], [0, 1, 1], [0, 1, -1]];
+  const cell = []; // [x, y, z, element, tag]
+  fccS.forEach((f, s) => {
+    const C = f.map((v) => v * a);
+    for (let k = 0; k < 3; k++) for (const sg of [-1, 1]) { const p = [...C]; p[k] += sg * 2.48; cell.push([...p, EI.Zr, `c${s}`]); } // Zr6 octahedron
+    for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const sz of [-1, 1]) cell.push([C[0] + sx * 1.3, C[1] + sy * 1.3, C[2] + sz * 1.3, EI.O, `c${s}`]); // μ3-O/OH
+    for (const d of dirs) { // each Zr6–Zr6 link counted once
+      const u = n3(d), L = ax, end = C.map((c, i) => c + u[i] * L);
+      const fe = end.map((v) => (((v / a) % 1) + 1) % 1);
+      const s2 = fccS.findIndex((q) => q.every((v, i) => Math.min(Math.abs(v - fe[i]), 1 - Math.abs(v - fe[i])) < 1e-6));
+      const p = n3(x3(u, Math.abs(u[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0]));
+      const tag = `l${Math.min(s, s2)}${Math.max(s, s2)}`;
+      const put = (t, off, e) => cell.push([C[0] + u[0] * t + p[0] * off, C[1] + u[1] * t + p[1] * off, C[2] + u[2] * t + p[2] * off, e, tag]);
+      for (const t of [4.55, L - 4.55]) put(t, 0, EI.C); // carboxylate C
+      for (const t of [3.95, L - 3.95]) { put(t, 1.1, EI.O); put(t, -1.1, EI.O); } // carboxylate O
+      for (const t of [6.05, L - 6.05]) put(t, 0, EI.C); // ring ipso C
+      for (const t of [6.75, L - 6.75]) { put(t, 1.2, EI.C); put(t, -1.2, EI.C); } // ring C
+    }
+  });
+  // project into the [110] prism: x' ∥ [1-10], y' ∥ [001], beam ∥ [110]
+  const groups = new Map(), eps = 1e-6;
+  for (const [x, y, z, e, tag] of cell)
+    for (let i = -1; i <= 2; i++) for (let j = -1; j <= 2; j++) for (let k = -1; k <= 1; k++) {
+      const X = x + i * a, Yy = y + j * a, Z = z + k * a;
+      const xp = (X - Yy) / Math.SQRT2, zp = (X + Yy) / Math.SQRT2;
+      if (xp < -eps || xp >= ax - eps || Z < -eps || Z >= ay - eps || zp < -eps || zp >= ax - eps) continue;
+      if (!groups.has(tag)) groups.set(tag, []);
+      groups.get(tag).push([xp / ax, Z / ay, [e]]);
+    }
+  const edge = (y) => -35 + 5 * Math.sin(y / 23) + 2 * Math.sin(y / 7);
+  const defect = { x: 25, y: -12, r: 34 };
+  const inDefect = (x, y) => (x - defect.x) ** 2 + (y - defect.y) ** 2 < defect.r * defect.r;
+  for (const [tag, basis] of groups) {
+    const missing = tag === 'c0' || tag.startsWith('l0');
+    fillLattice(A, { a1: [ax, 0], a2: [0, ay], basis, angle: 0, origin: [0, 0], R: 170, g: 0, L: -1, inside: (x, y) => x > edge(y) && !(missing && inDefect(x, y)) });
+  }
+  A.finalize();
+  A.jitter = new Float32Array(A.count * 2);
+  for (let i = 0; i < A.count; i++) { // fixed random direction per atom for radiolytic disorder
+    const u1 = (hash2(i, 1, 5) + 1) / 4294967297, u2 = hash2(i, 2, 5) / 4294967296, r = Math.sqrt(-2 * Math.log(u1));
+    A.jitter[2 * i] = r * Math.cos(6.2832 * u2); A.jitter[2 * i + 1] = r * Math.sin(6.2832 * u2);
+  }
+  const SUP = 60; // amorphous carbon support film, Å
+  return {
+    id: 'mof', name: 'UiO-66 metal–organic framework', short: 'UiO-66',
+    beamSensitive: true, Dc300: 12, noCBED: true, amorphThick: SUP,
+    grainRot: [0], grainAt() { return -1; },
+    atoms: A, grains: [{ a1: [ax, 0], a2: [0, ay], label: (m, n) => `${bar(m)}${bar(-m)}${bar(n)}` }],
+    period: ax, center: [8, 0], fov: 10, zone: '[110]',
+    elements: [EI.Zr, EI.O, EI.C],
+    amorph(x, y) { return x < edge(y) - 0.5 ? 'C' : null; },
+    thicknessAt(x, y, t) { return x < edge(y) ? SUP : t; },
+    tauAt(x, y, t, kV) { return (x < edge(y) ? SUP : t) / (10 * imfp(kV, 8)); },
+    rings: [{ d: 11.95, hkl: '111' }, { d: 10.35, hkl: '200' }, { d: 7.32, hkl: '220' }, { d: 6.24, hkl: '311' }, { d: 5.98, hkl: '222' }],
+    labels: [
+      { x: -46, y: -22, text: 'carbon support' },
+      { x: -8, y: -40, text: 'UiO-66 along [110]' },
+      { x: defect.x, y: defect.y + defect.r + 4, text: 'missing-cluster (reo) defects' },
+    ],
+    plasmon: [{ Ep: 22, G: 14, frac: 1 }],
+    zeff: 8, dmg: 0, damageVer: 0,
+  };
+}
+
+export const SPECIMENS = { au: makeGold(), si: makeSilicon(), sto: makeSTO(), gr: makeGraphene(), mof: makeUiO66() };
 for (const s of Object.values(SPECIMENS)) {
   for (const g of s.grains) g.b = reciprocal(g.a1, g.a2);
 }
@@ -493,9 +566,16 @@ export function projectMaps(spec, { cx, cy, n, dx, thick, tiltX = 0, tiltY = 0, 
   A.query(x0 - pad, y0 - pad, x0 + n * dx + pad, y0 + n * dx + pad, (i) => {
     if (A.dead && A.dead[i]) return;
     const L = A.L[i] < 0 ? thick : A.L[i];
-    const N = L / spec.period, e = A.e[i];
+    let N = L / spec.period;
+    const e = A.e[i];
     const l = (L * tanT) / dx, l2 = (l * l) / 12;
-    splat((A.x[i] - x0) / dx - 0.5, (A.y[i] - y0) / dx - 0.5, sA2, l2, e, VP[e] * N, ZH[e] * Math.pow(N, 0.85), ZL[e] * N, N);
+    let ax = A.x[i], ay = A.y[i];
+    if (spec.dmg && A.jitter) { // radiolysis: atoms wander off their sites; linkers lose mass
+      const sd = 7 * spec.dmg;
+      ax += sd * A.jitter[2 * i]; ay += sd * A.jitter[2 * i + 1];
+      if (e !== EI.Zr) N *= 1 - 0.35 * spec.dmg;
+    }
+    splat((ax - x0) / dx - 0.5, (ay - y0) / dx - 0.5, sA2, l2, e, VP[e] * N, ZH[e] * Math.pow(N, 0.85), ZL[e] * N, N);
   });
 
   // amorphous material: seeded per 2.2 Å cell so it is stable as the stage moves
@@ -558,6 +638,10 @@ export const XRAY = [
   { el: 'Au', line: 'Lα', E: 9.713, w: 1, y: 1.0 },
   { el: 'Au', line: 'Lβ', E: 11.442, w: 0.62, y: 1.0 },
   { el: 'Au', line: 'Lγ', E: 13.381, w: 0.1, y: 1.0 },
+  { el: 'Zr', line: 'Lα', E: 2.042, w: 1, y: 0.9 },
+  { el: 'Zr', line: 'Lβ', E: 2.124, w: 0.5, y: 0.9 },
+  { el: 'Zr', line: 'Kα', E: 15.775, w: 0.9, y: 1.0 },
+  { el: 'Zr', line: 'Kβ', E: 17.667, w: 0.16, y: 1.0 },
   { el: 'Cu', line: 'Kα', E: 8.048, w: 1, y: 0 },
   { el: 'Cu', line: 'Kβ', E: 8.905, w: 0.13, y: 0 },
   { el: 'Cu', line: 'Lα', E: 0.93, w: 0.25, y: 0 },
@@ -579,6 +663,8 @@ export const EDGES = [
   { key: 'Sr', el: 'Sr', name: 'Sr L₃', E: 1940, kind: 'sharp', h: 0.09 },
   { key: 'Au', el: 'Au', name: 'Au N₆,₇', E: 84, kind: 'delayed', h: 0.85, delay: 9 },
   { key: 'Au', el: 'Au', name: 'Au M₄,₅', E: 2206, kind: 'delayed', h: 0.11, delay: 55 },
+  { key: 'Zr', el: 'Zr', name: 'Zr M₄,₅', E: 180, kind: 'delayed', h: 1.0, delay: 25 },
+  { key: 'Zr', el: 'Zr', name: 'Zr L₃', E: 2222, kind: 'sharp', h: 0.1 },
 ];
 const erf = (x) => {
   const t = 1 / (1 + 0.3275911 * Math.abs(x));

@@ -41,10 +41,12 @@ const NOT_RONCH = 'tem stem 4d diff eds eels cbed';
 const TILTABLE = 'tem stem 4d diff eds eels cbed';
 const CONTROLS = [
   { sec: 'The specimen' },
-  { chips: 'spec', opts: [['au', 'Gold on carbon'], ['si', 'Si / SiO₂'], ['sto', 'SrTiO₃ boundary'], ['gr', 'Graphene']] },
+  { chips: 'spec', opts: [['au', 'Gold on carbon'], ['si', 'Si / SiO₂'], ['sto', 'SrTiO₃ boundary'], ['gr', 'Graphene'], ['mof', 'UiO-66 (MOF)']] },
   { slider: 'thick', label: 'Thickness', min: 3, max: 150, step: 1, fmt: (v) => `${v} nm`, ends: ['thin', '', 'thick'], modes: NOT_RONCH, show: () => S.spec !== 'gr' },
   { p: 'Graphene is one atom (0.335 nm) thick, so there is no thickness to set. Above ~86 kV the beam knocks carbon atoms out: watch in TEM or STEM at 200–300 kV, then compare 60–80 kV.', modes: NOT_RONCH, show: () => S.spec === 'gr' },
   { buttons: [['restore', 'Restore pristine graphene']], modes: 'tem stem', show: () => S.spec === 'gr' },
+  { p: 'UiO-66 is destroyed by radiolysis after ~10 e⁻/Å² at 300 kV, and sooner at lower voltage. The dose per image accumulates while the beam is on: watch the high-order diffraction spots fade first.', show: () => S.spec === 'mof' },
+  { buttons: [['fresh', 'Move to a fresh area']], show: () => S.spec === 'mof' },
   { slider: 'fov', label: 'Field of view', min: 1.5, max: 30, log: true, fmt: (v) => `${v.toFixed(1)} nm`, modes: 'tem stem 4d eds eels', note: 'Drag the detector image to move the stage; scroll to zoom.' },
   { slider: 'tiltX', inv: 'tilt', label: 'Tilt α', min: -3, max: 3, step: 0.02, fmt: (v) => `${v.toFixed(2)}°`, modes: TILTABLE },
   { slider: 'tiltY', inv: 'tilt', label: 'Tilt β', min: -3, max: 3, step: 0.02, fmt: (v) => `${v.toFixed(2)}°`, ends: ['', 'zone axis', ''], modes: TILTABLE },
@@ -53,7 +55,7 @@ const CONTROLS = [
   { sec: 'The electron gun' },
   { slider: 'kV', label: 'Accelerating voltage', min: 60, max: 300, step: 10, fmt: (v) => `${v} kV` },
   { chips: 'kV', small: true, opts: [[80, '80 kV · gentle'], [200, '200 kV'], [300, '300 kV · max']] },
-  { slider: 'dose', label: 'Electron dose', min: 5, max: 20000, log: true, fmt: (v) => `${Math.round(v).toLocaleString()} e⁻/Å²`, ends: ['cryo-gentle', '', 'brutal'] },
+  { slider: 'dose', label: 'Electron dose', min: 0.5, max: 20000, log: true, fmt: (v) => `${Math.round(v).toLocaleString()} e⁻/Å²`, ends: ['cryo-gentle', '', 'brutal'] },
 
   { sec: 'The lenses' },
   { chips: 'corrector', opts: [[false, 'Uncorrected'], [true, 'Aberration corrector']] },
@@ -89,7 +91,7 @@ const CONTROLS = [
   { chips: 'detPreset', modes: 'stem', opts: [['bf', 'BF'], ['abf', 'ABF'], ['adf', 'ADF'], ['haadf', 'HAADF']] },
   { slider: 'detIn', inv: 'det', label: 'Inner angle', min: 0, max: 150, step: 1, fmt: (v) => `${v} mrad`, modes: 'stem' },
   { slider: 'detOut', inv: 'det', label: 'Outer angle', min: 5, max: 250, step: 1, fmt: (v) => `${v} mrad`, modes: 'stem' },
-  { slider: 'camL', label: 'Camera length', min: 80, max: 2000, log: true, fmt: (v) => `${Math.round(v)} mm`, modes: 'diff cbed', show: () => S.mode !== 'cbed' || S.cbedKind === 'cbed', ends: ['wide angle', '', 'zoomed'] },
+  { slider: 'camL', label: 'Camera length', min: 80, max: 6000, log: true, fmt: (v) => `${Math.round(v)} mm`, modes: 'diff cbed', show: () => S.mode !== 'cbed' || S.cbedKind === 'cbed', ends: ['wide angle', '', 'zoomed'] },
   { slider: 'sa', label: 'Selected area', min: 2, max: 12, step: 0.2, fmt: (v) => `${v.toFixed(1)} nm`, modes: 'diff' },
   { toggles: [['beamStop', 'Beam stop']], modes: 'diff' },
   { chips: 'vdet', label: 'Virtual detector', modes: '4d', opts: [['bf', 'BF'], ['abf', 'ABF'], ['adf', 'ADF'], ['disk', 'Disk (DF)'], ['dpc', 'DPC'], ['com', 'Centre of mass'], ['ptycho', 'Ptychography']] },
@@ -286,7 +288,7 @@ function chip(key, v) {
   if (key === 'eelsRange') {
     S.eelsRange = v;
     const [a, b] = sim.eelsRangeBounds();
-    const def = { low: [22, 12], core: [S.spec === 'sto' ? 462 : S.spec === 'si' ? 102 : S.spec === 'gr' ? 287 : 100, S.spec === 'si' ? 5 : S.spec === 'gr' ? 6 : 16], high: [S.spec === 'au' ? 2260 : S.spec === 'si' ? 1860 : 1960, 60] }[v];
+    const def = { low: [22, 12], core: [S.spec === 'sto' ? 462 : S.spec === 'si' ? 102 : S.spec === 'gr' ? 287 : S.spec === 'mof' ? 200 : 100, S.spec === 'si' ? 5 : S.spec === 'gr' ? 6 : S.spec === 'mof' ? 30 : 16], high: [S.spec === 'au' ? 2260 : S.spec === 'si' ? 1860 : 1960, 60] }[v];
     S.eelsWin = clamp(def[0], a, b); S.eelsWidth = def[1];
     sim.invalidate('eelsRange'); refreshControls();
     return explainChange('eelsRange');
@@ -314,8 +316,12 @@ function setSpec(v) {
   S.fov = sp.fov; S.cx = sp.center[0]; S.cy = sp.center[1]; S.tiltX = 0; S.tiltY = 0;
   S.edsSel = 'all';
   S.eelsRange = 'core';
-  S.eelsWin = v === 'sto' ? 462 : v === 'si' ? 102 : v === 'gr' ? 287 : 100;
-  S.eelsWidth = v === 'si' ? 5 : v === 'au' ? 24 : v === 'gr' ? 6 : 16;
+  S.eelsWin = v === 'sto' ? 462 : v === 'si' ? 102 : v === 'gr' ? 287 : v === 'mof' ? 200 : 100;
+  S.eelsWidth = v === 'si' ? 5 : v === 'au' ? 24 : v === 'gr' ? 6 : v === 'mof' ? 30 : 16;
+  // a MOF needs low-dose conditions; other specimens go back to a normal dose
+  if (v === 'mof') { S.dose = 2; S.kV = 300; S.thick = 20; S.camL = 4000; }
+  else if (S.dose < 20) S.dose = 400;
+  sim.freshArea();
   resetVdet();
   sim.invalidate('spec');
   refreshControls();
@@ -347,6 +353,7 @@ function action(id, el) {
   }
   if (id === 'pause') { S.paused = !S.paused; refreshControls(); }
   if (id === 'restore') { sim.restoreSpecimen(); explainChange('restore'); }
+  if (id === 'fresh') { S.cx += 6 * (Math.random() - 0.5); sim.freshArea(); sim.invalidate('stage'); explainChange('fresh'); }
   if (id === 'scramble') {
     const r = () => Math.random();
     S.ab = { A1: 15 + 45 * r(), A1a: Math.round(180 * r()), B2: 150 + 500 * r(), B2a: Math.round(360 * r()), A2: 100 + 500 * r(), A2a: Math.round(120 * r()), A3: 2 + 6 * r(), A3a: Math.round(90 * r()) };

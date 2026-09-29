@@ -215,6 +215,13 @@ export class CBED {
   }
   compute() {
     const sim = this.sim, S = sim.S, spec = sim.spec, lam = sim.lam, t = spec.fixedT ?? S.thick * 10;
+    if (spec.noCBED) { // a MOF is amorphised long before a focused-probe pattern can be recorded
+      const W = 256, a0 = sim.alpha(), span = a0 * 1.3, out = new Float32Array(W * W);
+      for (let j = 0; j < W; j++) for (let i = 0; i < W; i++) { const tx = ((i + 0.5) / W * 2 - 1) * span, ty = ((j + 0.5) / W * 2 - 1) * span; if (Math.hypot(tx, ty) <= a0) out[j * W + i] = 0.9; }
+      this.disp = { arr: out, W, span, a: a0, lac: S.cbedKind === 'lacbed', grainC: -1, noCBED: true };
+      this.fit = null; this.rot = []; this.stale = false;
+      return;
+    }
     const L = this.lists(), lac = S.cbedKind === 'lacbed', a = sim.alpha();
     const W = lac ? 200 : 256, span = lac ? a * 1.12 : Math.max(a * 1.3, 0.022 * (1000 / S.camL));
     const tx0 = S.tiltX * DEG, ty0 = S.tiltY * DEG;
@@ -336,6 +343,11 @@ export function drawCBED(sim, S, m, s) {
   paint(ctx, d.arr, d.W, d.W, dst, { lo: 0, hi: mx * (d.lac ? 1 : 0.9), lut: real(S) ? LUT.gray : d.lac ? LUT.ice : LUT.magma, gamma: d.lac ? 1.3 : sim.spec.twoD ? 0.3 : 0.7, noise: real(S) ? 120 : 0 });
   if (sim.spec.twoD && !d.lac) label(ctx, 'one atom thick: uniform disks, no fringes, no HOLZ lines', W / 2, H - 16 * dpr, dpr, { color: C.muted, size: 9, align: 'center' });
   const px = W / (2 * d.span), cx = W / 2, cy = H / 2;
+  if (d.noCBED) {
+    label(ctx, 'UiO-66 is amorphous before a CBED pattern forms', W / 2, 20 * dpr, dpr, { color: C.warm, size: 9, align: 'center' });
+    label(ctx, `critical dose ~${sim.critDose().toFixed(0)} e⁻/Å² vs ~10⁶ e⁻/Å² in a focused probe`, W / 2, H - 16 * dpr, dpr, { color: C.muted, size: 9, align: 'center' });
+    return;
+  }
   if (d.lac) {
     label(ctx, `LACBED · α = ${Math.round(d.a * 1000)} mrad · shadow image + Bragg/HOLZ lines`, 10 * dpr, 16 * dpr, dpr, { color: C.accent, size: 9 });
     if (!real(S) && sim.spec.id === 'sto') label(ctx, 'lines break at the grain boundary', cx, H - 16 * dpr, dpr, { color: C.warm, size: 9, align: 'center' });
