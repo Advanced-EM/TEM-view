@@ -454,19 +454,21 @@ function draw4D(sim, S, m, s, hover) {
   layout.fd = { N, W, H };
   const rows = Math.ceil(f.done / N);
   const vec = S.vdet === 'dpc' ? [f.dpcX, f.dpcY] : [f.comX, f.comY];
-  if (S.vdet === 'ptycho') {
-    const ph = sim.ptychoPhase(), T = sim.pty;
+  if (S.vdet === 'ptycho' || S.vdet === 'mptycho') {
+    const ms = S.vdet === 'mptycho', T = ms ? sim.mpty : sim.pty, ph = ms ? sim.msPhase(-1) : sim.ptychoPhase();
+    const maxIt = ms ? T?.maxIter ?? 12 : 30;
     if (ph && T) {
       const [lo, hi] = range(ph.arr, 0.01, 0.995);
       paint(ctx, ph.arr, ph.S, ph.S, dst, { lo, hi, lut: real(S) ? LUT.gray : LUT.ice });
-      label(ctx, `ePIE iteration ${T.iter}${T.iter < 30 ? ` · ${Math.round((100 * T.k) / (N * N))}%` : ' · converged'}`, 10 * dpr, 38 * dpr, dpr, { color: C.accent });
+      label(ctx, `${ms ? `multislice (${f.K} × ${(f.dz / 10).toFixed(1)} nm)` : 'single-slice'} ePIE · iteration ${T.iter}${T.iter < maxIt ? ` · ${Math.round((100 * T.k) / (N * N))}%` : ' · done'}`, 10 * dpr, 38 * dpr, dpr, { color: C.accent });
+      if (ms) label(ctx, 'sum of slice phases', 10 * dpr, 58 * dpr, dpr, { color: C.muted, size: 9 });
       // convergence sparkline
       const hst = T.errHist;
       if (hst.length > 1) {
         const w = 90 * dpr, h = 26 * dpr, x0 = W - w - 10 * dpr, y0 = 10 * dpr, m0 = hst[0];
         ctx.fillStyle = 'rgba(5,7,10,0.62)'; ctx.fillRect(x0 - 4 * dpr, y0 - 4 * dpr, w + 8 * dpr, h + 8 * dpr);
         ctx.strokeStyle = C.warm; ctx.lineWidth = 1.2 * dpr; ctx.beginPath();
-        hst.forEach((v, i) => { const x = x0 + (i / 29) * w, y = y0 + h - (v / m0) * h; i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+        hst.forEach((v, i) => { const x = x0 + (i / (maxIt - 1)) * w, y = y0 + h - (v / m0) * h; i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
         ctx.stroke();
         font(ctx, 8, dpr); ctx.fillStyle = C.muted; ctx.textBaseline = 'top'; ctx.fillText('error', x0, y0 + h + 1);
       }
@@ -537,7 +539,7 @@ function draw4D(sim, S, m, s, hover) {
       q.beginPath(); q.arc(cx, cy, r, 0, 7); q.fill(); q.stroke();
       q.beginPath(); q.moveTo(cx - d, cy - d); q.lineTo(cx + d, cy + d); q.moveTo(cx + d, cy - d); q.lineTo(cx - d, cy + d); q.stroke();
       label(q, 'A−C, B−D: segmented detector', 8 * s.dpr, sz - 14 * s.dpr, s.dpr, { color: C.warm, size: 9 });
-    } else if (S.vdet === 'ptycho') {
+    } else if (S.vdet === 'ptycho' || S.vdet === 'mptycho') {
       q.strokeStyle = 'rgba(255,180,94,0.6)'; q.strokeRect(1, 1, sz - 2, sz - 2);
       label(q, 'every pixel used: amplitudes → phase', 8 * s.dpr, sz - 14 * s.dpr, s.dpr, { color: C.warm, size: 9 });
     }
@@ -553,7 +555,20 @@ function draw4D(sim, S, m, s, hover) {
     }
     if (sim.single?.hits && sim.single.count && sim.single.w === f.n4) drawHits(q, sim.single, [0, 0, sz, sz], s.dpr);
     label(q, `CBED at (${si}, ${sj})`, 8 * s.dpr, 14 * s.dpr + (sim.single ? 20 * s.dpr : 0), s.dpr, { color: C.accent });
-    if (!['com', 'dpc', 'ptycho'].includes(S.vdet)) label(q, 'drag to reshape detector', sz - 8 * s.dpr, sz - 14 * s.dpr, s.dpr, { color: C.muted, size: 9, align: 'right' });
+    if (!['com', 'dpc', 'ptycho', 'mptycho'].includes(S.vdet)) label(q, 'drag to reshape detector', sz - 8 * s.dpr, sz - 14 * s.dpr, s.dpr, { color: C.muted, size: 9, align: 'right' });
+  }
+  // multislice: one reconstructed phase image per slice, entrance to exit
+  if (S.vdet === 'mptycho' && sim.mpty) {
+    const gx0 = sz + 14 * s.dpr, gw = s.W - gx0 - 4 * s.dpr, K = f.K, cols = K > 2 ? 2 : K, rowsN = Math.ceil(K / cols);
+    const cell = Math.min((gw - 6 * s.dpr) / cols, (s.H - 30 * s.dpr) / rowsN) - 4 * s.dpr;
+    label(q, 'reconstructed slices (depth ↓)', gx0, 12 * s.dpr, s.dpr, { color: C.muted, size: 9 });
+    for (let k = 0; k < K; k++) {
+      const ph = sim.msPhase(k, 64), x = gx0 + (k % cols) * (cell + 6 * s.dpr), y = 24 * s.dpr + Math.floor(k / cols) * (cell + 6 * s.dpr);
+      const [lo, hi] = range(ph.arr, 0.01, 0.995);
+      paint(q, ph.arr, 64, 64, [x, y, cell, cell], { lo, hi, lut: real(S) ? LUT.gray : LUT.ice });
+      label(q, `${k + 1}: ${((k * f.dz) / 10).toFixed(1)}–${(((k + 1) * f.dz) / 10).toFixed(1)} nm`, x + 3 * s.dpr, y + 10 * s.dpr, s.dpr, { color: C.text, size: 8 });
+    }
+    return;
   }
   // data cube thumbnails
   const gx0 = sz + 14 * s.dpr, gw = s.W - gx0 - 4 * s.dpr, K = 6, cell = Math.min(gw / K, (s.H - 26 * s.dpr) / K);

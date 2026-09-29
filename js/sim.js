@@ -87,12 +87,12 @@ export class Sim {
 
   maps(opts) {
     const S = this.S;
-    const key = [S.spec, this.spec.damageVer ?? 0, S.cx.toFixed(2), S.cy.toFixed(2), S.thick, S.tiltX, S.tiltY, opts.n, opts.dx.toFixed(4), !!opts.elements, !!opts.noTilt].join('|');
+    const key = [S.spec, this.spec.damageVer ?? 0, S.cx.toFixed(2), S.cy.toFixed(2), S.thick, S.tiltX, S.tiltY, opts.n, opts.dx.toFixed(4), !!opts.elements, !!opts.noTilt, opts.part ?? ''].join('|');
     let m = this.mapCache.get(key);
     if (!m) {
       m = P.projectMaps(this.spec, {
         cx: S.cx, cy: S.cy, n: opts.n, dx: opts.dx, thick: S.thick * 10,
-        tiltX: (S.tiltX * Math.PI) / 180, tiltY: (S.tiltY * Math.PI) / 180, elements: opts.elements, noTilt: opts.noTilt,
+        tiltX: (S.tiltX * Math.PI) / 180, tiltY: (S.tiltY * Math.PI) / 180, elements: opts.elements, noTilt: opts.noTilt, part: opts.part,
       });
       this.mapCache.set(key, m);
       if (this.mapCache.size > 8) this.mapCache.delete(this.mapCache.keys().next().value);
@@ -330,8 +330,19 @@ export class Sim {
     const S = this.S, n4 = 64, dx = 0.18, N = 40, lam = this.lam;
     const scan = clamp(S.fov * 10 * 0.6, 14, 36), step = scan / N;
     const gridN = Math.ceil(scan / dx) + n4 + 8;
-    const maps = this.maps({ n: gridN, dx });
-    const { re, im } = P.transmission(maps.phase, S.kV);
+    // Multislice specimen: K slices with Fresnel propagation between them, so thick-specimen effects
+    // (beam spreading, channelling) are in the recorded patterns. On Au/C the particles sit on top of the film.
+    const K = 3, thickA = this.spec.fixedT ?? S.thick * 10, dz = thickA / K;
+    const slices = [];
+    if (this.spec.id === 'au') {
+      const top = this.maps({ n: gridN, dx, part: 'cryst' }), bot = this.maps({ n: gridN, dx, part: 'amorph' });
+      for (let k = 0; k < K; k++) slices.push(P.transmission((k < K / 2 ? top : bot).phase, S.kV, 2 / K));
+    } else {
+      const all = this.maps({ n: gridN, dx }), t = P.transmission(all.phase, S.kV, 1 / K);
+      for (let k = 0; k < K; k++) slices.push(t);
+    }
+    const { re, im } = slices[0];
+    const prop = this.fresnel(n4, dx, lam, dz);
     const kAp = (S.alpha4d * 1e-3) / lam, df = S.df * 10, Cs = this.CsA(), ab = this.abA();
     const pr = new Float64Array(n4 * n4), pi = new Float64Array(n4 * n4);
     for (let y = 0; y < n4; y++)
@@ -353,7 +364,7 @@ export class Sim {
     const nrm = 1 / Math.sqrt(ps || 1);
     for (let i = 0; i < n4 * n4; i++) { sr[i] *= nrm; si[i] *= nrm; }
     this.fd = {
-      N, n4, dx, scan, step, gridN, re, im, pr: sr, pi: si, lam,
+      N, n4, dx, scan, step, gridN, re, im, pr: sr, pi: si, lam, K, dz, slices, prop,
       data: new Float32Array(N * N * n4 * n4), done: 0, dk: 1 / (n4 * dx),
       mradPx: (lam * 1000) / (n4 * dx),
       wr: new Float64Array(n4 * n4), wi: new Float64Array(n4 * n4),
@@ -371,13 +382,18 @@ export class Sim {
       const idx = f.done, i = idx % N, j = (idx / N) | 0;
       const left = Math.round(gridN / 2 + (-scan / 2 + (i + 0.5) * step) / dx) - h;
       const top = Math.round(gridN / 2 + (-scan / 2 + (j + 0.5) * step) / dx) - h;
-      for (let y = 0; y < n4; y++) {
-        const go = (top + y) * gridN + left, po = y * n4;
-        for (let x = 0; x < n4; x++) {
-          const g = go + x, p = po + x;
-          wr[p] = re[g] * pr[p] - im[g] * pi[p];
-          wi[p] = re[g] * pi[p] + im[g] * pr[p];
+      wr.set(pr); wi.set(pi);
+      for (let k = 0; k < f.K; k++) {
+        const s = f.slices[k];
+        for (let y = 0; y < n4; y++) {
+          const go = (top + y) * gridN + left, po = y * n4;
+          for (let x = 0; x < n4; x++) {
+            const g = go + x, p = po + x, a = wr[p], b = wi[p];
+            wr[p] = s.re[g] * a - s.im[g] * b;
+            wi[p] = s.re[g] * b + s.im[g] * a;
+          }
         }
+        if (k < f.K - 1) this.propagate(wr, wi, n4, f.prop, false);
       }
       P.fft2(wr, wi, n4);
       const o = idx * n4 * n4;
@@ -435,6 +451,101 @@ export class Sim {
       f.dpcX[idx] = (Q[0] - Q[2]) / qt; f.dpcY[idx] = (Q[1] - Q[3]) / qt;
     }
     f.vDone = f.done;
+  }
+
+  // Fresnel propagator over dz (Å), band-limited to 2/3 of Nyquist to avoid aliasing
+  fresnel(n, dx, lam, dz) {
+    const re = new Float64Array(n * n), im = new Float64Array(n * n), kmax = (2 / 3) * (1 / (2 * dx));
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+      const kx = P.freq(x, n, dx), ky = P.freq(y, n, dx), k2 = kx * kx + ky * ky;
+      if (k2 > kmax * kmax) continue;
+      const c = -Math.PI * lam * dz * k2;
+      re[y * n + x] = Math.cos(c); im[y * n + x] = Math.sin(c);
+    }
+    return { re, im };
+  }
+  propagate(wr, wi, n, H, back) {
+    P.fft2(wr, wi, n);
+    const s = back ? -1 : 1;
+    for (let i = 0; i < n * n; i++) { const a = wr[i], b = wi[i], c = H.re[i], d = s * H.im[i]; wr[i] = a * c - b * d; wi[i] = a * d + b * c; }
+    P.fft2(wr, wi, n, true);
+  }
+
+  // ------------------------------------------------------------ multislice ptychography (MS-ePIE / 3PIE)
+  // The object is a stack of K slices; the wave is propagated between them in the forward model, and the
+  // correction is back-propagated slice by slice, updating each slice's transmission and the wave entering it.
+  startMSPtycho() {
+    const f = this.fd, G = f.gridN;
+    const O = Array.from({ length: f.K }, () => ({ re: new Float64Array(G * G).fill(1), im: new Float64Array(G * G) }));
+    const n2 = f.n4 * f.n4, mk = () => ({ re: new Float64Array(n2), im: new Float64Array(n2) });
+    this.mpty = { fd: f, O, iter: 0, k: 0, order: Array.from({ length: f.N * f.N }, (_, i) => i), errSum: 0, errHist: [],
+      inc: Array.from({ length: f.K }, mk), ex: Array.from({ length: f.K }, mk), w: mk(), maxIter: 10, win: new Int32Array(f.n4 * f.n4) };
+  }
+  stepMSPtycho(budget) {
+    const T = this.mpty, f = T.fd, { N, n4, gridN, dx, step, scan, K } = f;
+    if (T.iter >= T.maxIter) return false;
+    const h = n4 / 2, n2 = n4 * n4, t0 = performance.now(), beta = 0.8;
+    while (performance.now() - t0 < budget) {
+      if (T.k === 0) {
+        for (let i = T.order.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; [T.order[i], T.order[j]] = [T.order[j], T.order[i]]; }
+        T.errSum = 0;
+      }
+      const idx = T.order[T.k], i = idx % N, j = (idx / N) | 0;
+      const left = Math.round(gridN / 2 + (-scan / 2 + (i + 0.5) * step) / dx) - h;
+      const top = Math.round(gridN / 2 + (-scan / 2 + (j + 0.5) * step) / dx) - h;
+      const Wi = T.win;
+      for (let y = 0, p = 0; y < n4; y++) { const r = (top + y) * gridN + left; for (let x = 0; x < n4; x++, p++) Wi[p] = r + x; }
+      // forward through the slices
+      T.inc[0].re.set(f.pr); T.inc[0].im.set(f.pi);
+      for (let k = 0; k < K; k++) {
+        const O = T.O[k], I = T.inc[k], E = T.ex[k];
+        for (let p = 0; p < n2; p++) { const g = Wi[p]; E.re[p] = O.re[g] * I.re[p] - O.im[g] * I.im[p]; E.im[p] = O.re[g] * I.im[p] + O.im[g] * I.re[p]; }
+        if (k < K - 1) { T.inc[k + 1].re.set(E.re); T.inc[k + 1].im.set(E.im); this.propagate(T.inc[k + 1].re, T.inc[k + 1].im, n4, f.prop, false); }
+      }
+      // modulus constraint at the detector
+      const W = T.w; W.re.set(T.ex[K - 1].re); W.im.set(T.ex[K - 1].im);
+      P.fft2(W.re, W.im, n4);
+      const o = idx * n2;
+      for (let p = 0; p < n2; p++) {
+        const y = (p / n4) | 0, x = p % n4, meas = Math.sqrt(f.data[o + ((y + h) % n4) * n4 + ((x + h) % n4)]);
+        const amp = Math.hypot(W.re[p], W.im[p]);
+        T.errSum += (amp - meas) ** 2;
+        const sc = amp > 1e-12 ? meas / amp : 0;
+        W.re[p] *= sc; W.im[p] *= sc;
+      }
+      P.fft2(W.re, W.im, n4, true);
+      // back through the slices: W holds the corrected exit wave of slice k
+      for (let k = K - 1; k >= 0; k--) {
+        const O = T.O[k], I = T.inc[k], E = T.ex[k];
+        let mI = 0, mO = 0;
+        for (let p = 0; p < n2; p++) { mI = Math.max(mI, I.re[p] * I.re[p] + I.im[p] * I.im[p]); const g = Wi[p]; mO = Math.max(mO, O.re[g] * O.re[g] + O.im[g] * O.im[g]); }
+        for (let p = 0; p < n2; p++) {
+          const g = Wi[p], dr = W.re[p] - E.re[p], di = W.im[p] - E.im[p];
+          const ir = I.re[p], ii = I.im[p], or = O.re[g], oi = O.im[g];
+          O.re[g] += (beta * (ir * dr + ii * di)) / (mI || 1);
+          O.im[g] += (beta * (ir * di - ii * dr)) / (mI || 1);
+          if (k > 0) { // corrected wave entering this slice, then back-propagate to the previous exit
+            W.re[p] = ir + (beta * (or * dr + oi * di)) / (mO || 1);
+            W.im[p] = ii + (beta * (or * di - oi * dr)) / (mO || 1);
+          }
+        }
+        if (k > 0) this.propagate(W.re, W.im, n4, f.prop, true);
+      }
+      if (++T.k >= N * N) { T.k = 0; T.iter++; T.errHist.push(T.errSum); if (T.iter >= T.maxIter) break; }
+    }
+    return true;
+  }
+  msPhase(k, S = 96) { // phase of slice k (or the sum when k < 0) over the scanned area
+    const T = this.mpty;
+    if (!T) return null;
+    const f = T.fd, G = f.gridN, out = new Float32Array(S * S), x0 = G / 2 - f.scan / 2 / f.dx;
+    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+      const g = Math.round(x0 + ((y + 0.5) / S) * (f.scan / f.dx)) * G + Math.round(x0 + ((x + 0.5) / S) * (f.scan / f.dx));
+      let v = 0;
+      for (let kk = 0; kk < f.K; kk++) if (k < 0 || kk === k) v += Math.atan2(T.O[kk].im[g], T.O[kk].re[g]);
+      out[y * S + x] = v;
+    }
+    return { arr: out, S };
   }
 
   // ------------------------------------------------------------ ptychography (ePIE, known probe)
@@ -822,6 +933,10 @@ export class Sim {
       if (this.step4D(S.paused ? 0 : 7 * Math.min(2, Math.max(0.25, S.speed)))) this.version++;
       if (this.stale.vimg) { this.computeVirtual(0); this.stale.vimg = 0; this.version++; }
       else if (this.fd.done !== prev) this.computeVirtual(this.fd.vDone);
+      if (S.vdet === 'mptycho' && this.fd.done === this.fd.N * this.fd.N && !S.paused) {
+        if (!this.mpty || this.mpty.fd !== this.fd) this.startMSPtycho();
+        if (this.stepMSPtycho(11 * Math.min(2, Math.max(0.3, S.speed)))) this.version++;
+      }
       if (S.vdet === 'ptycho' && this.fd.done === this.fd.N * this.fd.N && !S.paused) {
         if (!this.pty || this.pty.fd !== this.fd) this.startPtycho();
         if (this.stepPtycho(9 * Math.min(2, Math.max(0.3, S.speed)))) this.version++;

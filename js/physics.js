@@ -84,13 +84,15 @@ function plan(n) {
   plans.set(n, p);
   return p;
 }
-function fft1(re, im, n, inv) {
+// In-place radix-2 FFT along a strided line (offset o, stride st): no copies for rows or columns.
+function fft1(re, im, n, inv, o = 0, st = 1) {
   const { rev, cos, sin } = plan(n);
   for (let i = 0; i < n; i++) {
     const j = rev[i];
     if (j > i) {
-      let t = re[i]; re[i] = re[j]; re[j] = t;
-      t = im[i]; im[i] = im[j]; im[j] = t;
+      const a = o + i * st, b = o + j * st;
+      let t = re[a]; re[a] = re[b]; re[b] = t;
+      t = im[a]; im[a] = im[b]; im[b] = t;
     }
   }
   for (let size = 2; size <= n; size <<= 1) {
@@ -98,28 +100,19 @@ function fft1(re, im, n, inv) {
     for (let i = 0; i < n; i += size) {
       for (let j = 0, k = 0; j < half; j++, k += step) {
         const c = cos[k], s = inv ? sin[k] : -sin[k];
-        const a = i + j, b = a + half;
-        const tr = re[b] * c - im[b] * s, ti = re[b] * s + im[b] * c;
+        const a = o + (i + j) * st, b = a + half * st;
+        const br = re[b], bi = im[b];
+        const tr = br * c - bi * s, ti = br * s + bi * c;
         re[b] = re[a] - tr; im[b] = im[a] - ti;
         re[a] += tr; im[a] += ti;
       }
     }
   }
-  if (inv) for (let i = 0; i < n; i++) { re[i] /= n; im[i] /= n; }
 }
 export function fft2(re, im, n, inv = false) {
-  const { tr, ti } = plan(n);
-  for (let y = 0; y < n; y++) {
-    const o = y * n;
-    for (let x = 0; x < n; x++) { tr[x] = re[o + x]; ti[x] = im[o + x]; }
-    fft1(tr, ti, n, inv);
-    for (let x = 0; x < n; x++) { re[o + x] = tr[x]; im[o + x] = ti[x]; }
-  }
-  for (let x = 0; x < n; x++) {
-    for (let y = 0; y < n; y++) { tr[y] = re[y * n + x]; ti[y] = im[y * n + x]; }
-    fft1(tr, ti, n, inv);
-    for (let y = 0; y < n; y++) { re[y * n + x] = tr[y]; im[y * n + x] = ti[y]; }
-  }
+  for (let y = 0; y < n; y++) fft1(re, im, n, inv, y * n, 1);
+  for (let x = 0; x < n; x++) fft1(re, im, n, inv, x, n);
+  if (inv) { const f = 1 / (n * n); for (let i = 0; i < n * n; i++) { re[i] *= f; im[i] *= f; } }
 }
 export const freq = (i, n, dx) => (i < n / 2 ? i : i - n) / (n * dx);
 
@@ -532,7 +525,8 @@ for (const s of Object.values(SPECIMENS)) {
 // ---------------------------------------------------------------- projected maps
 // Splat atoms onto an n×n grid (pixel size dx, centred at cx,cy). Tilting a crystal
 // smears each column along the tilt direction by L·tanθ, which is what kills lattice contrast off-axis.
-export function projectMaps(spec, { cx, cy, n, dx, thick, tiltX = 0, tiltY = 0, elements = false, noTilt = false }) {
+// part: 'cryst' or 'amorph' projects only that component (used to stack slices in depth)
+export function projectMaps(spec, { cx, cy, n, dx, thick, tiltX = 0, tiltY = 0, elements = false, noTilt = false, part = null }) {
   const N2 = n * n;
   const phase = new Float32Array(N2), zHi = new Float32Array(N2), zLo = new Float32Array(N2);
   const elem = elements ? EL.map(() => new Float32Array(N2)) : null;
@@ -563,7 +557,7 @@ export function projectMaps(spec, { cx, cy, n, dx, thick, tiltX = 0, tiltY = 0, 
   }
 
   const A = spec.atoms, pad = 4;
-  A.query(x0 - pad, y0 - pad, x0 + n * dx + pad, y0 + n * dx + pad, (i) => {
+  if (part !== 'amorph') A.query(x0 - pad, y0 - pad, x0 + n * dx + pad, y0 + n * dx + pad, (i) => {
     if (A.dead && A.dead[i]) return;
     const L = A.L[i] < 0 ? thick : A.L[i];
     let N = L / spec.period;
@@ -580,6 +574,7 @@ export function projectMaps(spec, { cx, cy, n, dx, thick, tiltX = 0, tiltY = 0, 
 
   // amorphous material: seeded per 2.2 Å cell so it is stable as the stage moves
   const cell = 2.2;
+  if (part === 'cryst') return { phase, zHi, zLo, elem, n, dx, x0, y0 };
   const i0 = Math.floor(x0 / cell) - 1, i1 = Math.floor((x0 + n * dx) / cell) + 1;
   const j0 = Math.floor(y0 / cell) - 1, j1 = Math.floor((y0 + n * dx) / cell) + 1;
   for (let j = j0; j <= j1; j++)

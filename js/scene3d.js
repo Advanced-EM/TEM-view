@@ -736,7 +736,15 @@ export class Scene3D {
     A.eds = lerp(A.eds, m === 'eds' ? 1 : 0, k);
     this.edsWinMat.color.setRGB(0.23 + A.eds * 0.9, 0.16 + A.eds * 0.55, 0.08 + A.eds * 0.2);
     this.shell.visible = S.showGlass;
-    this.screenMat.color.setScalar(!stemLike && !ded ? 1.25 : 0.25);
+    // the phosphor only glows while the screen is down in the beam path and in use
+    const screenLive = !stemLike && !ded && A.screenLift < 0.15;
+    if (screenLive !== this._screenLive) {
+      this._screenLive = screenLive;
+      this.screenMat.map = screenLive ? this.screenTex : null;
+      this.screenMat.color.set(screenLive ? 0xffffff : 0x14241a);
+      this.screenMat.needsUpdate = true;
+    }
+    if (screenLive) this.screenMat.color.setScalar(1.25);
     this.camMat.color.setScalar(ded ? 1.2 : 0.3);
     this.updateParticles(dt, S, sim);
     this.updateXrays(dt, S, onSpec);

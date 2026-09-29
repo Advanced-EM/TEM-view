@@ -94,7 +94,7 @@ const CONTROLS = [
   { slider: 'camL', label: 'Camera length', min: 80, max: 6000, log: true, fmt: (v) => `${Math.round(v)} mm`, modes: 'diff cbed', show: () => S.mode !== 'cbed' || S.cbedKind === 'cbed', ends: ['wide angle', '', 'zoomed'] },
   { slider: 'sa', label: 'Selected area', min: 2, max: 12, step: 0.2, fmt: (v) => `${v.toFixed(1)} nm`, modes: 'diff' },
   { toggles: [['beamStop', 'Beam stop']], modes: 'diff' },
-  { chips: 'vdet', label: 'Virtual detector', modes: '4d', opts: [['bf', 'BF'], ['abf', 'ABF'], ['adf', 'ADF'], ['disk', 'Disk (DF)'], ['dpc', 'DPC'], ['com', 'Centre of mass'], ['ptycho', 'Ptychography']] },
+  { chips: 'vdet', label: 'Virtual detector', modes: '4d', opts: [['bf', 'BF'], ['abf', 'ABF'], ['adf', 'ADF'], ['disk', 'Disk (DF)'], ['dpc', 'DPC'], ['com', 'Centre of mass'], ['ptycho', 'Ptychography'], ['mptycho', 'Multislice ptycho']] },
   { chips: 'edsSel', label: 'Map element', modes: 'eds', dynOpts: () => [['all', 'All']].concat(sim.si ? [...new Set(sim.si.els.map((e) => e.sym))].map((s) => [s, s]) : []) },
   { chips: 'eelsRange', label: 'Spectrum range', modes: 'eels', opts: [['low', 'Low loss'], ['core', 'Core loss'], ['high', 'High loss']] },
   { slider: 'eelsWin', inv: 'eelsWin', label: 'Energy window centre', dyn: () => { const [a, b] = sim.eelsRangeBounds(); return { min: Math.max(0, a), max: b, step: b - a > 500 ? 1 : 0.5 }; }, fmt: (v) => `${v.toFixed(0)} eV`, modes: 'eels' },
@@ -470,7 +470,7 @@ function updateDetectorHeader() {
   const names = {
     tem: [S.camera === 'screen' ? 'Fluorescent screen · image' : 'Direct electron detector · image', 'Diffractogram & contrast transfer'],
     stem: [`${stemDetType(S.detIn, S.detOut, S.alpha)} detector · scanned image`, 'Probe & detector geometry'],
-    '4d': [({ bf: 'Virtual BF image', abf: 'Virtual ABF image', adf: 'Virtual ADF image', disk: 'Virtual dark-field image', dpc: 'DPC · beam deflection', com: 'Centre-of-mass · electric field', ptycho: 'Ptychography · reconstructed phase' })[S.vdet], 'Direct electron detector · pattern at probe'],
+    '4d': [({ bf: 'Virtual BF image', abf: 'Virtual ABF image', adf: 'Virtual ADF image', disk: 'Virtual dark-field image', dpc: 'DPC · beam deflection', com: 'Centre-of-mass · electric field', ptycho: 'Ptychography · reconstructed phase', mptycho: 'Multislice ptychography · slice phases' })[S.vdet], 'Direct electron detector · pattern at probe'],
     diff: [S.camera === 'screen' ? 'Fluorescent screen · pattern' : 'Direct electron detector · pattern', 'Ring profile & d-spacings'],
     eds: ['EDS element map', 'X-ray spectrum'],
     eels: ['Energy-filtered map', 'Electron energy-loss spectrum'],
@@ -632,7 +632,7 @@ function frame(now) {
       R2.draw(sim, S, mainCv, secCv);
       lastVer = sim.version;
       lastDraw = now;
-      scene.screenTex.image = mainCv; scene.screenTex.needsUpdate = true;
+      if ((S.mode === 'tem' || S.mode === 'diff') && S.camera === 'screen') { scene.screenTex.image = mainCv; scene.screenTex.needsUpdate = true; }
       if (((S.mode === 'tem' || S.mode === 'diff') && S.camera === 'ded') || ['ronch', 'cbed'].includes(S.mode)) { scene.camTex.image = mainCv; scene.camTex.needsUpdate = true; }
       if (S.mode === '4d' && R2.layout.cbed) {
         const L = R2.layout.cbed;
