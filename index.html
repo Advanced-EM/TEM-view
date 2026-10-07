@@ -32,10 +32,10 @@
 
 <div id="tourCap" class="tourcap" hidden></div>
 
-<aside id="comp" class="card comp" hidden><button class="close" aria-label="Close">×</button><div class="compBody"></div></aside>
+<aside id="comp" class="card comp" hidden><button class="close" aria-label="Close">×</button><button class="speak" id="compSpeak" title="Listen" aria-label="Listen to this component"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path class="w1" d="M15.5 9a4.2 4.2 0 0 1 0 6"/><path class="w2" d="M18.3 6.5a8 8 0 0 1 0 11"/></svg></button><div class="compBody"></div></aside>
 
 <section class="card explain">
-  <p class="eyebrow">What you are looking at</p>
+  <p class="eyebrow">What you are looking at<button class="speak" id="infoSpeak" title="Listen" aria-label="Listen to this mode"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path class="w1" d="M15.5 9a4.2 4.2 0 0 1 0 6"/><path class="w2" d="M18.3 6.5a8 8 0 0 1 0 11"/></svg></button></p>
   <h2 id="infoTitle"></h2>
   <div id="infoBody" class="body"></div>
   <div id="change" class="change" hidden></div>
@@ -56,6 +56,7 @@
 <aside class="card controls">
   <div class="chead"><p class="eyebrow">Controls</p><div class="icons">
   <button id="btnLabels" title="Labels (L)" aria-label="Toggle labels"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button>
+  <button id="btnNarrate" title="Auto-narrate (N)" aria-label="Narrate automatically" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 13v-1a8 8 0 0 1 16 0v1"/><rect x="3" y="13" width="4" height="7" rx="1.5"/><rect x="17" y="13" width="4" height="7" rx="1.5"/></svg></button>
   <button id="btnFull" title="Fullscreen" aria-label="Fullscreen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
   <button id="btnHelp" title="About" aria-label="About this exhibit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9.5"/><path d="M9.6 9.3a2.5 2.5 0 1 1 3.4 2.3c-.7.3-1 .8-1 1.5v.6"/><circle cx="12" cy="16.8" r=".6" fill="currentColor"/></svg></button>
 </div></div>
