@@ -201,3 +201,16 @@ body.stacked .tourcap { position: fixed; top: auto; bottom: 16px; left: 50%; wid
 .comp table.live td:last-child { color: var(--accent); }
 body.stacked .comp { left: 12px !important; right: 12px; top: auto !important; bottom: 12px; width: auto; max-height: 70vh; }
 .comp .eyebrow { padding-right: 28px; }
+
+/* narration */
+.speak { display: inline-grid; place-items: center; width: 24px; height: 24px; margin-left: 8px; vertical-align: middle; border-radius: 8px; color: var(--muted); border: 1px solid var(--line); transition: color 0.15s, border-color 0.15s; }
+.speak svg { width: 15px; height: 15px; }
+.speak:hover { color: var(--text); border-color: var(--line-2); }
+.speak.on { color: var(--accent); border-color: var(--accent); }
+.speak.on .w1 { animation: spk 1s infinite; } .speak.on .w2 { animation: spk 1s 0.25s infinite; }
+@keyframes spk { 50% { opacity: 0.2; } }
+.comp .speak { position: absolute; top: 12px; right: 40px; margin: 0; }
+.explain .eyebrow .speak { margin-top: -6px; }
+#btnNarrate[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
+.narr { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 8px 0 4px; }
+.narrLbl { font: 500 9.5px var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }

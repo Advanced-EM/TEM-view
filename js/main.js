@@ -4,6 +4,7 @@ import * as R2 from './render2d.js';
 import { Scene3D, Y } from './scene3d.js';
 import { modeInfo, changeText, dataRows } from './explain.js';
 import { renderComponent } from './components.js';
+import * as N from './narration.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -341,6 +342,8 @@ function setMode(m) {
   explainChange(null);
   updateDetectorHeader();
   if (sim.single) sim.startSingle(true);
+  if (autoNarrate) N.speak('mode-' + m);
+  else if (N.playing()?.startsWith('mode-')) N.stop();
 }
 
 function action(id, el) {
@@ -667,6 +670,7 @@ function showComponent(name, el) {
   card.querySelector('.compBody').innerHTML = renderComponent(name, S, sim);
   card.hidden = false;
   card.scrollTop = 0;
+  if (autoNarrate) N.speak(name);
   if (!document.body.classList.contains('stacked')) {
     const r = el.getBoundingClientRect(), W = 360, H = Math.min(card.offsetHeight, window.innerHeight - 40);
     const right = r.right + 14 + W < window.innerWidth - 360;
@@ -677,6 +681,7 @@ function showComponent(name, el) {
 }
 function closeComponent() {
   $('#comp').hidden = true;
+  if (openComp && N.playing() === openComp) N.stop();
   openComp = null;
   document.querySelectorAll('.lbl.active').forEach((l) => l.classList.remove('active'));
 }
@@ -691,6 +696,35 @@ setInterval(() => {
   body.innerHTML = renderComponent(openComp, S, sim);
   body.parentElement.scrollTop = st;
 }, 700);
+
+// ------------------------------------------------------------------ narration
+let autoNarrate = false;
+try { autoNarrate = localStorage.getItem('tem-narrate') === '1'; } catch {}
+function setAutoNarrate(on) {
+  autoNarrate = on;
+  $('#btnNarrate').setAttribute('aria-pressed', on);
+  try { localStorage.setItem('tem-narrate', on ? '1' : '0'); } catch {}
+  if (on) N.speak(openComp || 'mode-' + S.mode); else N.stop();
+}
+$('#btnNarrate').addEventListener('click', () => setAutoNarrate(!autoNarrate));
+$('#btnNarrate').setAttribute('aria-pressed', autoNarrate);
+$('#infoSpeak').addEventListener('click', () => N.toggle('mode-' + S.mode));
+$('#compSpeak').addEventListener('click', () => openComp && N.toggle(openComp));
+window.addEventListener('keydown', (e) => { if ((e.key === 'n' || e.key === 'N') && !e.target.closest('input, textarea')) setAutoNarrate(!autoNarrate); });
+function renderNarr() {
+  const st = N.getSettings();
+  const chips = (sel, opts, cur, k) => {
+    $(sel).innerHTML = opts.map(([v, l]) => `<button class="chip${v === cur ? ' on' : ''}" data-v="${v}">${l}</button>`).join('');
+    $(sel).querySelectorAll('button').forEach((b) => b.addEventListener('click', () => { N.setSettings({ [k]: b.dataset.v }); renderNarr(); }));
+  };
+  chips('#narrLevel', N.LEVELS, st.level, 'level');
+  chips('#narrVoice', Object.entries(N.VOICES).map(([v, o]) => [v, o.label]), st.voice, 'voice');
+}
+renderNarr();
+N.onNarration((id) => {
+  $('#infoSpeak').classList.toggle('on', id === 'mode-' + S.mode);
+  $('#compSpeak').classList.toggle('on', !!id && id === openComp);
+});
 
 build();
 wire();
