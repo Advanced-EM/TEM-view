@@ -11,7 +11,7 @@ An interactive transmission electron microscope in the browser, built as a small
 - **Aberration correction:** a Ronchigram computed from the aberrated probe on amorphous carbon; tune C1, A1, B2, A2, C3, A3 by hand (with a π/4 flat-phase readout) or run Auto-tune. Residual aberrations propagate to every probe and image.
 - **CBED / LACBED:** two-beam dynamical disks with a live Kossel–Möllenstedt thickness fit, HOLZ lines that shift with lattice strain and voltage, and large-angle patterns whose lines break across the grain boundary.
 - **Educational ↔ realistic toggle:** a clean, labelled, false-colour view, or Poisson shot noise, grayscale detectors, accumulating counts and log spectra.
-- **Voice narration:** a speaker button on every component card and on the mode panel, plus an *Auto-narrate* toggle (`N`) that reads each mode and component as you open it. Clips are generated with ElevenLabs into `audio/narration/` (`ELEVENLABS_API_KEY=… node tools/narrate.mjs`); any clip not yet generated falls back to the browser's speech synthesis.
+- **Voice narration:** a speaker button on every component card and on the mode panel, plus an *Auto-narrate* toggle (`N`) that reads each mode and component as you open it. Two levels, **General** (for a broad audience) and **Physics** (equations, limits and metrology, in words), each in a **female** or **male** voice. Clips are generated with ElevenLabs into `audio/narration/<voice>/<level>/` (`ELEVENLABS_API_KEY=… node tools/narrate.mjs`, which only regenerates changed scripts); any clip not yet generated falls back to the browser's speech synthesis.
 - **Experiments:** *One electron at a time* (watch the pattern build from single electron arrivals) and *Fly down the column*.
 
 ## Run

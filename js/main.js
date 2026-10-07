@@ -711,6 +711,16 @@ $('#btnNarrate').setAttribute('aria-pressed', autoNarrate);
 $('#infoSpeak').addEventListener('click', () => N.toggle('mode-' + S.mode));
 $('#compSpeak').addEventListener('click', () => openComp && N.toggle(openComp));
 window.addEventListener('keydown', (e) => { if ((e.key === 'n' || e.key === 'N') && !e.target.closest('input, textarea')) setAutoNarrate(!autoNarrate); });
+function renderNarr() {
+  const st = N.getSettings();
+  const chips = (sel, opts, cur, k) => {
+    $(sel).innerHTML = opts.map(([v, l]) => `<button class="chip${v === cur ? ' on' : ''}" data-v="${v}">${l}</button>`).join('');
+    $(sel).querySelectorAll('button').forEach((b) => b.addEventListener('click', () => { N.setSettings({ [k]: b.dataset.v }); renderNarr(); }));
+  };
+  chips('#narrLevel', N.LEVELS, st.level, 'level');
+  chips('#narrVoice', Object.entries(N.VOICES).map(([v, o]) => [v, o.label]), st.voice, 'voice');
+}
+renderNarr();
 N.onNarration((id) => {
   $('#infoSpeak').classList.toggle('on', id === 'mode-' + S.mode);
   $('#compSpeak').classList.toggle('on', !!id && id === openComp);

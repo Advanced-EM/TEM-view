@@ -212,3 +212,5 @@ body.stacked .comp { left: 12px !important; right: 12px; top: auto !important; b
 .comp .speak { position: absolute; top: 12px; right: 40px; margin: 0; }
 .explain .eyebrow .speak { margin-top: -6px; }
 #btnNarrate[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
+.narr { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 8px 0 4px; }
+.narrLbl { font: 500 9.5px var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
