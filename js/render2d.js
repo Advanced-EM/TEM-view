@@ -2,6 +2,7 @@
 import * as P from './physics.js';
 import { stemDetType, AP_MRAD } from './sim.js';
 import { drawRonch, drawCBED } from './techniques.js';
+import { drawOAH, drawILH } from './holography.js';
 
 const C = {
   accent: '#6fd6ff', warm: '#ffb45e', text: '#e9edf2', muted: '#8a94a3', dim: '#566070',
@@ -171,9 +172,9 @@ export function draw(sim, S, mainCv, secCv, hover) {
   const m = fit(mainCv), s = fit(secCv);
   m.ctx.fillStyle = C.bg; m.ctx.fillRect(0, 0, m.W, m.H);
   s.ctx.fillStyle = C.bg; s.ctx.fillRect(0, 0, s.W, s.H);
-  const fn = { tem: drawTEM, stem: drawSTEM, diff: drawDiff, '4d': draw4D, eds: drawEDS, eels: drawEELS, ronch: drawRonch, cbed: drawCBED }[S.mode];
+  const fn = { tem: drawTEM, stem: drawSTEM, diff: drawDiff, '4d': draw4D, eds: drawEDS, eels: drawEELS, ronch: drawRonch, cbed: drawCBED, oah: drawOAH, ilh: drawILH }[S.mode];
   fn(sim, S, m, s, performance.now() / 1000);
-  if (sim.single?.hits && sim.single.count && !['4d', 'eds', 'eels'].includes(S.mode)) {
+  if (sim.single?.hits && sim.single.count && !['4d', 'eds', 'eels', 'ilh'].includes(S.mode)) {
     m.ctx.fillStyle = C.bg; m.ctx.fillRect(0, 0, m.W, m.H);
     drawHits(m.ctx, sim.single, [0, 0, m.W, m.H], m.dpr);
   }
@@ -500,7 +501,7 @@ function draw4D(sim, S, m, s, hover) {
           ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + vx * L, y + vy * L); ctx.stroke();
         }
     }
-    // colour wheel legend
+    // color wheel legend
     const R = 16 * dpr, lx = W - R - 10 * dpr, ly = R + 10 * dpr;
     for (let a = 0; a < 360; a += 6) {
       const [r, g, b] = hsv(a / 360, 0.85, 1);
@@ -547,7 +548,7 @@ function draw4D(sim, S, m, s, hover) {
       const k = sel, vx = f.comX[k], vy = f.comY[k];
       q.strokeStyle = C.warm; q.beginPath(); q.moveTo(cx, cy); q.lineTo(cx + vx * mp * 25, cy + vy * mp * 25); q.stroke();
       q.beginPath(); q.arc(cx + vx * mp * 25, cy + vy * mp * 25, 3 * s.dpr, 0, 7); q.fillStyle = C.warm; q.fill();
-      label(q, 'centre-of-mass shift ×25', 8 * s.dpr, sz - 14 * s.dpr, s.dpr, { color: C.warm, size: 9 });
+      label(q, 'center-of-mass shift ×25', 8 * s.dpr, sz - 14 * s.dpr, s.dpr, { color: C.warm, size: 9 });
     } else {
       q.beginPath(); q.arc(cx, cy, S.vdOut * mp, 0, 7); q.arc(cx, cy, S.vdIn * mp, 0, 7, true); q.fill();
       q.beginPath(); q.arc(cx, cy, S.vdOut * mp, 0, 7); q.stroke();

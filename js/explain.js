@@ -1,6 +1,7 @@
 // Plain-English explanations of what each mode shows and what each control physically changes.
 import * as P from './physics.js';
 import { stemDetType, AP_MRAD } from './sim.js';
+import { biprism } from './holography.js';
 
 const f1 = (v) => v.toFixed(1), f2 = (v) => v.toFixed(2);
 const sgn = (v, d = 1) => (v > 0 ? '+' : '') + v.toFixed(d);
@@ -44,7 +45,7 @@ export function modeInfo(S, sim) {
       const f = sim.fd;
       return {
         title: 'Record everything, <em>decide later</em>',
-        body: `Instead of summing electrons on a fixed ring, a <b>direct electron detector</b> running at thousands of frames per second records the <b>entire diffraction pattern at every probe position</b>, a four-dimensional dataset: two scan axes × two detector axes. Detectors are designed afterwards, in software. Drag the orange shape on the pattern and the image rebuilds from stored data. <b>DPC</b> and <b>centre-of-mass</b> track how each atom's electric field nudges the beam sideways, and <b>ptychography</b> solves for the specimen's full phase from the overlapping patterns.`,
+        body: `Instead of summing electrons on a fixed ring, a <b>direct electron detector</b> running at thousands of frames per second records the <b>entire diffraction pattern at every probe position</b>, a four-dimensional dataset: two scan axes × two detector axes. Detectors are designed afterwards, in software. Drag the orange shape on the pattern and the image rebuilds from stored data. <b>DPC</b> and <b>center-of-mass</b> track how each atom's electric field nudges the beam sideways, and <b>ptychography</b> solves for the specimen's full phase from the overlapping patterns.`,
         stats: [
           ['Scan grid', f ? `${f.N} × ${f.N}` : '—', f ? `${f2(f.step)} Å steps` : ''],
           ['Each pattern', f ? `${f.n4} × ${f.n4} px` : '—', f ? `${f2(f.mradPx)} mrad per pixel` : ''],
@@ -97,11 +98,35 @@ export function modeInfo(S, sim) {
           : [['Convergence α', `${S.alphaCB} mrad`, 'disk radius'], ['Fitted thickness', f ? `${(f.t / 10).toFixed(1)} nm` : '—', `true ${S.thick} nm`], ['Extinction distance', f ? `${(f.xi / 10).toFixed(0)} nm` : '—', 'from the same fit']],
       };
     }
+    case 'oah': {
+      const d = sim.oah.disp, bp = biprism(S.biprism);
+      return {
+        title: 'Recording the <em>phase</em> itself',
+        body: `Every camera records only intensity, |ψ|², so the electron wave's <b>phase</b> is lost. Off-axis holography gets it back with a <b>Möllenstedt biprism</b>: a wire thinner than a micron, held at a positive voltage below the specimen. Part of the beam passes through the specimen (the object wave), part through the vacuum beside it (the reference wave), and the wire bends the two toward each other so they overlap and <b>interfere</b>. The fringes shift sideways wherever the specimen delays the wave, so the hologram stores the phase as fringe displacements. In the Fourier transform the hologram splits into a center band and two <b>sidebands</b>: one of them is the complete image wave. Cut it out, center it, transform back, and you have amplitude and phase. Because the result is a complex wave, the lens aberrations can then be <b>removed numerically</b>. Holography maps electric and magnetic fields, mean inner potentials and dopant profiles. In 1989 Tonomura recorded a biprism pattern one electron at a time: try the single-electron experiment here.`,
+        stats: [
+          ['Fringe spacing', d ? `${f2(d.s)} Å` : '—', `biprism at ${S.biprism} V`],
+          ['Fringe contrast', `${Math.round(bp.mu * 100)} %`, `over a ${f1(bp.W)} nm overlap`],
+          ['Phase precision', d ? `2π/${Math.round((2 * Math.PI) / d.sig)}` : '—', `at ${Math.round(S.dose)} e⁻/Å²`],
+        ],
+      };
+    }
+    case 'ilh': {
+      const st = sim.ilh.st;
+      return {
+        title: 'Phase from a <em>focal series</em>',
+        body: `In-line holography needs no biprism: the reference wave is the unscattered beam itself, traveling along the same axis. A single image hides the phase (at perfect focus a thin specimen is almost invisible), but <b>defocus</b> converts phase into intensity, by a different amount at each focus and each spatial frequency. Recording a <b>focal series</b> and fitting all the images at once recovers the complete <b>exit wave</b>, the wave as it leaves the specimen before the lens degrades it. The reconstruction here is iterative (Gerchberg–Saxton style): guess the wave, propagate it to each focus, keep the computed phase but impose the measured amplitude, propagate back, average, repeat. The result is free of lens aberrations, and resolution reaches the <b>information limit</b> rather than the point resolution. Close to focus, fine detail is transferred; the large defocus values recover the slowly varying phase, so widen the focal step to bring back large features such as the gold particles or the oxide layer.`,
+        stats: [
+          ['Series', `${S.nFocal} images`, `${f1(S.focalStep)} nm steps, ${f1(S.focalStep * (S.nFocal - 1))} nm range`],
+          ['Iterations', st ? `${st.it} / ${st.maxIt}` : '—', st && st.err.length ? `fit error ${st.err[st.err.length - 1].toExponential(1)}` : 'waiting for the series'],
+          ['Information limit', `${f2(o.il)} Å`, `point resolution ${f2(o.pr)} Å`],
+        ],
+      };
+    }
     case 'eels': {
       const imfp = P.imfp(S.kV, spec.zeff);
       return {
         title: 'Weighing <em>lost energy</em>',
-        body: `Most electrons pass straight through, but some lose energy inside the sample. They excite <b>plasmons</b> (the collective sloshing of valence electrons, 15–30 eV) or ionise inner shells, which produces element-specific <b>edges</b>. A magnetic prism below the column bends slower electrons more, fanning the beam into a spectrum. Put an energy window on an edge to map one element. The fine structure just above an edge reveals bonding and oxidation state: at the Si/SiO₂ interface the oxide's Si L-edge sits about 6 eV higher.`,
+        body: `Most electrons pass straight through, but some lose energy inside the sample. They excite <b>plasmons</b> (the collective sloshing of valence electrons, 15–30 eV) or ionize inner shells, which produces element-specific <b>edges</b>. A magnetic prism below the column bends slower electrons more, fanning the beam into a spectrum. Put an energy window on an edge to map one element. The fine structure just above an edge reveals bonding and oxidation state: at the Si/SiO₂ interface the oxide's Si L-edge sits about 6 eV higher.`,
         stats: [
           ['Relative thickness', sim.si ? `t/λ = ${f2(sim.si.tauMean)}` : '—', 'from the zero-loss fraction'],
           ['Mean free path', `${Math.round(imfp)} nm`, 'between inelastic events'],
@@ -115,10 +140,10 @@ export function modeInfo(S, sim) {
 export function changeText(key, S, sim) {
   const o = optics(S, sim), spec = sim.spec;
   const probe = sim.probe?.fwhm;
-  const stemLike = S.mode !== 'tem' && S.mode !== 'diff';
+  const stemLike = !['tem', 'diff', 'oah', 'ilh'].includes(S.mode);
   const a = (S.mode === '4d' ? S.alpha4d : S.alpha) * 1e-3;
   switch (key) {
-    case 'kV': return ['Accelerating voltage', `At <b>${S.kV} kV</b> each electron travels at <b>${f2(o.beta)} c</b> and weighs ${o.gam.toFixed(2)}× its rest mass. Its wavelength is <b>${f2(o.lam * 100)} pm</b>. A shorter wavelength means smaller Bragg angles (watch the diffraction spots pull inward) and deeper penetration. The cost: above ~86 kV a head-on hit can knock a carbon atom clean out of graphene, so fragile materials are imaged at 60–80 kV. ${S.kV > 86 ? `<span class="warn">You are above the knock-on threshold for carbon.${spec.twoD ? ' Watch the graphene: in TEM or STEM, atoms are being sputtered and holes grow.' : ''}${spec.beamSensitive ? ` For UiO-66 the danger is radiolysis, not knock-on: the critical dose is now ${sim.critDose().toFixed(1)} e⁻/Å², and it drops at lower voltage because slower electrons ionise more strongly.` : ''}</span>` : `<span class="ok">Below the knock-on threshold for carbon.${spec.twoD && S.kV > 55 ? ' Only weakly bonded edge atoms can still be displaced.' : ''}</span>${spec.beamSensitive ? ` <span class="warn">But for UiO-66 lower voltage is worse: radiolysis grows as 1/β², so the critical dose falls to ${sim.critDose().toFixed(1)} e⁻/Å².</span>` : ''}`}`];
+    case 'kV': return ['Accelerating voltage', `At <b>${S.kV} kV</b> each electron travels at <b>${f2(o.beta)} c</b> and weighs ${o.gam.toFixed(2)}× its rest mass. Its wavelength is <b>${f2(o.lam * 100)} pm</b>. A shorter wavelength means smaller Bragg angles (watch the diffraction spots pull inward) and deeper penetration. The cost: above ~86 kV a head-on hit can knock a carbon atom clean out of graphene, so fragile materials are imaged at 60–80 kV. ${S.kV > 86 ? `<span class="warn">You are above the knock-on threshold for carbon.${spec.twoD ? ' Watch the graphene: in TEM or STEM, atoms are being sputtered and holes grow.' : ''}${spec.beamSensitive ? ` For UiO-66 the danger is radiolysis, not knock-on: the critical dose is now ${sim.critDose().toFixed(1)} e⁻/Å², and it drops at lower voltage because slower electrons ionize more strongly.` : ''}</span>` : `<span class="ok">Below the knock-on threshold for carbon.${spec.twoD && S.kV > 55 ? ' Only weakly bonded edge atoms can still be displaced.' : ''}</span>${spec.beamSensitive ? ` <span class="warn">But for UiO-66 lower voltage is worse: radiolysis grows as 1/β², so the critical dose falls to ${sim.critDose().toFixed(1)} e⁻/Å².</span>` : ''}`}`];
     case 'dose': {
       const dx = (S.fov * 10) / 224;
       if (spec.beamSensitive) return ['Electron dose', `<b>${S.dose} e⁻/Å²</b> per image. UiO-66 tolerates only about <b>${sim.critDose().toFixed(1)} e⁻/Å²</b> in total at ${S.kV} kV before its lattice is gone, so every image spends part of the budget. Radiolysis breaks the linkers first: the fine detail and high-order diffraction spots disappear before the coarse ones. ${S.clarity === 'real' ? 'At these doses shot noise dominates: this is why MOF imaging needs direct electron detectors and dose-efficient methods.' : 'Switch to “physically realistic” to see how noisy a low-dose image is.'}`];
@@ -160,8 +185,8 @@ export function changeText(key, S, sim) {
       return ['Specimen tilt', `Tilted <b>${f2(S.tiltX)}°, ${f2(S.tiltY)}°</b>. Atomic columns only look like dots when viewed exactly end-on; tilt and each column smears into a streak about <b>${f1(sm)} Å</b> long (t·tan θ). In diffraction the Ewald sphere cuts the lattice differently: spots on one side strengthen (the Laue circle), and the Kikuchi lines, which are locked to the crystal, sweep across the screen. That’s how microscopists steer back to a zone axis. ${sm > 2 ? '<span class="warn">Columns are blurred.</span>' : ''}`];
     }
     case 'fov': return ['Magnification', `Field of view <b>${f1(S.fov)} nm</b> (${f2((S.fov * 10) / 224)} Å per pixel). Magnification comes from the intermediate and projector lens currents, not from moving glass. To resolve a spacing you need at least two pixels across it (Nyquist), so zooming out eventually hides the lattice even though the optics still resolve it.`];
-    case 'stage': return ['Stage', `Specimen moved to <b>(${f1(S.cx / 10)}, ${f1(S.cy / 10)}) nm</b>. A piezo stage can position a sample to picometre precision. The specimen extends far beyond the field of view; drag to explore it.`];
-    case 'camL': return ['Camera length', `<b>L = ${Math.round(S.camL)} mm.</b> The intermediate lens magnifies the diffraction pattern: a spot sits at R = λL/d from the centre. Longer L spreads spots apart for precise measurement; shorter L captures high-angle reflections and <b>HOLZ</b> rings. The camera constant λL = ${f1(o.lam * S.camL)} Å·mm is what you calibrate to index a pattern.`];
+    case 'stage': return ['Stage', `Specimen moved to <b>(${f1(S.cx / 10)}, ${f1(S.cy / 10)}) nm</b>. A piezo stage can position a sample to picometer precision. The specimen extends far beyond the field of view; drag to explore it.`];
+    case 'camL': return ['Camera length', `<b>L = ${Math.round(S.camL)} mm.</b> The intermediate lens magnifies the diffraction pattern: a spot sits at R = λL/d from the center. Longer L spreads spots apart for precise measurement; shorter L captures high-angle reflections and <b>HOLZ</b> rings. The camera constant λL = ${f1(o.lam * S.camL)} Å·mm is what you calibrate to index a pattern.`];
     case 'sa': return ['Selected-area aperture', `Selecting a <b>${f1(S.sa)} nm</b> region of the specimen. Only electrons that pass through this area reach the pattern. ${spec.poly ? 'A larger area includes more nanoparticles, and their random orientations spread spots into rings.' : spec.id === 'sto' ? 'Straddling the boundary gives two superimposed patterns, one per grain.' : 'Including the oxide adds a diffuse amorphous halo.'} A finite area also broadens each spot: size ∝ 1/diameter.`];
     case 'camera': return S.camera === 'screen'
       ? ['Fluorescent screen', 'A phosphor-coated plate glows green where electrons hit (green because that’s where the eye is most sensitive). It’s instant and intuitive, but the light spreads inside the phosphor (blur) and only a fraction of electrons are effectively recorded. Today it’s mostly used to find your way around.']
@@ -170,38 +195,38 @@ export function changeText(key, S, sim) {
     case 'spec': return ['Specimen', {
       au: 'Gold nanoparticles on amorphous carbon. Gold (Z = 79) is 13× heavier than carbon, so in HAADF the particles blaze and the support vanishes. Each particle is its own crystal with its own orientation, so the diffraction pattern becomes <b>rings</b>. Try dark field in TEM to light up only the particles that share one orientation.',
       si: 'The silicon/silicon-dioxide interface, the heart of every transistor. Crystalline Si viewed along [110] shows <b>dumbbells</b>: pairs of atom columns only 1.36 Å apart, a classic resolution test. The oxide is amorphous: no lattice, no spots, only a diffuse halo.',
-      mof: 'UiO-66, a zirconium <b>metal–organic framework</b>: Zr₆O₄(OH)₄ clusters on an fcc lattice (a = 2.07 nm), each joined to 12 neighbours by terephthalate linkers, leaving large open pores. Viewed along [110], the heavy Zr₆ clusters dominate (bright in HAADF); the organic linkers are faint. A patch where every fourth cluster is missing (reo-type defects) changes the contrast. The catch: MOFs are destroyed by <b>radiolysis</b> after only ~10 e⁻/Å² at 300 kV. Real MOF imaging relies on low-dose protocols, direct electron detectors and dose-efficient methods such as iDPC and 4D-STEM.',
+      mof: 'UiO-66, a zirconium <b>metal–organic framework</b>: Zr₆O₄(OH)₄ clusters on an fcc lattice (a = 2.07 nm), each joined to 12 neighbors by terephthalate linkers, leaving large open pores. Viewed along [110], the heavy Zr₆ clusters dominate (bright in HAADF); the organic linkers are faint. A patch where every fourth cluster is missing (reo-type defects) changes the contrast. The catch: MOFs are destroyed by <b>radiolysis</b> after only ~10 e⁻/Å² at 300 kV. Real MOF imaging relies on low-dose protocols, direct electron detectors and dose-efficient methods such as iDPC and 4D-STEM.',
       gr: 'Graphene: a single sheet of carbon atoms in a honeycomb, 0.335 nm thick, the thinnest possible specimen and an almost perfect <b>weak-phase object</b>. This sheet has a hole with hydrocarbon contamination at its edge, a single <b>Si dopant</b> atom (it blazes in HAADF: Z = 14 vs 6), a <b>Stone–Wales</b> defect (a bond rotated 90°, making two pentagons and two heptagons), vacancies, and a region where a second layer is twisted by 5°, producing a <b>moiré</b> with a ~2.8 nm period. At 200 kV the beam knocks atoms out; graphene is usually imaged at 60–80 kV.',
-      sto: 'Strontium titanate with a <b>Σ5 grain boundary</b>: two crystals rotated 36.9° relative to each other. In HAADF, Sr columns (Z = 38) outshine Ti–O columns; pure oxygen columns appear only in ABF or centre-of-mass imaging. Boundaries like this control conduction in oxide electronics.',
+      sto: 'Strontium titanate with a <b>Σ5 grain boundary</b>: two crystals rotated 36.9° relative to each other. In HAADF, Sr columns (Z = 38) outshine Ti–O columns; pure oxygen columns appear only in ABF or center-of-mass imaging. Boundaries like this control conduction in oxide electronics.',
     }[S.spec]];
-    case 'fresh': return ['Fresh area', `The stage moved to an unexposed region: crystallinity is back to 100 %. At ${S.kV} kV the critical dose is about <b>${sim.critDose().toFixed(1)} e⁻/Å²</b>, so at ${S.dose} e⁻/Å² per image you get roughly ${Math.max(1, Math.round(sim.critDose() / S.dose))} good image(s). Low-dose workflows focus on a neighbouring area and only then blank the beam onto the region of interest.`];
+    case 'fresh': return ['Fresh area', `The stage moved to an unexposed region: crystallinity is back to 100 %. At ${S.kV} kV the critical dose is about <b>${sim.critDose().toFixed(1)} e⁻/Å²</b>, so at ${S.dose} e⁻/Å² per image you get roughly ${Math.max(1, Math.round(sim.critDose() / S.dose))} good image(s). Low-dose workflows focus on a neighboring area and only then blank the beam onto the region of interest.`];
     case 'restore': return ['Pristine again', 'All sputtered atoms are back. At 60–80 kV the lattice survives indefinitely; above the ~86 kV knock-on threshold, holes nucleate at defects and grow from their edges, where atoms have fewer bonds and a lower displacement threshold.'];
     case 'damage': return null;
     case 'clarity':
       return S.clarity === 'real'
         ? ['Physically realistic', 'Poisson shot noise at your chosen dose, grayscale detectors, counts accumulating in real time, log-scale spectra, crystal-field-split Ti L₂,₃ white lines, Kikuchi bands and faster electrons. This is closer to what a microscopist actually sees at the console.']
-        : ['Educational clarity', 'Noise-free signals, false colour, labels, slower and brighter electrons. The physics underneath is identical; it’s just drawn to be read.'];
+        : ['Educational clarity', 'Noise-free signals, false color, labels, slower and brighter electrons. The physics underneath is identical; it’s just drawn to be read.'];
     case 'vdet': return ['Virtual detector', {
       bf: 'A <b>virtual bright-field</b> disk: summing the undiffracted cone. Phase contrast, like TEM.',
       abf: 'A <b>virtual annular bright-field</b> ring at the edge of the disk. It picks up light atoms such as oxygen.',
       adf: 'A <b>virtual ADF</b> ring outside the bright-field disk. Heavier columns scatter more into it.',
       disk: 'A small <b>virtual aperture</b> on one diffracted disk. It’s a dark-field image computed after the experiment. Drag it onto different disks and grains light up differently.',
-      dpc: '<b>Differential phase contrast</b>: a disk detector cut into four quadrants. When an atom’s electric field pushes the beam sideways, one quadrant gets more electrons than its opposite (A−C, B−D). Colour shows the push direction. DPC hardware exists as real segmented detectors; with a direct electron detector you synthesise it afterwards.',
-      mptycho: '<b>Multislice ptychography</b>: the specimen is treated as a stack of thin slices, with the wave Fresnel-propagated from one to the next, exactly as the patterns here were simulated (3 slices). Single-slice ptychography assumes one thin phase plate, so on thick crystals channelling and beam spreading leave artifacts and the fit error stalls. The multislice model accounts for them, fits the data better, and gives <b>depth sectioning</b>: on gold-on-carbon, the particles appear in the upper slices and the carbon film in the lower ones. In 2021 multislice electron ptychography reached a resolution limited only by the thermal vibration of the atoms. The cost is many more FFTs per iteration, which is why it runs slower here.',
+      dpc: '<b>Differential phase contrast</b>: a disk detector cut into four quadrants. When an atom’s electric field pushes the beam sideways, one quadrant gets more electrons than its opposite (A−C, B−D). Color shows the push direction. DPC hardware exists as real segmented detectors; with a direct electron detector you synthesize it afterwards.',
+      mptycho: '<b>Multislice ptychography</b>: the specimen is treated as a stack of thin slices, with the wave Fresnel-propagated from one to the next, exactly as the patterns here were simulated (3 slices). Single-slice ptychography assumes one thin phase plate, so on thick crystals channeling and beam spreading leave artifacts and the fit error stalls. The multislice model accounts for them, fits the data better, and gives <b>depth sectioning</b>: on gold-on-carbon, the particles appear in the upper slices and the carbon film in the lower ones. In 2021 multislice electron ptychography reached a resolution limited only by the thermal vibration of the atoms. The cost is many more FFTs per iteration, which is why it runs slower here.',
       ptycho: '<b>Electron ptychography</b>: overlapping diffraction patterns jointly determine the specimen’s phase, the one thing a detector cannot measure directly. The ePIE algorithm iterates: guess the object, predict each pattern, keep the predicted phase but enforce the measured amplitudes, update the object. It’s running live on the patterns recorded here. Ptychography holds the resolution record for any microscope (~0.2 Å, limited by thermal vibration of the atoms).',
-      com: 'The <b>centre of mass</b> of each pattern. The electron beam is deflected by the atoms’ electric fields; colour shows direction, brightness shows strength. It’s a map of the field itself, with arrows in educational mode.',
+      com: 'The <b>center of mass</b> of each pattern. The electron beam is deflected by the atoms’ electric fields; color shows direction, brightness shows strength. It’s a map of the field itself, with arrows in educational mode.',
     }[S.vdet]];
     case 'eelsWin': {
       const w0 = S.eelsWin - S.eelsWidth / 2, w1 = S.eelsWin + S.eelsWidth / 2;
       const hit = P.EDGES.filter((e) => sim.si?.comp[e.key] && e.E < w1 && e.E > w0 - 40).map((e) => e.name);
       if (w1 < 6) return ['Energy window', 'Window on the <b>zero-loss peak</b>: only electrons that lost no energy. Thin regions transmit more of them, so the map is brightest where the sample is thinnest. Energy filtering also sharpens images and diffraction by removing the chromatic blur.'];
-      if (w1 < 60) return ['Energy window', `Window at <b>${Math.round(w0)}–${Math.round(w1)} eV</b>, on the <b>plasmon</b> peak. Collective oscillations of valence electrons: the probability of exciting one grows with thickness, so this is essentially a thickness map. Plasmon energy also shifts with electron density, which is how aluminium alloys and hydrides are mapped.`];
+      if (w1 < 60) return ['Energy window', `Window at <b>${Math.round(w0)}–${Math.round(w1)} eV</b>, on the <b>plasmon</b> peak. Collective oscillations of valence electrons: the probability of exciting one grows with thickness, so this is essentially a thickness map. Plasmon energy also shifts with electron density, which is how aluminum alloys and hydrides are mapped.`];
       return ['Energy window', `Window at <b>${Math.round(w0)}–${Math.round(w1)} eV</b>${hit.length ? `, on the <b>${hit.join(' and ')}</b> edge` : ', between edges'}. ${S.bgsub ? 'The smooth power-law background extrapolated from before the edge is subtracted, and what remains is the signal from atoms whose inner shells sit in this range.' : 'Background is <b>not</b> subtracted, so the map is dominated by thickness, not chemistry. Real analysis always fits and removes the pre-edge power law.'}`];
     }
-    case 'eelsRange': return ['Spectrum range', { low: 'Low loss: zero-loss peak, band gap onset and plasmons. It’s the strongest part of the spectrum, and it tells you thickness and dielectric properties.', core: 'Core loss: ionisation edges of light and transition-metal elements (C, O, Si, Ti, Sr). The signal is 100–10,000× weaker than the plasmons, riding on a steep background.', high: 'High loss: deep edges of heavy elements (Si K, Sr L, Au M). The signal is faint; you need a thin sample and long exposures.' }[S.eelsRange]];
+    case 'eelsRange': return ['Spectrum range', { low: 'Low loss: zero-loss peak, band gap onset and plasmons. It’s the strongest part of the spectrum, and it tells you thickness and dielectric properties.', core: 'Core loss: ionization edges of light and transition-metal elements (C, O, Si, Ti, Sr). The signal is 100–10,000× weaker than the plasmons, riding on a steep background.', high: 'High loss: deep edges of heavy elements (Si K, Sr L, Au M). The signal is faint; you need a thin sample and long exposures.' }[S.eelsRange]];
     case 'bgsub': return ['Background subtraction', S.bgsub ? 'Fitting A·E<sup>−r</sup> before the edge and subtracting it: the element map now shows chemistry.' : 'Raw window intensity: mostly a thickness map, because the background under an edge scales with thickness too.'];
     case 'edsSel': {
-      if (S.edsSel === 'all') return ['Element maps', 'All elements overlaid in false colour. Each pixel is a separate X-ray spectrum; the colour intensity is the count in each element’s main peak.'];
+      if (S.edsSel === 'all') return ['Element maps', 'All elements overlaid in false color. Each pixel is a separate X-ray spectrum; the color intensity is the count in each element’s main peak.'];
       const L = P.XRAY.find((l) => l.el === S.edsSel && l.w === 1);
       return ['Element map', `Mapping <b>${S.edsSel}</b> using counts in its ${L?.line} peak at ${L?.E.toFixed(3)} keV. Each pixel is a histogram of X-rays, so sparse pixels look speckled. That’s why EDS maps are often binned or smoothed, and why atomic-resolution EDS needs long, stable acquisitions.`];
     }
@@ -213,7 +238,7 @@ export function changeText(key, S, sim) {
       return ['Residual aberrations', `A1 ${S.ab.A1} nm, B2 ${S.ab.B2} nm, A2 ${S.ab.A2} nm, A3 ${S.ab.A3} µm. Each aberration adds a phase that grows as a power of angle (θ², θ³, θ⁴), so higher orders only matter at large angles, which is why correctors null them in order: first C1 and A1, then B2 and A2, then C3 and A3. ${R.flat ? `The phase is flat (< π/4) out to <b>${(R.flat * 1000).toFixed(1)} mrad</b>, allowing a probe of about <b>${((0.61 * o.lam) / R.flat).toFixed(2)} Å</b>.` : ''} These residuals also blur the STEM and TEM images.`];
     }
     case 'scramble': return ['Aberrations scrambled', 'The corrector has drifted: astigmatism, coma, 3-fold and 4-fold terms are all present, and the sweet spot has shrunk and distorted. Look at the <b>shape</b> of the Ronchigram: two-fold stretching means A1, a one-sided comet means B2, a triangle means A2. Null them one at a time with the sliders, watching the flat-phase circle grow. Or press Auto-tune.'];
-    case 'autotuned': return ['Corrector tuned', `The corrector software measured the aberrations from Ronchigrams and cancelled them order by order. The flat-phase region now reaches <b>${sim.ronch.flat ? (sim.ronch.flat * 1000).toFixed(1) : '—'} mrad</b>. Real systems iterate the same loop: measure (Ronchigram or Zemlin tableau fitting), correct, re-measure. The residuals left are set by measurement noise and instabilities.`];
+    case 'autotuned': return ['Corrector tuned', `The corrector software measured the aberrations from Ronchigrams and canceled them order by order. The flat-phase region now reaches <b>${sim.ronch.flat ? (sim.ronch.flat * 1000).toFixed(1) : '—'} mrad</b>. Real systems iterate the same loop: measure (Ronchigram or Zemlin tableau fitting), correct, re-measure. The residuals left are set by measurement noise and instabilities.`];
     case 'ronchAp': return ['Ronchigram aperture', `A deliberately oversized <b>${S.ronchAp} mrad</b> aperture shows where the aberration-free region ends. For imaging you would then choose a probe aperture about the size of the flat-phase circle.`];
     case 'cbedKind': return S.cbedKind === 'lacbed'
       ? ['LACBED', 'Large-angle CBED: a defocused probe and a selected-area aperture give one huge disk full of Bragg and HOLZ lines, with a shadow image of the specimen. Drag the pattern to move the boundary through the field and watch the lines break.']
@@ -222,6 +247,25 @@ export function changeText(key, S, sim) {
     case 'alphaLA': return ['LACBED angle', `A <b>${S.alphaLA} mrad</b> cone. The wider it is, the more lines and the larger the area of specimen seen in the shadow image.`];
     case 'strain': return ['Lattice strain', `Lattice parameter changed by <b>${S.strain >= 0 ? '+' : ''}${S.strain.toFixed(2)} %</b>. HOLZ lines come from reflections with large g, where the Bragg condition is extremely sensitive to d-spacing, so they shift visibly for 0.1 % strain. That’s how CBED measures local strain in transistors. The same shift results from a change in accelerating voltage, which is why HOLZ lines also calibrate kV.`];
     case 'holz': return ['HOLZ lines', S.holz ? 'Showing higher-order Laue zone lines: fine deficiency lines where a reflection in the next reciprocal-lattice layer is exactly excited.' : 'HOLZ lines hidden: only zero-order (ZOLZ) dynamical contrast remains.'];
+    case 'biprism': {
+      const bp = biprism(S.biprism), d = sim.oah.disp;
+      return ['Biprism voltage', `<b>${S.biprism} V</b> on the wire. A higher voltage deflects the two waves more steeply, so they overlap over a wider region (<b>${f1(bp.W)} nm</b>) with finer fringes (<b>${f2(bp.s)} Å</b>). Finer fringes allow a larger sideband aperture and so better resolution, but the two waves must stay coherent across the whole overlap, so <b>fringe contrast drops</b> (now ${Math.round(bp.mu * 100)} %) and the phase gets noisier.${d?.under ? ' <span class="warn">The fringes are now finer than the detector can sample; reduce the field of view (raise the magnification).</span>' : ''}`];
+    }
+    case 'sbR': {
+      const d = sim.oah.disp;
+      return ['Sideband aperture', `The mask around the sideband has a radius of <b>${Math.round(S.sbR * 100)} %</b> of the carrier frequency${d ? `, giving <b>${f2(d.res)} Å</b> resolution` : ''}. A larger mask passes finer detail but also more noise, and above about one third of the carrier it starts to collect the center band, mixing intensity into the phase. Resolution in off-axis holography is set by this mask, which is why it is usually two to three fringe spacings.`];
+    }
+    case 'numCorr': return ['Numerical aberration correction', S.numCorr
+      ? 'The reconstructed wave is multiplied by exp(+iχ), the inverse of the lens’s phase error, so defocus and spherical aberration are undone in the computer. The dashed reference curve is now the true exit wave. Only the information limit, set by the energy spread, cannot be undone.'
+      : 'Showing the image wave as the lens delivered it, aberrations included. Turn correction on to undo defocus and Cₛ a posteriori; change the defocus and watch the corrected phase stay put.'];
+    case 'holoView': return ['Display', {
+      holo: 'The raw <b>hologram</b>: interference fringes whose local position encodes the phase and whose contrast encodes the amplitude. The magnified inset shows the fringes; near the edges of the overlap, the Fresnel fringes from the biprism wire add artifacts.',
+      phase: 'The reconstructed <b>phase</b>: how much each part of the specimen has delayed the electron wave. For a thin specimen it is proportional to the projected electrostatic potential.',
+      amp: 'The reconstructed <b>amplitude</b>: how much of the wave got through. It looks like an image recorded with an energy filter and no aberrations.',
+      contour: '<b>Phase contours</b>, cos(4φ): each dark-to-dark band is a phase step of π/2. This is the classic way holographers display electric and magnetic fields: the contours follow equipotential or magnetic flux lines.',
+    }[S.holoView]];
+    case 'nFocal': case 'focalStep': case 'series': return ['Focal series', `Recording <b>${S.nFocal}</b> images, <b>${f1(S.focalStep)} nm</b> apart, around ${f1(S.df)} nm defocus. More images over a wider range recover the phase more completely, especially its slowly varying part, but each image only gets 1/${S.nFocal} of the dose, and in a real microscope the specimen drifts during the series, so the images must be aligned before reconstruction.`];
+    case 'ilhView': return ['Display', { phase: 'The reconstructed <b>exit-wave phase</b>, free of lens aberrations.', amp: 'The reconstructed <b>exit-wave amplitude</b>. For a thin specimen it is almost uniform: nearly all the information is in the phase.', series: 'The recorded <b>focal series</b>, cycling through the images. Contrast reverses and fringes appear as the focus changes.' }[S.ilhView]];
     case 'mode': return null;
   }
   return null;
@@ -239,7 +283,7 @@ export function dataRows(S, sim) {
     ['Point resolution', `${o.pr.toFixed(2)} Å`],
     ['Information limit', `${o.il.toFixed(2)} Å`],
   ];
-  if (S.mode !== 'tem' && S.mode !== 'diff') {
+  if (!['tem', 'diff', 'oah', 'ilh'].includes(S.mode)) {
     rows.push(['Probe size (FWHM)', sim.probe ? `${sim.probe.fwhm.toFixed(2)} Å` : '—']);
     rows.push(['Depth of field', `${(o.lam / (a * a) / 10).toFixed(1)} nm`]);
   }

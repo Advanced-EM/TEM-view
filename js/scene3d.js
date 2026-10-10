@@ -229,7 +229,7 @@ export class Scene3D {
     this.composer.addPass(new OutputPass());
 
     this.M = makeMaterials();
-    this.anim = { screenLift: 0, adf: 0, bf: 0, cam: 0, prism: 0, objAp: 0.2, objApX: 0, sa: 0.3, fade: 0, eds: 0 };
+    this.anim = { screenLift: 0, adf: 0, bf: 0, cam: 0, prism: 0, objAp: 0.2, objApX: 0, sa: 0.3, fade: 0, eds: 0, bip: 0 };
     this.buildColumn();
     this.beamGroups = [new THREE.Group(), new THREE.Group()];
     this.beamGroups.forEach((g) => this.scene.add(g));
@@ -331,6 +331,18 @@ export class Scene3D {
     this.objAp = aperturePlate(M, Y.bfp, 0.2, -1);
     this.saAp = aperturePlate(M, Y.sa, 0.3, 1);
     col.add(this.objAp, this.saAp);
+    // Möllenstedt electron biprism: a sub-micron wire across the beam, slid in for off-axis holography
+    this.biprism = new THREE.Group();
+    this.bipMat = new THREE.MeshStandardMaterial({ color: 0xd8c39a, metalness: 0.9, roughness: 0.25, emissive: 0xffb45e, emissiveIntensity: 0 });
+    const wire = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.86, 8), this.bipMat);
+    wire.rotation.x = Math.PI / 2;
+    const frameBar = (z) => { const b = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.025, 0.025), M.plat); b.position.set(-0.45, 0, z); return b; };
+    const brod = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 1.6, 12), M.plat);
+    brod.rotation.z = Math.PI / 2; brod.position.set(-1.7, 0, 0);
+    const bend = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.025, 0.86), M.plat); bend.position.set(-0.9, 0, 0);
+    this.biprism.add(wire, frameBar(0.43), frameBar(-0.43), bend, brod);
+    this.biprism.position.set(-2.6, Y.sa + 0.06, 0);
+    col.add(this.biprism);
     // viewing chamber
     col.add(halfSolid([[1.45, -4.1], [1.6, -4.1], [1.6, -2.85], [1.45, -2.85]], M.iron, M.cut));
     col.add(halfSolid([[0.5, -2.9], [1.6, -2.9], [1.6, -2.82], [0.5, -2.82]], M.iron, M.cut));
@@ -369,7 +381,7 @@ export class Scene3D {
     col.add(this.pixCam);
     // EELS spectrometer
     this.spectro = new THREE.Group();
-    // magnet sector below/left of its bending centre (0.72, prism), behind the beam plane
+    // magnet sector below/left of its bending center (0.72, prism), behind the beam plane
     const sector = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 0.95, 0.3, 40, 1, false, -Math.PI / 2, Math.PI / 2), M.iron);
     sector.rotation.x = Math.PI / 2;
     sector.position.set(0.72, Y.prism + 0.02, -0.22);
@@ -456,14 +468,15 @@ export class Scene3D {
       ['Specimen', [0.9, Y.spec + 0.1, 0.1], null],
       ['EDS X-ray detector', [-1.3, Y.spec + 0.9, -0.8], ['eds'], 'left'],
       ['Objective aperture', [-0.5, Y.bfp, 0], ['tem'], 'left'],
-      ['Back focal plane', [-0.5, Y.bfp, 0], ['diff', 'stem', '4d', 'eds', 'eels', 'ronch', 'cbed'], 'left'],
+      ['Back focal plane', [-0.5, Y.bfp, 0], ['diff', 'stem', '4d', 'eds', 'eels', 'ronch', 'cbed', 'oah', 'ilh'], 'left'],
       ['Selected-area aperture', [0.5, Y.sa, 0], ['diff']],
+      ['Electron biprism', [0.5, Y.sa + 0.06, 0], ['oah']],
       ['Intermediate lens', [1.12, Y.int, 0], null],
       ['Projector lens', [1.12, Y.proj, 0], null],
       ['Fluorescent screen', [1.2, Y.screen, 0], ['tem:screen', 'diff:screen']],
       ['Annular dark-field detector', [1.0, Y.adf, 0], ['stem', 'eds', 'eels']],
       ['Bright-field detector', [-0.35, Y.bfdet, 0], ['stem', 'eds'], 'left'],
-      ['Direct electron detector', [0.7, Y.cam, 0], ['4d', 'tem:ded', 'diff:ded', 'ronch', 'cbed']],
+      ['Direct electron detector', [0.7, Y.cam, 0], ['4d', 'tem:ded', 'diff:ded', 'ronch', 'cbed', 'oah', 'ilh']],
       ['Magnetic prism', [1.2, Y.prism, 0.2], ['eels']],
       ['Energy-loss spectrum', [2.6, Y.prism - 1.0, 0], ['eels']],
     ];
@@ -485,7 +498,7 @@ export class Scene3D {
     this.renderer.setSize(w, h, false);
     this.composer.setSize(w, h);
     this.camera.aspect = w / h;
-    // shift the projection so the column is centred in the free area between panels
+    // shift the projection so the column is centered in the free area between panels
     const dx = (off.left - off.right) / 2, dy = (off.top - off.bottom) / 2;
     this.camera.setViewOffset(w, h, -dx, -dy, w, h);
     this.camera.updateProjectionMatrix();
@@ -511,8 +524,22 @@ export class Scene3D {
     const cyan = 0x3dff7a, pale = 0xb4ffc8, warm = 0xffb45e, violet = 0x9dffb0;
     const V = (keys, off = () => [0, 0]) => keys.map(([y, r]) => { const [x, z] = off(y); return [x, y, z, r]; });
     const upperTEM = [[Y.gun, 0], [Y.anode, 0.09], [Y.c1, 0.26], [3.35, 0], [Y.c2, -0.2], [Y.cap, -0.18], [Y.objTop, -0.18], [Y.spec, -0.18]];
-    if (m === 'tem' || m === 'diff') {
-      const yEnd = S.camera === 'ded' ? Y.cam : Y.screen;
+    const holo = m === 'oah' || m === 'ilh', cam = holo ? 'ded' : S.camera;
+    if (m === 'oah') {
+      // object wave through the specimen, reference wave through vacuum beside it; the charged wire
+      // deflects both toward the axis so they overlap and interfere on the detector
+      B.push({ id: 'up', keys: V(upperTEM), color: cyan, I: 1, kids: [['obj', 0.5], ['ref', 0.5]] });
+      this.anim.objApT = null; this.anim.saT = null;
+      const sep = 0.11, yW = Y.sa + 0.06;
+      const side = (sgn) => (y) => {
+        if (y >= yW) return [sgn * sep, 0];
+        return [sgn * sep * clamp((y - Y.int) / (yW - Y.int), 0, 1), 0];
+      };
+      const keys = [[Y.spec, -0.08], [Y.bfp, 0], [yW, 0.07], [Y.int, 0.22], [-1.95, 0], [Y.proj, -0.2], [Y.cam, -0.52]];
+      B.push({ id: 'obj', keys: V(keys, side(-1)), color: cyan, I: 0.8, kids: [] });
+      B.push({ id: 'ref', keys: V(keys, side(1)), color: pale, I: 0.8, kids: [] });
+    } else if (m === 'tem' || m === 'diff' || m === 'ilh') {
+      const yEnd = cam === 'ded' ? Y.cam : Y.screen;
       B.push({ id: 'up', keys: V(upperTEM), color: cyan, I: 1, kids: [] });
       const gs = this.gvecs(S);
       const apMrad = AP_MRAD[S.objAp];
@@ -524,10 +551,10 @@ export class Scene3D {
       const saR = m === 'diff' ? clamp(S.sa * 0.028, 0.06, 0.34) : 0.34;
       this.anim.saT = m === 'diff' ? saR : null;
       const mainBlocked = m === 'tem' && S.objAp === 'df';
-      if (m === 'tem') {
+      if (m === 'tem' || m === 'ilh') {
         const lowA = V([[Y.spec, -0.18], [Y.bfp, 0], [Y.sa, 0.3]]);
         B.push({ id: 'lowA', keys: mainBlocked ? V([[Y.spec, -0.18], [Y.bfp, 0]]) : lowA, color: cyan, I: 1, kids: mainBlocked ? [] : ['tail'] });
-        B.push({ id: 'tail', keys: V([[Y.sa, 0.3], [Y.int, 0.42], [-1.95, 0], [Y.proj, -0.22], S.camera === 'ded' ? [Y.cam, -0.55] : [Y.screen, -1.05]]), color: cyan, I: 0.9, kids: [] });
+        B.push({ id: 'tail', keys: V([[Y.sa, 0.3], [Y.int, 0.42], [-1.95, 0], [Y.proj, -0.22], cam === 'ded' ? [Y.cam, -0.55] : [Y.screen, -1.05]]), color: cyan, I: 0.9, kids: [] });
         gs.forEach((g, i) => {
           const d = [g.x * kScale, g.z * kScale];
           const pass = Math.hypot(d[0] - apC[0], d[1] - apC[1]) < apR;
@@ -676,8 +703,8 @@ export class Scene3D {
       this.beamGroups[slot].visible = w > 0.01;
     });
     // mechanical parts
-    const stemLike = !['tem', 'diff'].includes(m);
-    const ded = ['4d', 'ronch', 'cbed'].includes(m) || (!stemLike && S.camera === 'ded');
+    const stemLike = !['tem', 'diff', 'oah', 'ilh'].includes(m);
+    const ded = ['4d', 'ronch', 'cbed', 'oah', 'ilh'].includes(m) || (!stemLike && S.camera === 'ded');
     A.screenLift = lerp(A.screenLift, stemLike || ded ? 1 : 0, k);
     this.screenPivot.rotation.x = -A.screenLift * 1.35;
     A.adf = lerp(A.adf, ['stem', 'eds', 'eels'].includes(m) ? 1 : 0, k);
@@ -693,6 +720,10 @@ export class Scene3D {
     this.spectro.visible = A.prism > 0.02;
     this.spectro.scale.setScalar(Math.max(0.001, A.prism));
     this.spectro.position.set(0, Y.prism * (1 - A.prism), 0);
+    A.bip = lerp(A.bip, m === 'oah' ? 1 : 0, k);
+    this.biprism.position.x = (1 - A.bip) * -2.6;
+    this.biprism.visible = A.bip > 0.02;
+    this.bipMat.emissiveIntensity = m === 'oah' ? 0.45 + 0.15 * Math.sin(this.time * 3) : 0;
     this.scanCoils.children.forEach((c) => (c.material = stemLike ? this.M.copper : this.M.iron));
     // apertures
     const setAp = (grp, target, center, key, keyX, y, side) => {

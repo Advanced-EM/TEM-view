@@ -393,7 +393,7 @@ function makeGraphene() {
   A.e[nearest(4, -6)] = EI.Si;
   // single vacancies
   drop.add(nearest(-2, 16)); drop.add(nearest(9, 11));
-  // Stone–Wales defect: rotate one C–C bond by 90° about its centre (two pentagons + two heptagons)
+  // Stone–Wales defect: rotate one C–C bond by 90° about its center (two pentagons + two heptagons)
   {
     const p = nearest(-6, -13);
     let q = -1, bd = Infinity;
@@ -445,7 +445,7 @@ function makeGraphene() {
   };
 }
 
-// UiO-66: Zr6O4(OH)4(BDC)6, Fm-3m, a = 20.7 Å. Zr6 octahedra on fcc sites, each linked to 12 neighbours by
+// UiO-66: Zr6O4(OH)4(BDC)6, Fm-3m, a = 20.7 Å. Zr6 octahedra on fcc sites, each linked to 12 neighbors by
 // terephthalate (BDC) linkers along <110>. Built from one 3D conventional cell, then projected along [110].
 function makeUiO66() {
   const A = new AtomList();
@@ -523,7 +523,7 @@ for (const s of Object.values(SPECIMENS)) {
 }
 
 // ---------------------------------------------------------------- projected maps
-// Splat atoms onto an n×n grid (pixel size dx, centred at cx,cy). Tilting a crystal
+// Splat atoms onto an n×n grid (pixel size dx, centered at cx,cy). Tilting a crystal
 // smears each column along the tilt direction by L·tanθ, which is what kills lattice contrast off-axis.
 // part: 'cryst' or 'amorph' projects only that component (used to stack slices in depth)
 export function projectMaps(spec, { cx, cy, n, dx, thick, tiltX = 0, tiltY = 0, elements = false, noTilt = false, part = null }) {
