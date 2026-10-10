@@ -215,7 +215,7 @@ export class CBED {
   }
   compute() {
     const sim = this.sim, S = sim.S, spec = sim.spec, lam = sim.lam, t = spec.fixedT ?? S.thick * 10;
-    if (spec.noCBED) { // a MOF is amorphised long before a focused-probe pattern can be recorded
+    if (spec.noCBED) { // a MOF is amorphized long before a focused-probe pattern can be recorded
       const W = 256, a0 = sim.alpha(), span = a0 * 1.3, out = new Float32Array(W * W);
       for (let j = 0; j < W; j++) for (let i = 0; i < W; i++) { const tx = ((i + 0.5) / W * 2 - 1) * span, ty = ((j + 0.5) / W * 2 - 1) * span; if (Math.hypot(tx, ty) <= a0) out[j * W + i] = 0.9; }
       this.disp = { arr: out, W, span, a: a0, lac: S.cbedKind === 'lacbed', grainC: -1, noCBED: true };
@@ -405,7 +405,7 @@ function drawHOLZZoom(sim, S, s, d) {
   label(q, `HOLZ ring: H = ${L.H.toFixed(3)} Å⁻¹, G_H ≈ ${L.GH.toFixed(2)} Å⁻¹ (${(lam * L.GH * 1000).toFixed(0)} mrad)`, 10 * s.dpr, 14 * s.dpr, s.dpr, { color: C.muted, size: 9 });
   if (gi < 0 || !L.holz.length) { label(q, 'no HOLZ lines here (amorphous or no layer)', 10 * s.dpr, 38 * s.dpr, s.dpr, { color: C.warm, size: 9 }); return; }
   // strongest lines inside the disk and their strain sensitivity
-  // one representative per symmetry-equivalent family (same distance from the disk centre)
+  // one representative per symmetry-equivalent family (same distance from the disk center)
   const seen = new Set();
   const lines = cb.rot[gi].holz.filter((G) => Math.abs(G.d) < d.a).sort((p, q2) => q2.w - p.w)
     .filter((G) => { const k = G.d.toFixed(5); if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 6);

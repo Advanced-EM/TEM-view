@@ -1,6 +1,7 @@
 // Simulation engine: turns the instrument state into detector signals.
 import * as P from './physics.js';
 import { Ronch, CBED } from './techniques.js';
+import { OffAxis, FocalSeries } from './holography.js';
 
 const SP = P.SPECIMENS;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -55,6 +56,8 @@ export class Sim {
     this.frameNoise = 0;
     this.ronch = new Ronch(this);
     this.cbed = new CBED(this);
+    this.oah = new OffAxis(this);
+    this.ilh = new FocalSeries(this);
   }
 
   get spec() { return SP[this.S.spec]; }
@@ -80,8 +83,11 @@ export class Sim {
       damage: ['tem', 'stem', 'diff', 'probe'],
     };
     for (const k of map[key] ?? all) this.stale[k] = 1;
-    if (!['mode', 'edsSel', 'camera', 'beamStop', 'vdet', 'bgsub', 'eelsWin', 'eelsRange'].includes(key)) { this.ronch.stale = true; this.cbed.stale = true; }
-    if (!['vdet', 'edsSel', 'mode', 'camera'].includes(key)) this.resetSingle();
+    const view = ['mode', 'edsSel', 'camera', 'beamStop', 'vdet', 'bgsub', 'eelsWin', 'eelsRange', 'holoView', 'ilhView'];
+    if (!view.includes(key)) { this.ronch.stale = true; this.cbed.stale = true; this.oah.stale = true; }
+    // a focal series takes a while to record, so only restart it when the physics changes
+    if (!view.includes(key) && !['damage', 'speed', 'biprism', 'sbR', 'numCorr'].includes(key)) this.ilh.stale = true;
+    if (!['vdet', 'edsSel', 'mode', 'camera', 'holoView', 'ilhView'].includes(key)) this.resetSingle();
     this.version++;
   }
 
@@ -101,10 +107,12 @@ export class Sim {
   }
 
   // ------------------------------------------------------------ coherent imaging core
-  // Apply the objective-lens transfer function to an exit wave and return |ψ|².
-  lensImage(maps, { apK, apCenter = [0, 0], envelopes = true }) {
-    const n = maps.n, dx = maps.dx, lam = this.lam, df = this.S.df * 10, Cs = this.CsA(), ab = this.abA();
-    const { re, im } = P.transmission(maps.phase, this.S.kV);
+  // Objective-lens transfer function applied to the exit wave: returns the complex image wave.
+  // `df` (Å) overrides the current defocus (focal series); `exit` reuses a precomputed exit wave.
+  lensWave(maps, { apK = Infinity, apCenter = [0, 0], envelopes = true, df: dfA, exit } = {}) {
+    const n = maps.n, dx = maps.dx, lam = this.lam, df = dfA ?? this.S.df * 10, Cs = this.CsA(), ab = this.abA();
+    const ex = exit ?? P.transmission(maps.phase, this.S.kV);
+    const re = Float64Array.from(ex.re), im = Float64Array.from(ex.im);
     P.fft2(re, im, n);
     const D = FOCAL_SPREAD, ac = CONV_TEM;
     for (let y = 0; y < n; y++) {
@@ -129,8 +137,12 @@ export class Sim {
       }
     }
     P.fft2(re, im, n, true);
-    const I = new Float32Array(n * n);
-    for (let i = 0; i < n * n; i++) I[i] = re[i] * re[i] + im[i] * im[i];
+    return { re, im };
+  }
+  // ... and its intensity |ψ|²
+  lensImage(maps, opts) {
+    const { re, im } = this.lensWave(maps, opts), I = new Float32Array(re.length);
+    for (let i = 0; i < re.length; i++) I[i] = re[i] * re[i] + im[i] * im[i];
     return I;
   }
 
@@ -331,7 +343,7 @@ export class Sim {
     const scan = clamp(S.fov * 10 * 0.6, 14, 36), step = scan / N;
     const gridN = Math.ceil(scan / dx) + n4 + 8;
     // Multislice specimen: K slices with Fresnel propagation between them, so thick-specimen effects
-    // (beam spreading, channelling) are in the recorded patterns. On Au/C the particles sit on top of the film.
+    // (beam spreading, channeling) are in the recorded patterns. On Au/C the particles sit on top of the film.
     const K = 3, thickA = this.spec.fixedT ?? S.thick * 10, dz = thickA / K;
     const slices = [];
     if (this.spec.id === 'au') {
@@ -821,7 +833,7 @@ export class Sim {
       const arr = this.cbedAt(S.fdSel >= 0 ? S.fdSel : f.done - 1);
       return { arr, w: f.n4, h: f.n4, key: `4d${S.fdSel}` };
     }
-    if (S.mode === 'eds' || S.mode === 'eels') return null;
+    if (S.mode === 'eds' || S.mode === 'eels' || S.mode === 'ilh') return null;
     return this.main ? { ...this.main, key: S.mode + this.version } : null;
   }
   stepSingle(dt) {
@@ -912,7 +924,7 @@ export class Sim {
     this.sputter(dt);
     this.radiolysis(dt);
     const S = this.S, m = S.mode;
-    if (this.stale.probe && (m !== 'tem' && m !== 'diff')) { this.computeProbe(); this.stale.probe = 0; }
+    if (this.stale.probe && !['tem', 'diff', 'oah', 'ilh'].includes(m)) { this.computeProbe(); this.stale.probe = 0; }
     if (m === 'tem' && this.stale.tem) { this.computeTEM(); this.stale.tem = 0; this.version++; }
     if (m === 'stem' && this.stale.stem) {
       const soft = this._soft; // beam damage: keep scanning, like a live instrument
@@ -946,6 +958,13 @@ export class Sim {
       if (this.stale.si) { this.computeSI(); this.stale.si = 0; this.version++; }
       if (m === 'eels' && this.stale.eels) { this.buildEELS(); this.stale.eels = 0; this.version++; }
       if (!S.paused) this.accumulate(dt * S.speed);
+    }
+    if (m === 'oah' && this.oah.stale) { this.oah.compute(); this.version++; }
+    if (m === 'oah') this.main = this.oah.disp ? { arr: this.oah.disp.holo, w: this.oah.disp.c, h: this.oah.disp.c } : null;
+    if (m === 'ilh') {
+      if (this.ilh.stale) { this.ilh.start(); this.version++; }
+      if (this.ilh.step(dt)) this.version++;
+      this.main = null;
     }
     if (m === 'ronch' && this.ronch.stale) { this.ronch.compute(); this.version++; }
     if (m === 'cbed' && this.cbed.stale) { this.cbed.compute(); this.version++; }

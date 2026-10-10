@@ -110,5 +110,17 @@
  "male/physics/Bright-field detector": "male/physics/bright-field-detector.mp3",
  "male/physics/Direct electron detector": "male/physics/direct-electron-detector.mp3",
  "male/physics/Magnetic prism": "male/physics/magnetic-prism.mp3",
- "male/physics/Energy-loss spectrum": "male/physics/energy-loss-spectrum.mp3"
+ "male/physics/Energy-loss spectrum": "male/physics/energy-loss-spectrum.mp3",
+ "female/general/mode-oah": "female/general/mode-oah.mp3",
+ "female/general/mode-ilh": "female/general/mode-ilh.mp3",
+ "female/general/Electron biprism": "female/general/electron-biprism.mp3",
+ "female/physics/mode-oah": "female/physics/mode-oah.mp3",
+ "female/physics/mode-ilh": "female/physics/mode-ilh.mp3",
+ "female/physics/Electron biprism": "female/physics/electron-biprism.mp3",
+ "male/general/mode-oah": "male/general/mode-oah.mp3",
+ "male/general/mode-ilh": "male/general/mode-ilh.mp3",
+ "male/general/Electron biprism": "male/general/electron-biprism.mp3",
+ "male/physics/mode-oah": "male/physics/mode-oah.mp3",
+ "male/physics/mode-ilh": "male/physics/mode-ilh.mp3",
+ "male/physics/Electron biprism": "male/physics/electron-biprism.mp3"
 }

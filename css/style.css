@@ -214,3 +214,15 @@ body.stacked .comp { left: 12px !important; right: 12px; top: auto !important; b
 #btnNarrate[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
 .narr { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 8px 0 4px; }
 .narrLbl { font: 500 9.5px var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+
+/* results panel: enlarge in place or pop out to a window */
+.dicons { display: flex; gap: 4px; margin-left: 6px; flex: none; }
+.dicons button { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 7px; border: 1px solid var(--line); color: var(--muted); }
+.dicons button:hover, .dicons button[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
+.dicons svg { width: 14px; height: 14px; }
+body.detBig .detector { z-index: 30; top: 64px; bottom: 24px; left: 24px; right: 24px; max-width: none; margin: 0; display: flex; flex-direction: column; background: rgba(6, 8, 11, 0.97); box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.55); }
+body.detBig .dbody { flex: 1; height: auto; min-height: 0; }
+body.detBig #detMain { max-width: 52%; }
+body.stacked.detBig .detector { position: fixed; margin: 0; top: 12px; bottom: 12px; left: 8px; right: 8px; overflow-y: auto; }
+body.stacked.detBig #detMain { max-width: none; }
+body.stacked.detBig #detSec { height: 46vh; }

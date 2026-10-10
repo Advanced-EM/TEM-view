@@ -1,8 +1,9 @@
-// Instrument-physics cards for each labelled component of the column.
+// Instrument-physics cards for each labeled component of the column.
 // Each entry: what it does, the physics behind it, typical specifications,
 // how it is measured / calibrated in practice, what limits it, and live values from the current state.
 import * as P from './physics.js';
 import { AP_MRAD, FOCAL_SPREAD, stemDetType } from './sim.js';
+import { biprism } from './holography.js';
 
 const f2 = (v) => v.toFixed(2), f1 = (v) => v.toFixed(1);
 const lamOf = (S) => P.wavelength(S.kV);
@@ -11,7 +12,7 @@ export const COMPONENTS = {
   'Electron gun': {
     kicker: 'Source',
     role: 'Emits the electrons. Its <b>brightness</b> and <b>energy spread</b> set the ultimate limits on probe current, coherence and chromatic resolution.',
-    physics: 'A Schottky field-emission gun uses a ZrO-coated W(100) tip at ~1800 K. The zirconia lowers the work function from 4.5 to ~2.8 eV, and a strong extraction field (~10⁹ V/m) thins the barrier further, so electrons escape from a virtual source only ~15 nm across. Cold-FEG tips run at room temperature and emit by pure tunnelling, trading stability for a narrower energy spread.',
+    physics: 'A Schottky field-emission gun uses a ZrO-coated W(100) tip at ~1800 K. The zirconia lowers the work function from 4.5 to ~2.8 eV, and a strong extraction field (~10⁹ V/m) thins the barrier further, so electrons escape from a virtual source only ~15 nm across. Cold-FEG tips run at room temperature and emit by pure tunneling, trading stability for a narrower energy spread.',
     specs: [['Reduced brightness', '~1 × 10⁸ A m⁻² sr⁻¹ V⁻¹'], ['Energy spread (Schottky)', '0.6–0.8 eV'], ['Energy spread (cold FEG)', '0.3–0.4 eV'], ['Virtual source size', '~15 nm'], ['Emission current', '50–200 µA']],
     metrology: 'Energy spread is read directly as the <b>FWHM of the zero-loss peak</b> in EELS. Brightness comes from measuring probe current (Faraday cup or calibrated screen current) against probe size and convergence angle. Emission stability is logged as %/hour.',
     limits: 'Brightness caps how much current fits into an atomic probe; energy spread couples to chromatic aberration and sets the information limit.',
@@ -20,9 +21,9 @@ export const COMPONENTS = {
   'High-voltage accelerator': {
     kicker: 'Acceleration',
     role: 'Accelerates electrons through a stack of electrodes to the working voltage, fixing their <b>wavelength</b> and <b>penetration</b>.',
-    physics: 'Kinetic energy eV makes the electron relativistic: λ = h / √(2m₀eV(1 + eV/2m₀c²)). At 300 kV electrons move at 0.78 c. Ripple and drift in the high voltage broaden the energy just like the gun does, so the tank is actively stabilised.',
+    physics: 'Kinetic energy eV makes the electron relativistic: λ = h / √(2m₀eV(1 + eV/2m₀c²)). At 300 kV electrons move at 0.78 c. Ripple and drift in the high voltage broaden the energy just like the gun does, so the tank is actively stabilized.',
     specs: [['Voltage range', '30–300 kV'], ['HV stability', '< 1 ppm (ΔV/V)'], ['Accelerator stages', '6–12 electrodes']],
-    metrology: 'The absolute voltage is calibrated from <b>HOLZ line positions in CBED</b>, which shift sensitively with λ, or from a known lattice spacing. The <b>HT wobbler</b> modulates the voltage so the <i>chromatic (voltage) centre</i> can be aligned onto the optic axis.',
+    metrology: 'The absolute voltage is calibrated from <b>HOLZ line positions in CBED</b>, which shift sensitively with λ, or from a known lattice spacing. The <b>HT wobbler</b> modulates the voltage so the <i>chromatic (voltage) center</i> can be aligned onto the optic axis.',
     limits: 'Chromatic focal spread Δ = C<sub>c</sub>·√[(ΔE/E)² + (ΔV/V)² + (2ΔI/I)²]; high voltage drives knock-on damage above ~86 kV in carbon.',
     live: (S) => [['Voltage', `${S.kV} kV`], ['Wavelength', `${f2(lamOf(S) * 100)} pm`], ['Speed', `${P.betaOf(S.kV).toFixed(3)} c`], ['Mass', `${P.gammaOf(S.kV).toFixed(3)} m₀`]],
   },
@@ -31,7 +32,7 @@ export const COMPONENTS = {
     role: 'Demagnifies the source image (the "spot size" setting) and so controls <b>beam current</b>: stronger C1 means a smaller source image, less current, more coherence.',
     physics: 'A magnetic round lens: a copper coil in a soft-iron yoke concentrates the field across a narrow pole-piece gap. Focal length scales as f ∝ V*/(NI)², where V* is the relativistic voltage and NI the ampere-turns. Electrons spiral through, so the image is also rotated.',
     specs: [['Spot-size steps', '~1–11'], ['Current per step', '≈ ×0.5–0.7'], ['Coil excitation', '10³–10⁴ ampere-turns']],
-    metrology: 'Beam current per spot size is tabulated with a <b>Faraday cup</b> or the calibrated screen current. Lenses are <b>normalised</b> (cycled through saturation) before measurements so magnetic hysteresis doesn\'t make settings irreproducible.',
+    metrology: 'Beam current per spot size is tabulated with a <b>Faraday cup</b> or the calibrated screen current. Lenses are <b>normalized</b> (cycled through saturation) before measurements so magnetic hysteresis doesn\'t make settings irreproducible.',
     limits: 'Current and coherence trade off directly: the same brightness can’t give you both a big current and a tiny, coherent source.',
     live: () => [],
   },
@@ -49,7 +50,7 @@ export const COMPONENTS = {
     role: 'A platinum or molybdenum disk with a precise hole. In STEM it is the <b>probe-forming aperture</b> and directly sets α and probe current.',
     physics: 'The aperture selects which rays reach the specimen. The probe’s diffraction limit ∝ λ/α fights spherical aberration ∝ C<sub>s</sub>α³, so there is an optimum aperture for each C<sub>s</sub>.',
     specs: [['Typical sizes', '10–150 µm'], ['Material', 'Pt or Mo, heated to stay clean'], ['Optimum α (uncorrected)', '~10 mrad at 200 kV']],
-    metrology: 'Centred with the <b>aperture wobble / Ronchigram</b>: the Ronchigram’s flat, aberration-free region should fill it symmetrically. Its angular size is calibrated from CBED disks.',
+    metrology: 'Centered with the <b>aperture wobble / Ronchigram</b>: the Ronchigram’s flat, aberration-free region should fill it symmetrically. Its angular size is calibrated from CBED disks.',
     limits: 'Contamination on the edge charges up and adds astigmatism; a smaller aperture means less current.',
     live: (S, sim) => [['α now', `${S.mode === '4d' ? S.alpha4d : S.alpha} mrad`], ['Optimum α for this Cₛ', `${Math.round(1.27 * Math.pow(lamOf(S) / Math.max(1, Math.abs(sim.CsA())), 0.25) * 1000)} mrad`]],
   },
@@ -68,13 +69,13 @@ export const COMPONENTS = {
     physics: 'Two deflectors tilt the beam in opposite directions, so it pivots about the objective’s front focal plane and lands on the specimen <b>parallel to the axis</b> at every position (a telecentric scan). Descan coils below the specimen keep the diffraction pattern stationary on the detector, which is critical for 4D-STEM.',
     specs: [['Pixel dwell time', '0.1–100 µs'], ['Frame size', '256² – 4096²'], ['Flyback delay', '~100 µs per line']],
     metrology: 'Pixel size is calibrated against a known lattice (for example Si 111 = 3.135 Å). <b>Scan distortion and drift</b> are measured by acquiring the same area at 0° and 90° scan rotation and fitting a nonlinear correction. Pivot points are aligned so beam tilt doesn’t move the probe.',
-    limits: 'Specimen drift (~0.5 nm/min), scan-coil hysteresis and line flyback artefacts; fast scans trade dose for distortion.',
+    limits: 'Specimen drift (~0.5 nm/min), scan-coil hysteresis and line flyback artifacts; fast scans trade dose for distortion.',
     live: (S) => [['Pixel size', `${f2((S.fov * 10) / 224)} Å`], ['Field of view', `${f1(S.fov)} nm`]],
   },
   'Objective lens': {
     kicker: 'Resolution',
     role: 'The strongest lens, with the specimen immersed in its field. It forms the first image in TEM and the probe in STEM, and its <b>aberrations set the resolution of the whole instrument</b>.',
-    physics: 'A ~2 T immersion field gives f ≈ 1.5–2 mm. Round lenses always have positive spherical and chromatic aberration (Scherzer, 1936). The wave aberration χ(k) = πλΔf k² + ½πC<sub>s</sub>λ³k⁴ plus astigmatism, coma, and so on is cancelled by a multipole <b>corrector</b> (hexapole or quadrupole-octupole), which can even make C<sub>s</sub> negative.',
+    physics: 'A ~2 T immersion field gives f ≈ 1.5–2 mm. Round lenses always have positive spherical and chromatic aberration (Scherzer, 1936). The wave aberration χ(k) = πλΔf k² + ½πC<sub>s</sub>λ³k⁴ plus astigmatism, coma, and so on is canceled by a multipole <b>corrector</b> (hexapole or quadrupole-octupole), which can even make C<sub>s</sub> negative.',
     specs: [['Cₛ uncorrected', '0.5–1.5 mm'], ['Cc', '1–1.5 mm'], ['Pole-piece gap', '2–5 mm'], ['Corrected resolution', '< 0.6 Å (TEM & STEM)']],
     metrology: 'Aberrations are measured, not assumed. In TEM a <b>Zemlin tableau</b> (diffractograms of amorphous carbon at several tilted illuminations) fits defocus, astigmatism, coma and C<sub>s</sub>. In STEM the <b>Ronchigram</b> is fitted. Coma-free alignment uses beam-tilt wobbling; the corrector software iterates until residual aberrations are below target.',
     limits: 'After correcting Cₛ, chromatic aberration and the source energy spread take over, along with instabilities (lens current, vibration, stray fields).',
@@ -86,7 +87,7 @@ export const COMPONENTS = {
   Specimen: {
     kicker: 'Sample',
     role: 'A 3 mm grid or FIB lamella, thinned until electrons pass through, held in a goniometer that tilts and translates it inside the lens gap.',
-    physics: 'The specimen must be thinner than about one inelastic mean free path (~100 nm) for quantitative work. Beam damage comes from <b>knock-on</b> displacement (above a voltage threshold), <b>radiolysis</b> (ionisation that breaks bonds), heating and charging.',
+    physics: 'The specimen must be thinner than about one inelastic mean free path (~100 nm) for quantitative work. Beam damage comes from <b>knock-on</b> displacement (above a voltage threshold), <b>radiolysis</b> (ionization that breaks bonds), heating and charging.',
     specs: [['Tilt range (double-tilt)', '±20–35°'], ['Stage drift', '< 0.5 nm/min'], ['Positioning', 'piezo, ~20 pm steps']],
     metrology: '<b>Eucentric height</b> is set with the α-wobbler: the image shouldn’t move as the stage rocks. <b>Thickness</b> is measured by EELS log-ratio (t/λ = ln I<sub>total</sub>/I<sub>0</sub>) or from CBED Kossel–Möllenstedt fringes. Orientation comes from Kikuchi patterns; dose is logged in e⁻/Å².',
     limits: 'Thickness, drift, contamination and damage often limit results before optics do.',
@@ -106,7 +107,7 @@ export const COMPONENTS = {
     role: 'Sits in the back focal plane and chooses <b>which scattered beams form the image</b>, so it sets contrast, resolution and dark-field selection.',
     physics: 'A hole of diameter d at focal length f passes scattering angles up to α = d/2f, i.e. spatial frequencies up to α/λ. Removing beams removes the fringes they would make; displacing the aperture onto one reflection gives a dark-field image.',
     specs: [['Sizes', '5–70 µm'], ['Angular cut-off', '~2–20 mrad'], ['Heating', 'self-cleaning, ~200 °C']],
-    metrology: 'Centred in <b>diffraction mode</b> around the direct beam; its angular radius is calibrated against known Bragg reflections.',
+    metrology: 'Centered in <b>diffraction mode</b> around the direct beam; its angular radius is calibrated against known Bragg reflections.',
     limits: 'Too small cuts resolution; charging on a dirty aperture adds phase shifts and astigmatism.',
     live: (S) => {
       const m = AP_MRAD[S.objAp];
@@ -130,6 +131,15 @@ export const COMPONENTS = {
     metrology: 'The image must be focused precisely in the SA plane. Spherical aberration displaces high-angle beams by C<sub>s</sub>θ³, a <b>selection error</b> that makes very small SA areas unreliable (use nanobeam diffraction instead).',
     limits: 'Selection error from Cₛ and defocus; for small features, convergent nanobeam diffraction is preferred.',
     live: (S) => [['Selected area', `${f1(S.sa)} nm`]],
+  },
+  'Electron biprism': {
+    kicker: 'Holography',
+    role: 'A charged wire across the beam that <b>overlaps two halves of the electron wave</b>: the object wave through the specimen and the reference wave through the vacuum beside it. Where they overlap they interfere, forming a hologram.',
+    physics: 'Möllenstedt and Düker (1955): a gold-coated quartz or platinum wire, typically 0.3–1 µm across, sits in the selected-area plane. Its electric field deflects each passing electron by an angle α ∝ U, independent of the distance from the wire, so the two halves of the beam tilt toward each other like light through a Fresnel biprism. The overlap width grows and the fringe spacing shrinks in proportion to the wire voltage U. A second or third biprism decouples fringe spacing from overlap width and removes the Fresnel fringes from the wire edges.',
+    specs: [['Wire diameter', '0.3–1 µm'], ['Wire voltage', '±0–300 V'], ['Fringe spacing', '0.02–10 nm (object plane)'], ['Fringe contrast', '10–80 %']],
+    metrology: 'Fringe spacing and contrast are measured in a <b>vacuum reference hologram</b>, recorded without the specimen and used to remove distortions from the projector and detector. Phase sensitivity is quoted as 2π/N, from the noise in a reconstructed vacuum phase; it scales as √2 / (μ√N<sub>e</sub>), so contrast μ and dose N<sub>e</sub> per pixel both matter. Elliptical illumination, elongated perpendicular to the wire, maximizes coherence across the overlap.',
+    limits: 'Spatial coherence of the illumination (contrast falls as the overlap widens), dose and detector MTF, Fresnel fringes from the wire edges, and the need for vacuum or a thin reference region within a few overlap widths of the area of interest.',
+    live: (S) => { const b = biprism(S.biprism); return [['Wire voltage', `${S.biprism} V`], ['Fringe spacing', `${(b.s).toFixed(2)} Å`], ['Overlap width', `${f1(b.W)} nm`], ['Fringe contrast μ', `${Math.round(b.mu * 100)} %`]]; },
   },
   'Intermediate lens': {
     kicker: 'Imaging system',
@@ -163,7 +173,7 @@ export const COMPONENTS = {
     role: 'A ring-shaped scintillator that collects electrons scattered outside the bright-field cone, giving Z-contrast (HAADF) or strain-sensitive (LAADF) images.',
     physics: 'Scintillator (YAP/YAG) and photomultiplier. High inner angles (> ~3α) collect thermal-diffuse and Rutherford-like scattering, which is incoherent and grows as ~Z<sup>1.7</sup>.',
     specs: [['Inner angle', '~30–100 mrad (camera-length set)'], ['Outer angle', '~150–250 mrad'], ['Bandwidth', '~1–10 MHz']],
-    metrology: 'For quantitative STEM the <b>detector sensitivity map</b> is recorded by scanning the beam over the detector, and intensities are normalised to the incident beam. Black level and gain are set so the response is linear.',
+    metrology: 'For quantitative STEM the <b>detector sensitivity map</b> is recorded by scanning the beam over the detector, and intensities are normalized to the incident beam. Black level and gain are set so the response is linear.',
     limits: 'Non-uniform response and nonlinearity bias atom counting; camera-length errors shift the angular range.',
     live: (S) => [['Collection', `${S.detIn}–${S.detOut} mrad`], ['Type', stemDetType(S.detIn, S.detOut, S.alpha)]],
   },
@@ -179,9 +189,9 @@ export const COMPONENTS = {
   'Direct electron detector': {
     kicker: 'Detector',
     role: 'A radiation-hard CMOS or hybrid-pixel sensor that detects each electron directly: the camera behind 4D-STEM, DPC, ptychography and cryo-EM.',
-    physics: 'Electrons deposit charge straight into the sensor, with no scintillator and no optics. In <b>counting mode</b> each event is localised and counted, suppressing read noise and Landau fluctuations, which gives near-ideal DQE. Monolithic CMOS gives small pixels; hybrid pixel arrays (for example EMPAD or Medipix) give huge dynamic range for diffraction.',
+    physics: 'Electrons deposit charge straight into the sensor, with no scintillator and no optics. In <b>counting mode</b> each event is localized and counted, suppressing read noise and Landau fluctuations, which gives near-ideal DQE. Monolithic CMOS gives small pixels; hybrid pixel arrays (for example EMPAD or Medipix) give huge dynamic range for diffraction.',
     specs: [['DQE(0), counting', '~0.8–0.9'], ['Frame rate', '1 kHz – 100 kHz'], ['Pixel size', '5–150 µm'], ['Dynamic range (hybrid)', '10⁶ : 1']],
-    metrology: '<b>Gain (flat-field) and dark references</b> are taken regularly. <b>MTF</b> is measured with the knife-edge method and <b>DQE</b> from MTF and the noise power spectrum. At high flux, coincidence loss needs correction. For 4D-STEM the pattern centre and camera length are calibrated so centre-of-mass shifts are absolute.',
+    metrology: '<b>Gain (flat-field) and dark references</b> are taken regularly. <b>MTF</b> is measured with the knife-edge method and <b>DQE</b> from MTF and the noise power spectrum. At high flux, coincidence loss needs correction. For 4D-STEM the pattern center and camera length are calibrated so center-of-mass shifts are absolute.',
     limits: 'Count-rate saturation (coincidence loss), data volume (tens of GB per scan), radiation lifetime.',
     live: (S, sim) => (sim.fd ? [['4D dataset here', `${sim.fd.N}² × ${sim.fd.n4}²`], ['Angular sampling', `${f2(sim.fd.mradPx)} mrad/px`]] : [['In use for', S.mode === '4d' ? '4D-STEM' : S.camera === 'ded' ? 'imaging' : 'standby']]),
   },
@@ -197,7 +207,7 @@ export const COMPONENTS = {
   'Energy-loss spectrum': {
     kicker: 'Spectrometer',
     role: 'The camera at the end of the spectrometer records intensity versus energy loss, from which composition, bonding and thickness are extracted.',
-    physics: 'Low loss (plasmons, band gaps) and core loss (ionisation edges with fine structure) span 10⁴–10⁶ in intensity, so high-dynamic-range or dual-exposure acquisition is standard.',
+    physics: 'Low loss (plasmons, band gaps) and core loss (ionization edges with fine structure) span 10⁴–10⁶ in intensity, so high-dynamic-range or dual-exposure acquisition is standard.',
     specs: [['Energy range', '0 – ~3 keV'], ['Dynamic range needed', '> 10⁵']],
     metrology: 'Quantification: fit and subtract the power-law background, then divide edge intensities by <b>cross-sections</b> for the chosen β and energy window. Thickness from log-ratio t/λ; plural scattering is removed by Fourier-ratio deconvolution. Gain/dark correction and point-spread-tail correction are applied first.',
     limits: 'Signal-to-background for weak or high-energy edges, cross-section accuracy (~5–10%), beam damage during long acquisitions.',

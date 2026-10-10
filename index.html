@@ -46,6 +46,10 @@
   <div class="dhead">
     <span class="dot"></span><span id="detTitle"></span><span id="status" class="status"></span>
     <span class="sp"></span><span id="secTitle" class="muted"></span>
+    <span class="dicons">
+      <button id="btnExpand" title="Enlarge the results (X)" aria-label="Enlarge the results panel" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg></button>
+      <button id="btnPopout" title="Open the results in a separate window" aria-label="Open the results in a separate window"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M13 4h7v7M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></button>
+    </span>
   </div>
   <div class="dbody">
     <canvas id="detMain" aria-label="Detector image"></canvas>
@@ -61,7 +65,7 @@
   <button id="btnHelp" title="About" aria-label="About this exhibit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9.5"/><path d="M9.6 9.3a2.5 2.5 0 1 1 3.4 2.3c-.7.3-1 .8-1 1.5v.6"/><circle cx="12" cy="16.8" r=".6" fill="currentColor"/></svg></button>
 </div></div>
   <div class="clarity">
-    <button data-v="edu"><b>Educational clarity</b><small>Labels, colour, no noise</small></button>
+    <button data-v="edu"><b>Educational clarity</b><small>Labels, color, no noise</small></button>
     <button data-v="real"><b>Physically realistic</b><small>Shot noise, real detectors</small></button>
   </div>
   <div class="narr"><span class="narrLbl">Narration</span>
@@ -78,16 +82,18 @@
     <h2>How to <em>drive it</em></h2>
     <ul>
       <li><b>Click a label</b> on the column to open its instrument-physics card: how it works, typical specifications, how it is calibrated, and live values.</li>
-      <li><b>Drag</b> the 3D column to orbit, scroll to zoom. Keys <kbd>1</kbd>–<kbd>8</kbd> switch modes, <kbd>Space</kbd> pauses, <kbd>L</kbd> labels, <kbd>C</kbd> clarity, <kbd>R</kbd> resets the view.</li>
+      <li><b>Drag</b> the 3D column to orbit, scroll to zoom. Keys <kbd>1</kbd>–<kbd>9</kbd> and <kbd>0</kbd> switch modes, <kbd>Space</kbd> pauses, <kbd>L</kbd> labels, <kbd>C</kbd> clarity, <kbd>R</kbd> resets the view, <kbd>N</kbd> turns narration on or off.</li>
+      <li><b>Results panel:</b> the buttons at its top right enlarge it in place (<kbd>X</kbd>, <kbd>Esc</kbd> to close) or open it in a separate window, for example on a second screen.</li>
       <li><b>Drag the detector image</b> to move the specimen stage; scroll it to change magnification. In diffraction, dragging the pattern tilts the crystal. Try to find the zone axis by following the Kikuchi lines.</li>
       <li><b>4D-STEM:</b> hover the virtual image to read individual diffraction patterns; drag on the pattern to reshape the virtual detector.</li>
       <li><b>EDS:</b> click a peak to map that element. <b>EELS:</b> drag on the spectrum to move the energy window.</li>
       <li><b>Ronchigram:</b> press Scramble, then null the aberrations with the sliders (watch the π/4 circle grow), or press Auto-tune. <b>CBED:</b> thicken the sample to read thickness from the fringes; drag strain to move HOLZ lines.</li>
+      <li><b>Holography:</b> in off-axis mode, raise the biprism voltage for finer fringes and watch the contrast and phase precision fall; switch between hologram, phase and phase contours. In in-line mode, widen the focal step to recover large, slowly varying features.</li>
     </ul>
     <p class="eyebrow">What is computed, and how</p>
-    <p>The three specimens are real atomic structures: Au nanoparticles (FCC, [110]) on amorphous carbon; Si [110] against amorphous SiO₂; and a SrTiO₃ Σ5 (310) tilt boundary. Their projected potential is built atom by atom.</p>
-    <p><b>TEM</b> and <b>diffraction</b> treat the specimen as a phase object, then apply the full objective-lens transfer function: defocus, C<sub>s</sub>, aperture, and temporal and spatial coherence envelopes. <b>STEM</b> convolves the aberrated probe with a Z<sup>n</sup> scattering map. <b>4D-STEM</b> computes a real convergent-beam pattern (probe × transmission function, then FFT) at each of 1,600 probe positions. <b>EDS</b> uses real line energies, a Fano-limited detector response and Kramers bremsstrahlung. <b>EELS</b> uses Drude plasmons with Poisson plural scattering and real edge onsets. The <b>Ronchigram</b> is |FFT(probe × amorphous film)|² with the full axial aberration function. <b>CBED/LACBED</b> use two-beam dynamical theory per reflection with 3D structure factors and exact HOLZ geometry.</p>
-    <p class="muted">Simplifications: thick-crystal dynamical scattering (channelling) is approximated by a saturating phase rather than full multislice, and cross-sections are schematic. Trends and length scales are right; absolute intensities are illustrative.</p>
+    <p>The five specimens are real atomic structures: Au nanoparticles (FCC, [110]) on amorphous carbon; Si [110] against amorphous SiO₂; a SrTiO₃ Σ5 (310) tilt boundary; graphene with defects; and the metal–organic framework UiO-66 along [110]. Their projected potential is built atom by atom.</p>
+    <p><b>TEM</b> and <b>diffraction</b> treat the specimen as a phase object, then apply the full objective-lens transfer function: defocus, C<sub>s</sub>, aperture, and temporal and spatial coherence envelopes. <b>STEM</b> convolves the aberrated probe with a Z<sup>n</sup> scattering map. <b>4D-STEM</b> computes a real convergent-beam pattern (probe × transmission function, then FFT) at each of 1,600 probe positions. <b>EDS</b> uses real line energies, a Fano-limited detector response and Kramers bremsstrahlung. <b>EELS</b> uses Drude plasmons with Poisson plural scattering and real edge onsets. The <b>Ronchigram</b> is |FFT(probe × amorphous film)|² with the full axial aberration function. <b>CBED/LACBED</b> use two-beam dynamical theory per reflection with 3D structure factors and exact HOLZ geometry. <b>Off-axis holography</b> interferes the aberrated image wave with a tilted plane reference wave, then reconstructs it by sideband filtering; <b>in-line holography</b> simulates a focal series through the same transfer function and recovers the exit wave iteratively.</p>
+    <p class="muted">Simplifications: thick-crystal dynamical scattering (channeling) is approximated by a saturating phase rather than full multislice, and cross-sections are schematic. Trends and length scales are right; absolute intensities are illustrative.</p>
   </div>
 </div>
 
