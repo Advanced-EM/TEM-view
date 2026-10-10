@@ -27,7 +27,7 @@ python3 -m http.server 8765
 
 Then open http://localhost:8765. Three.js loads from jsDelivr, so the first load needs an internet connection.
 
-To publish, push this folder to a GitHub repository and enable **Pages** on the main branch; no build step is needed.
+To publish, push this folder to a GitHub repository and enable **Pages** on the main branch; no build step is needed. Before each release, run `node tools/stamp.mjs`: it stamps a version onto every module and the stylesheet in `index.html`, so browsers load the new code instead of a cached copy.
 
 ## Controls
 
