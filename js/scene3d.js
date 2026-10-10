@@ -494,6 +494,7 @@ export class Scene3D {
 
   resize(w, h, off) {
     this.W = w; this.H = h;
+    this.labels?.forEach((L) => (L.wd = 0)); // label widths change with the responsive font size
     this.viewOffset = off;
     this.renderer.setSize(w, h, false);
     this.composer.setSize(w, h);
@@ -861,6 +862,13 @@ export class Scene3D {
       if (v.z > 1) { L.el.style.opacity = 0; L.el.classList.add('off'); continue; }
       L.el.classList.remove('off');
       const x = (v.x * 0.5 + 0.5) * w, y = (-v.y * 0.5 + 0.5) * h;
+      // on narrow screens, flip a label to the other side rather than let it run off the edge
+      if (L.left0 === undefined) L.left0 = L.el.classList.contains('left');
+      if (!L.wd) L.wd = L.el.offsetWidth;
+      let left = L.left0;
+      if (!left && x + L.wd > w - 4) left = true;
+      else if (left && x - L.wd < 4) left = false;
+      L.el.classList.toggle('left', left);
       L.el.style.opacity = 1;
       L.el.style.transform = `translate(${x}px, ${y}px)`;
     }

@@ -139,13 +139,23 @@ const ICONS = {
 // ------------------------------------------------------------------ build controls
 const panel = $('#controlsBody');
 const bound = [];
+// on narrow screens, control sections fold; these start folded
+const folded = new Set(['Time', 'Show', 'Instrument readout']);
 function build() {
+  let secName = null;
   for (const c of CONTROLS) {
     let el;
     if (c.sec) {
       el = document.createElement('h3');
       el.className = 'sec';
       el.textContent = c.sec;
+      secName = c.sec;
+      const name = c.sec;
+      el.addEventListener('click', () => {
+        if (!document.body.classList.contains('stacked')) return;
+        folded.has(name) ? folded.delete(name) : folded.add(name);
+        refreshControls();
+      });
       bound.push({ c, el });
     } else if (c.slider) {
       el = document.createElement('div');
@@ -207,6 +217,7 @@ function build() {
       bound.push({ c, el });
     }
     if (c.modes) el.dataset.modes = c.modes;
+    bound[bound.length - 1].sec = secName;
     panel.appendChild(el);
   }
   // section visibility is inherited: elements after a moded section header share its modes
@@ -242,7 +253,9 @@ function renderChips({ c, box }) {
 function refreshControls() {
   document.body.dataset.mode = S.mode;
   for (const b of bound) {
-    const vis = (!b.el.dataset.modes || b.el.dataset.modes.split(' ').includes(S.mode)) && (!b.c.show || b.c.show());
+    const stacked = document.body.classList.contains('stacked');
+    if (b.c.sec) b.el.classList.toggle('closed', stacked && folded.has(b.c.sec));
+    const vis = (!b.el.dataset.modes || b.el.dataset.modes.split(' ').includes(S.mode)) && (!b.c.show || b.c.show()) && !(stacked && !b.c.sec && folded.has(b.sec));
     b.el.hidden = !vis;
     if (!vis) continue;
     if (b.input) {
@@ -349,6 +362,7 @@ function setSpec(v) {
 function setMode(m) {
   if (m === S.mode) return;
   S.mode = m;
+  infoOpen = false;
   S.df = S.dfFam[fam(m)];
   S.fdSel = -1;
   if (m === 'eds' || m === 'eels' || m === 'ilh') { if (sim.single) sim.startSingle(false); }
@@ -462,7 +476,12 @@ function tourStops() {
 }
 
 // ------------------------------------------------------------------ text panels
+let infoOpen = false;
 function renderInfo() {
+  const stacked = document.body.classList.contains('stacked');
+  $('.explain').classList.toggle('folded', stacked && !infoOpen);
+  $('#infoMore').hidden = !stacked;
+  $('#infoMore').textContent = infoOpen ? 'Show less' : 'Read more';
   const inf = modeInfo(S, sim);
   $('#infoTitle').innerHTML = inf.title;
   $('#infoBody').innerHTML = inf.body;
@@ -569,6 +588,7 @@ function wire() {
   $('#btnLabels').addEventListener('click', () => set('showLabels', !S.showLabels));
   $('#btnFull').addEventListener('click', () => { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.(); });
   $('#btnHelp').addEventListener('click', () => ($('#help').hidden = false));
+  $('#infoMore').addEventListener('click', () => { infoOpen = !infoOpen; renderInfo(); });
   $('#btnExpand').addEventListener('click', () => setExpanded(!document.body.classList.contains('detBig')));
   $('#btnPopout').addEventListener('click', openPopout);
   $('#help').addEventListener('click', (e) => { if (e.target.id === 'help' || e.target.closest('.close')) $('#help').hidden = true; });
@@ -669,7 +689,10 @@ let lastBottom = 0;
 function resize() {
   const w = window.innerWidth, h = window.innerHeight;
   const wide = w >= 1100;
-  document.body.classList.toggle('stacked', !wide);
+  if (document.body.classList.contains('stacked') === wide) {
+    document.body.classList.toggle('stacked', !wide);
+    if (bound.length) refreshControls();
+  }
   let off = { left: 0, right: 0, bottom: 0, top: 0 };
   let cw = w, ch = h;
   if (wide) {
