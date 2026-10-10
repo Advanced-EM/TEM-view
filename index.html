@@ -17,8 +17,10 @@
 </script>
 </head>
 <body>
+<div class="stage">
 <canvas id="gl" aria-label="3D cutaway of a transmission electron microscope column"></canvas>
 <div id="labels"></div>
+</div>
 
 <header class="hero">
   <p class="eyebrow">Interactive exhibit · Electron optics</p>
@@ -38,6 +40,7 @@
   <p class="eyebrow">What you are looking at<button class="speak" id="infoSpeak" title="Listen" aria-label="Listen to this mode"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path class="w1" d="M15.5 9a4.2 4.2 0 0 1 0 6"/><path class="w2" d="M18.3 6.5a8 8 0 0 1 0 11"/></svg></button></p>
   <h2 id="infoTitle"></h2>
   <div id="infoBody" class="body"></div>
+  <button id="infoMore" class="more" hidden>Read more</button>
   <div id="change" class="change" hidden></div>
   <div id="infoStats" class="stats"></div>
 </section>
