@@ -2,13 +2,15 @@
 import * as P from './physics.js';
 import { Ronch, CBED } from './techniques.js';
 import { OffAxis, FocalSeries } from './holography.js';
+import { focalSpread } from './profile.js';
 
 const SP = P.SPECIMENS;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
-export const AP_MRAD = { none: Infinity, 40: 12, 20: 6, 10: 3, df: 2.5 };
-export const FOCAL_SPREAD = 32; // Å, Schottky FEG with Cc ≈ 1.2 mm
-export const CONV_TEM = 0.08e-3; // illumination semi-angle in TEM, rad
+export const AP_MRAD = { none: Infinity, 40: 12, 20: 6, 10: 3, df: 2.5, zpp: Infinity };
+// Zernike phase plate: a thin film in the back focal plane with a small central hole. Unscattered electrons
+// pass the hole; scattered ones cross the film and are shifted by π/2. Cut-on frequency set by the hole.
+export const ZPP_CUTON = 1 / 250; // 1/Å (hole ≈ 1 µm at f ≈ 3 mm, 200 kV)
 
 export function stemDetType(inner, outer, alpha) {
   if (outer <= alpha * 1.05 && inner < 0.35 * alpha) return 'BF';
@@ -63,6 +65,17 @@ export class Sim {
   get spec() { return SP[this.S.spec]; }
   get lam() { return P.wavelength(this.S.kV); }
   CsA() { return this.S.corrector ? this.S.csCor * 1e4 : this.S.csUnc * 1e7; } // Å
+  // from the instrument profile (see profile.js)
+  focalSpread() { return focalSpread(this.S.profile, this.S.kV); } // Å
+  convTEM() { return this.S.profile.convTEM * 1e-3; } // rad
+  infoLimit() { return P.infoLimit(this.lam, this.focalSpread()); } // Å
+  // cryo-holder drift, Å/s: fast after cooling or inserting a grid, settling over about half a minute
+  driftSpeed() {
+    if (!this.S.cryo) return 0;
+    const t = this.cryoT || 0;
+    return 2.5 * Math.exp(-t / 30) + 0.05;
+  }
+  driftDir() { return [Math.cos(0.6), Math.sin(0.6)]; }
   alpha() {
     const S = this.S;
     return ({ '4d': S.alpha4d, ronch: S.ronchAp, cbed: S.cbedKind === 'lacbed' ? S.alphaLA : S.alphaCB }[S.mode] ?? S.alpha) * 1e-3;
@@ -81,25 +94,28 @@ export class Sim {
       dose: ['si'], edsSel: [], mode: [],
       // progressive beam damage: refresh images and patterns in place, but don't restart 4D scans or spectrum accumulation
       damage: ['tem', 'stem', 'diff', 'probe'],
+      drift: ['tem', 'stem'],
     };
     for (const k of map[key] ?? all) this.stale[k] = 1;
     const view = ['mode', 'edsSel', 'camera', 'beamStop', 'vdet', 'bgsub', 'eelsWin', 'eelsRange', 'holoView', 'ilhView'];
     if (!view.includes(key)) { this.ronch.stale = true; this.cbed.stale = true; this.oah.stale = true; }
     // a focal series takes a while to record, so only restart it when the physics changes
-    if (!view.includes(key) && !['damage', 'speed', 'biprism', 'sbR', 'numCorr'].includes(key)) this.ilh.stale = true;
+    if (!view.includes(key) && !['damage', 'drift', 'speed', 'biprism', 'sbR', 'numCorr'].includes(key)) this.ilh.stale = true;
     if (!['vdet', 'edsSel', 'mode', 'camera', 'holoView', 'ilhView'].includes(key)) this.resetSingle();
     this.version++;
   }
 
   maps(opts) {
     const S = this.S;
-    const key = [S.spec, this.spec.damageVer ?? 0, S.cx.toFixed(2), S.cy.toFixed(2), S.thick, S.tiltX, S.tiltY, opts.n, opts.dx.toFixed(4), !!opts.elements, !!opts.noTilt, opts.part ?? ''].join('|');
+    const key = [S.spec, S.cryo ? 1 : 0, this.spec.damageVer ?? 0, S.cx.toFixed(2), S.cy.toFixed(2), S.thick, S.tiltX, S.tiltY, opts.n, opts.dx.toFixed(4), !!opts.elements, !!opts.noTilt, opts.part ?? ''].join('|');
     let m = this.mapCache.get(key);
     if (!m) {
+      const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
       m = P.projectMaps(this.spec, {
         cx: S.cx, cy: S.cy, n: opts.n, dx: opts.dx, thick: S.thick * 10,
-        tiltX: (S.tiltX * Math.PI) / 180, tiltY: (S.tiltY * Math.PI) / 180, elements: opts.elements, noTilt: opts.noTilt, part: opts.part,
+        tiltX: (S.tiltX * Math.PI) / 180, tiltY: (S.tiltY * Math.PI) / 180, elements: opts.elements, noTilt: opts.noTilt, part: opts.part, cryo: S.cryo,
       });
+      this._mapsMs = (typeof performance !== 'undefined' ? performance.now() : 0) - t0;
       this.mapCache.set(key, m);
       if (this.mapCache.size > 8) this.mapCache.delete(this.mapCache.keys().next().value);
     }
@@ -109,12 +125,12 @@ export class Sim {
   // ------------------------------------------------------------ coherent imaging core
   // Objective-lens transfer function applied to the exit wave: returns the complex image wave.
   // `df` (Å) overrides the current defocus (focal series); `exit` reuses a precomputed exit wave.
-  lensWave(maps, { apK = Infinity, apCenter = [0, 0], envelopes = true, df: dfA, exit } = {}) {
+  lensWave(maps, { apK = Infinity, apCenter = [0, 0], envelopes = true, df: dfA, exit, zpp = false } = {}) {
     const n = maps.n, dx = maps.dx, lam = this.lam, df = dfA ?? this.S.df * 10, Cs = this.CsA(), ab = this.abA();
     const ex = exit ?? P.transmission(maps.phase, this.S.kV);
     const re = Float64Array.from(ex.re), im = Float64Array.from(ex.im);
     P.fft2(re, im, n);
-    const D = FOCAL_SPREAD, ac = CONV_TEM;
+    const D = this.focalSpread(), ac = this.convTEM();
     for (let y = 0; y < n; y++) {
       const ky = P.freq(y, n, dx);
       for (let x = 0; x < n; x++) {
@@ -130,7 +146,11 @@ export class Sim {
           const Es = Math.exp(-Math.pow((Math.PI * ac) / lam, 2) * g * g);
           H = Et * Es;
         }
-        const c = P.chiFull(kx, ky, lam, df, Cs, ab), cc = Math.cos(c), ss = Math.sin(c);
+        let c = P.chiFull(kx, ky, lam, df, Cs, ab);
+        // Zernike plate: the unscattered beam (through the hole) is retarded by π/2 relative to the scattered
+        // waves, which turns the phase shift into negative (dark-protein) contrast at focus: transfer −cos χ
+        if (zpp) c += (Math.PI / 2) * clamp((ZPP_CUTON - Math.sqrt(k2)) / (0.4 * ZPP_CUTON) + 0.5, 0, 1);
+        const cc = Math.cos(c), ss = Math.sin(c);
         const a = re[i], b = im[i];
         re[i] = H * (a * cc + b * ss);
         im[i] = H * (b * cc - a * ss);
@@ -156,7 +176,9 @@ export class Sim {
       apCenter = [m * g.b[0][0] + k * g.b[1][0], m * g.b[0][1] + k * g.b[1][1]];
       apK = Math.min(0.13, 0.45 * Math.hypot(apCenter[0], apCenter[1]));
     }
-    const I = this.lensImage(maps, { apK, apCenter });
+    if (S.objAp === 'zpp') apK = Infinity;
+    const I = this.lensImage(maps, { apK, apCenter, zpp: S.objAp === 'zpp' });
+    this.motionBlur(I, n, dx, S.camera === 'ded' ? 0.1 : 1);
     // Diffractogram: |FFT| of the (windowed) image shows the lens's transfer rings.
     const re = new Float64Array(n * n), im = new Float64Array(n * n);
     let mean = 0;
@@ -271,6 +293,7 @@ export class Sim {
     }
     // finite effective source size (~0.7 Å FWHM) blurs every real STEM image a little
     blur(img, n, 0.3 / dx);
+    this.scanDrift(img, n, dx);
     this.stemImg = { img: cropArr(img, n, c), c, dx, type };
     this._stemPass = this.frameNoise;
     this.main = { arr: this.stemImg.img, w: c, h: c };
@@ -640,7 +663,7 @@ export class Sim {
     const S = this.S, n = 128, dx = (S.fov * 10) / n, spec = this.spec;
     const maps = this.maps({ n, dx, elements: true });
     if (this.stale.probe) this.computeProbe();
-    const s = this.probe.fwhm / 2.355 / dx;
+    const s = Math.hypot(this.probe.fwhm / 2.355, (this.driftSpeed() * 20) / 3.5) / dx;
     const els = spec.elements.map((e) => ({ idx: e, key: P.EL[e].key || P.EL[e].sym, sym: P.EL[e].sym, map: blur(Float32Array.from(maps.elem[e]), n, s) }));
     const tau = new Float32Array(n * n), totN = new Float32Array(n * n);
     for (let y = 0; y < n; y++)
@@ -717,7 +740,8 @@ export class Sim {
   eelsRangeBounds() {
     return { low: [-4, 60], core: [60, 720], high: [1500, 2500] }[this.S.eelsRange];
   }
-  eelsRes() { return this.S.clarity === 'real' ? 0.75 : 0.9; }
+  // gun energy spread from the instrument profile, broadened by the spectrometer (≈0.15 eV)
+  eelsRes() { const r = Math.hypot(this.S.profile.dE, 0.15); return this.S.clarity === 'real' ? r : Math.max(0.9, r); }
 
   // Model single-scattering + plural plasmon EELS at energy loss E (per eV, ZLP area = 1 at τ=0)
   eelsModel(E, tau, comp, parts = null) {
@@ -900,13 +924,17 @@ export class Sim {
   }
   // Radiolysis in beam-sensitive crystals (MOFs): the dose set per image accumulates while the beam is on.
   // Critical dose Dc ∝ β² (inelastic cross-section ∝ 1/β²), so lower voltage destroys the crystal faster.
-  critDose() { return this.spec.Dc300 * Math.pow(P.betaOf(this.S.kV) / P.betaOf(300), 2); }
+  // radiolysis: falls as β² at lower voltage; cooling to liquid-nitrogen temperature slows it several-fold
+  critDose() { return this.spec.Dc300 * Math.pow(P.betaOf(this.S.kV) / P.betaOf(300), 2) * (this.S.cryo ? this.spec.cryoProtect ?? 3 : 1); }
   radiolysis(dt) {
     const S = this.S, spec = this.spec;
     if (!spec.beamSensitive || S.paused || S.mode === 'ronch') return;
     this.doseAcc = (this.doseAcc || 0) + S.dose * 0.5 * dt * S.speed;
     const q = 1 - Math.exp(-this.doseAcc / this.critDose()), qs = Math.round(q * 40) / 40;
-    if (qs !== spec.dmg) { spec.dmg = qs; spec.damageVer++; this.invalidate('damage'); this._soft = true; }
+    // refresh at most ~3× a second, and never spend more than about a third of the time recomputing the
+    // projected specimen (the expensive part, e.g. ~0.3 s for proteins in ice)
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    if (qs !== spec.dmg && now - (this._dmgT || 0) > Math.max(330, 3 * (this._mapsMs || 0))) { this._dmgT = now; spec.dmg = qs; spec.damageVer++; this.invalidate('damage'); this._soft = true; }
   }
   freshArea() {
     const spec = this.spec;
@@ -920,9 +948,48 @@ export class Sim {
     this.invalidate('damage');
   }
 
+  // cryo holder: track time since cooling and refresh images as the drift settles
+  cryoStep(dt) {
+    if (!this.S.cryo || this.S.paused) return;
+    this.cryoT = (this.cryoT || 0) + dt * this.S.speed;
+    const q = Math.round(this.driftSpeed() * 10) / 10;
+    if (q !== this._driftQ) { this._driftQ = q; this.invalidate('drift'); this._soft = true; this.oah.stale = true; }
+  }
+  // blur along the drift direction during one exposure (TEM 1 s; a direct detector's motion-corrected movie
+  // leaves ~10 % of it)
+  motionBlur(I, n, dx, frac = 1, tExp = 1) {
+    const L = (this.driftSpeed() * tExp * frac) / dx;
+    if (L < 0.3) return;
+    const [ux, uy] = this.driftDir(), K = Math.min(24, Math.ceil(L * 2) + 1), src = Float32Array.from(I);
+    for (let y = 0; y < n; y++)
+      for (let x = 0; x < n; x++) {
+        let v = 0;
+        for (let k = 0; k < K; k++) {
+          const t = (k / (K - 1) - 0.5) * L, xs = clamp(Math.round(x + ux * t), 0, n - 1), ys = clamp(Math.round(y + uy * t), 0, n - 1);
+          v += src[ys * n + xs];
+        }
+        I[y * n + x] = v / K;
+      }
+  }
+
+  // a scanned frame takes ~2.4 s; the specimen drifts while the rows are recorded, shearing the image
+  scanDrift(img, n, dx, tFrame = 2.4) {
+    const v = this.driftSpeed() / dx;
+    if (v * tFrame < 0.3) return;
+    const [ux, uy] = this.driftDir(), src = Float32Array.from(img);
+    for (let y = 0; y < n; y++) {
+      const t = (y / n) * tFrame, sx = ux * v * t, sy = uy * v * t;
+      for (let x = 0; x < n; x++) {
+        const fx = clamp(x + sx, 0, n - 1.001), fy = clamp(y + sy, 0, n - 1.001), x0 = fx | 0, y0 = fy | 0, ax = fx - x0, ay = fy - y0;
+        img[y * n + x] = (src[y0 * n + x0] * (1 - ax) + src[y0 * n + x0 + 1] * ax) * (1 - ay) + (src[(y0 + 1) * n + x0] * (1 - ax) + src[(y0 + 1) * n + x0 + 1] * ax) * ay;
+      }
+    }
+  }
+
   update(dt) {
     this.sputter(dt);
     this.radiolysis(dt);
+    this.cryoStep(dt);
     const S = this.S, m = S.mode;
     if (this.stale.probe && !['tem', 'diff', 'oah', 'ilh'].includes(m)) { this.computeProbe(); this.stale.probe = 0; }
     if (m === 'tem' && this.stale.tem) { this.computeTEM(); this.stale.tem = 0; this.version++; }

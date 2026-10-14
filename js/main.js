@@ -5,23 +5,16 @@ import { Scene3D, Y } from './scene3d.js';
 import { modeInfo, changeText, dataRows } from './explain.js';
 import { renderComponent } from './components.js';
 import * as N from './narration.js';
+import { defaultState, SESSION_KEYS } from './state.js';
+import { PRESETS, newProfile, sanitizeProfile } from './profile.js';
+import { collectData, toNpz } from './export.js';
+import { openCalibration } from './calibui.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 // ------------------------------------------------------------------ state
-const S = {
-  mode: 'stem', clarity: 'edu', spec: 'sto', thick: 15, tiltX: 0, tiltY: 0, fov: 5, cx: 0, cy: 0,
-  kV: 200, dose: 400, df: 0, dfFam: { tem: -4, probe: 0 }, corrector: true, csUnc: 1.2, csCor: 5,
-  objAp: 'none', alpha: 22, alpha4d: 12, detIn: 70, detOut: 200, detPreset: 'haadf',
-  camL: 1000, sa: 10, beamStop: true, camera: 'screen',
-  vdet: 'adf', vdIn: 14, vdOut: 60, vdX: 0, vdY: 0, vdR: 4, fdSel: -1,
-  edsSel: 'all', eelsRange: 'core', eelsWin: 462, eelsWidth: 16, bgsub: true,
-  speed: 1, paused: false, showLabels: true, showElectrons: true, showGlass: true, autoRotate: false,
-  ab: { A1: 0, A1a: 0, B2: 0, B2a: 0, A2: 0, A2a: 0, A3: 0, A3a: 0 }, ronchAp: 45,
-  cbedKind: 'cbed', alphaCB: 3, alphaLA: 40, strain: 0, holz: true,
-  biprism: 100, sbR: 0.33, numCorr: true, holoView: 'holo', nFocal: 10, focalStep: 5, ilhView: 'phase',
-};
+const S = defaultState();
 const fam = (m) => (['tem', 'diff', 'oah', 'ilh'].includes(m) ? 'tem' : 'probe');
 S.df = S.dfFam[fam(S.mode)];
 
@@ -45,13 +38,16 @@ const NOT_RONCH = 'tem stem 4d diff eds eels cbed oah ilh';
 const TILTABLE = 'tem stem 4d diff eds eels cbed oah ilh';
 const CONTROLS = [
   { sec: 'The specimen' },
-  { chips: 'spec', opts: [['au', 'Gold on carbon'], ['si', 'Si / SiO₂'], ['sto', 'SrTiO₃ boundary'], ['gr', 'Graphene'], ['mof', 'UiO-66 (MOF)']] },
+  { chips: 'spec', opts: [['au', 'Gold on carbon'], ['si', 'Si / SiO₂'], ['sto', 'SrTiO₃ boundary'], ['gr', 'Graphene'], ['mof', 'UiO-66 (MOF)'], ['bio', 'Proteins in ice']] },
+  { toggles: [['cryo', 'Cryo holder (−180 °C)']] },
+  { p: 'Thickness here is the ice layer. Proteins scatter only slightly more than the ice around them, so they are weak phase objects: use 1–3 µm underfocus in TEM, or the Zernike phase plate near focus.', show: () => S.spec === 'bio' },
+  { p: 'At room temperature the vitreous ice sublimes in the vacuum and the proteins dry out. Turn the cryo holder back on.', show: () => S.spec === 'bio' && !S.cryo },
   { slider: 'thick', label: 'Thickness', min: 3, max: 150, step: 1, fmt: (v) => `${v} nm`, ends: ['thin', '', 'thick'], modes: NOT_RONCH, show: () => S.spec !== 'gr' },
   { p: 'Graphene is one atom (0.335 nm) thick, so there is no thickness to set. Above ~86 kV the beam knocks carbon atoms out: watch in TEM or STEM at 200–300 kV, then compare 60–80 kV.', modes: NOT_RONCH, show: () => S.spec === 'gr' },
   { buttons: [['restore', 'Restore pristine graphene']], modes: 'tem stem', show: () => S.spec === 'gr' },
   { p: 'UiO-66 is destroyed by radiolysis after ~10 e⁻/Å² at 300 kV, and sooner at lower voltage. The dose per image accumulates while the beam is on: watch the high-order diffraction spots fade first.', show: () => S.spec === 'mof' },
   { buttons: [['fresh', 'Move to a fresh area']], show: () => S.spec === 'mof' },
-  { slider: 'fov', label: 'Field of view', min: 1.5, max: 30, log: true, fmt: (v) => `${v.toFixed(1)} nm`, modes: 'tem stem 4d eds eels oah ilh', note: 'Drag the detector image to move the stage; scroll to zoom.' },
+  { slider: 'fov', label: 'Field of view', min: 1.5, max: 120, log: true, fmt: (v) => `${v.toFixed(1)} nm`, modes: 'tem stem 4d eds eels oah ilh', note: 'Drag the detector image to move the stage; scroll to zoom.' },
   { slider: 'tiltX', inv: 'tilt', label: 'Tilt α', min: -3, max: 3, step: 0.02, fmt: (v) => `${v.toFixed(2)}°`, modes: TILTABLE },
   { slider: 'tiltY', inv: 'tilt', label: 'Tilt β', min: -3, max: 3, step: 0.02, fmt: (v) => `${v.toFixed(2)}°`, ends: ['', 'zone axis', ''], modes: TILTABLE },
   { buttons: [['zone', 'Return to zone axis']], modes: TILTABLE },
@@ -64,9 +60,9 @@ const CONTROLS = [
   { sec: 'The lenses' },
   { chips: 'corrector', opts: [[false, 'Uncorrected'], [true, 'Aberration corrector']] },
   { slider: 'cs', label: 'Spherical aberration Cₛ', dyn: () => S.corrector ? { key: 'csCor', min: -40, max: 40, step: 1, fmt: (v) => `${v} µm` } : { key: 'csUnc', min: 0.5, max: 2.5, step: 0.05, fmt: (v) => `${v.toFixed(2)} mm` } },
-  { slider: 'df', label: 'Defocus', dyn: () => (S.corrector ? { min: -30, max: 30, step: 0.2 } : { min: -150, max: 150, step: 1 }), fmt: (v) => `${v > 0 ? '+' : ''}${v.toFixed(1)} nm`, ends: ['under', 'focus', 'over'], modes: 'tem stem 4d eds eels ronch oah ilh' },
+  { slider: 'df', label: 'Defocus', dyn: () => (S.corrector ? { min: -30, max: 30, step: 0.2 } : S.spec === 'bio' ? { min: -4000, max: 500, step: 10 } : { min: -150, max: 150, step: 1 }), fmt: (v) => `${v > 0 ? '+' : ''}${v.toFixed(1)} nm`, ends: ['under', 'focus', 'over'], modes: 'tem stem 4d eds eels ronch oah ilh' },
   { buttons: [['optfocus', 'Optimal focus']], modes: 'tem stem 4d eds eels ronch oah ilh' },
-  { chips: 'objAp', label: 'Objective aperture', modes: 'tem', opts: [['none', 'Open'], ['40', '40 µm'], ['20', '20 µm'], ['10', '10 µm'], ['df', 'Dark field']] },
+  { chips: 'objAp', label: 'Objective aperture', modes: 'tem', opts: [['none', 'Open'], ['40', '40 µm'], ['20', '20 µm'], ['10', '10 µm'], ['df', 'Dark field'], ['zpp', 'Zernike phase plate']] },
   { slider: 'alpha', label: 'Convergence semi-angle', dyn: () => ({ key: S.mode === '4d' ? 'alpha4d' : 'alpha' }), min: 3, max: 40, step: 0.5, fmt: (v) => `${v} mrad`, modes: 'stem 4d eds eels', ends: ['parallel-ish', '', 'wide cone'] },
 
   { sec: 'Off-axis holography', modes: 'oah' },
@@ -127,6 +123,13 @@ const CONTROLS = [
   { sec: 'Experiments' },
   { exp: 'single', title: 'One electron at a time', desc: 'Dim the beam until electrons arrive singly. Watch the pattern emerge from random dots.', icon: 'dots' },
   { exp: 'tour', title: 'Fly down the column', desc: 'Follow an electron from the gun to the detector, one component at a time.', icon: 'path' },
+  { sec: 'Digital twin' },
+  { p: 'The instrument profile holds what belongs to one particular microscope (energy spread, Cc, Cs, illumination). Calibrate it from your own data, save the whole session, and export what the detectors record.' },
+  { chips: 'profile', label: 'Instrument profile', get: () => S.profile.preset, dynOpts: () => Object.entries(PRESETS).map(([k, v]) => [k, v.name.split(',')[0]]) },
+  { twin: true },
+  { buttons: [['calib', 'Calibrate from data…']] },
+  { buttons: [['saveSession', 'Save session'], ['loadSession', 'Load session']] },
+  { buttons: [['exportData', 'Export data (.npz)'], ['exportProfile', 'Export profile']] },
   { sec: 'Instrument readout' },
   { table: true },
 ];
@@ -210,6 +213,11 @@ function build() {
       el.className = 'ctl note';
       el.textContent = c.p;
       bound.push({ c, el });
+    } else if (c.twin) {
+      el = document.createElement('table');
+      el.className = 'data twin';
+      el.innerHTML = '<tbody id="twinBody"></tbody>';
+      bound.push({ c, el });
     } else if (c.table) {
       el = document.createElement('table');
       el.className = 'data';
@@ -247,7 +255,8 @@ function renderChips({ c, box }) {
       box.appendChild(b);
     }
   }
-  box.querySelectorAll('.chip').forEach((b) => b.classList.toggle('on', JSON.stringify(S[c.chips]) === b.dataset.v));
+  const cur = c.get ? c.get() : S[c.chips];
+  box.querySelectorAll('.chip').forEach((b) => b.classList.toggle('on', JSON.stringify(cur) === b.dataset.v));
 }
 
 function refreshControls() {
@@ -289,6 +298,7 @@ function set(key, v, inv = key) {
   if (key === 'detIn' || key === 'detOut') { if (S.detOut < S.detIn + 5) S.detOut = S.detIn + 5; S.detPreset = null; }
   if (key === 'eelsWin' || key === 'eelsWidth') inv = 'eelsWin';
   if (key === 'alpha4d') resetVdet();
+  if (key === 'cryo') sim.cryoT = 0; // cooling (or warming) starts the holder drifting
   if (!['speed', 'showLabels', 'showElectrons', 'showGlass', 'autoRotate', 'paused'].includes(key)) sim.invalidate(inv);
   refreshControls();
   explainChange(inv === 'cs' ? 'cs' : ['tiltX', 'tiltY'].includes(key) ? 'tilt' : ['detIn', 'detOut'].includes(key) ? 'det' : ['alpha', 'alpha4d'].includes(key) ? 'alpha' : ['eelsWin', 'eelsWidth'].includes(key) ? 'eelsWin' : key);
@@ -296,6 +306,7 @@ function set(key, v, inv = key) {
 
 function chip(key, v) {
   if (key === 'spec') return setSpec(v);
+  if (key === 'profile') return setProfile(newProfile(v), 'profile');
   if (key === 'corrector') {
     S.corrector = v;
     const lim = v ? 30 : 150;
@@ -319,7 +330,7 @@ function chip(key, v) {
   if (key === 'eelsRange') {
     S.eelsRange = v;
     const [a, b] = sim.eelsRangeBounds();
-    const def = { low: [22, 12], core: [S.spec === 'sto' ? 462 : S.spec === 'si' ? 102 : S.spec === 'gr' ? 287 : S.spec === 'mof' ? 200 : 100, S.spec === 'si' ? 5 : S.spec === 'gr' ? 6 : S.spec === 'mof' ? 30 : 16], high: [S.spec === 'au' ? 2260 : S.spec === 'si' ? 1860 : 1960, 60] }[v];
+    const def = { low: [22, 12], core: [S.spec === 'sto' ? 462 : S.spec === 'si' ? 102 : S.spec === 'gr' ? 287 : S.spec === 'mof' ? 200 : S.spec === 'bio' ? 405 : 100, S.spec === 'si' ? 5 : S.spec === 'gr' ? 6 : S.spec === 'mof' ? 30 : S.spec === 'bio' ? 20 : 16], high: [S.spec === 'au' ? 2260 : S.spec === 'si' ? 1860 : 1960, 60] }[v];
     S.eelsWin = clamp(def[0], a, b); S.eelsWidth = def[1];
     sim.invalidate('eelsRange'); refreshControls();
     return explainChange('eelsRange');
@@ -342,16 +353,28 @@ function resetVdet() {
 }
 
 function setSpec(v) {
+  const prevSpec = S.spec;
   S.spec = v;
   const sp = P.SPECIMENS[v];
   S.fov = sp.fov; S.cx = sp.center[0]; S.cy = sp.center[1]; S.tiltX = 0; S.tiltY = 0;
   S.edsSel = 'all';
   S.eelsRange = 'core';
-  S.eelsWin = v === 'sto' ? 462 : v === 'si' ? 102 : v === 'gr' ? 287 : v === 'mof' ? 200 : 100;
-  S.eelsWidth = v === 'si' ? 5 : v === 'au' ? 24 : v === 'gr' ? 6 : v === 'mof' ? 30 : 16;
+  S.eelsWin = v === 'sto' ? 462 : v === 'si' ? 102 : v === 'gr' ? 287 : v === 'mof' ? 200 : v === 'bio' ? 405 : 100;
+  S.eelsWidth = v === 'si' ? 5 : v === 'au' ? 24 : v === 'gr' ? 6 : v === 'mof' ? 30 : v === 'bio' ? 20 : 16;
   // a MOF needs low-dose conditions; other specimens go back to a normal dose
   if (v === 'mof') { S.dose = 2; S.kV = 300; S.thick = 20; S.camL = 4000; }
-  else if (S.dose < 20) S.dose = 400;
+  else if (v === 'bio') {
+    // single-particle cryo-EM conditions: frozen grid, 300 kV, no corrector, ~1.5 µm underfocus, ~30 e⁻/Å²
+    Object.assign(S, { cryo: true, kV: 300, dose: 30, thick: 30, corrector: false, csUnc: S.profile.CsUnc, objAp: 'none', camL: 2000 });
+    S.dfFam.tem = -1500; S.dfFam.probe = +(P.probeDefocus(S.profile.CsUnc * 1e7, P.wavelength(300)) / 10).toFixed(1);
+    S.alpha = Math.min(S.alpha, 10);
+    S.df = S.dfFam[fam(S.mode)];
+    sim.cryoT = 0; // a freshly inserted cryo holder drifts at first
+  } else if (S.dose < 20) S.dose = 400;
+  if (v !== 'bio' && prevSpec === 'bio') {
+    S.corrector = S.profile.corrector; S.dfFam = { tem: -4, probe: 0 }; S.df = S.dfFam[fam(S.mode)];
+    if (S.corrector) S.alpha = 22;
+  }
   sim.freshArea();
   resetVdet();
   sim.invalidate('spec');
@@ -387,6 +410,11 @@ function action(id, el) {
   }
   if (id === 'pause') { S.paused = !S.paused; refreshControls(); }
   if (id === 'refocus') { sim.invalidate('series'); explainChange('series'); }
+  if (id === 'calib') openCalibration({ S, sim, onApply: applyCalibration });
+  if (id === 'saveSession') saveSession();
+  if (id === 'loadSession') $('#fileSession').click();
+  if (id === 'exportData') exportData();
+  if (id === 'exportProfile') download(new Blob([JSON.stringify(S.profile, null, 1)], { type: 'application/json' }), `instrument-profile-${S.profile.preset}.json`);
   if (id === 'restore') { sim.restoreSpecimen(); explainChange('restore'); }
   if (id === 'fresh') { S.cx += 6 * (Math.random() - 0.5); sim.freshArea(); sim.invalidate('stage'); explainChange('fresh'); }
   if (id === 'scramble') {
@@ -561,7 +589,89 @@ function drawPopout() {
   R2.draw(sim, S, m, sc);
 }
 
+// ------------------------------------------------------------------ digital twin: profile, calibration, sessions, export
+function setProfile(pr, why) {
+  S.profile = pr;
+  S.csUnc = pr.CsUnc;
+  if (why === 'profile') S.corrector = pr.corrector;
+  sim.invalidate('profile');
+  refreshControls();
+  explainChange(why);
+}
+function applyCalibration(r) {
+  const pr = structuredClone(S.profile), when = new Date().toISOString();
+  if (r.type === 'ctf') {
+    // defocus and astigmatism are the state of the instrument today; they set the twin's current optics
+    pr.calibrated.ctf = { df: r.df, A1: r.A1, A1a: r.A1a, fitRes: r.fitRes, kV: r.kV, CsA: r.CsA, pixA: r.pixA, source: r.source, when };
+    if (!S.corrector) pr.CsUnc = r.CsA / 1e7;
+    if (r.kV !== S.kV) S.kV = r.kV;
+    if (S.corrector) S.csCor = Math.round(r.CsA / 1e4);
+    S.dfFam.tem = +(r.df / 10).toFixed(1);
+    if (fam(S.mode) === 'tem') S.df = S.dfFam.tem;
+    S.ab.A1 = +(r.A1 / 10).toFixed(1); S.ab.A1a = Math.round(r.A1a);
+  } else if (r.type === 'zlp') {
+    pr.dE = +r.dE.toFixed(3);
+    pr.calibrated.zlp = { fwhm: r.fwhm, dE: r.dE, source: r.source, when };
+  }
+  setProfile(pr, 'calibrated');
+  sim.invalidate('ab');
+  refreshControls();
+}
+function download(blob, name) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+const stamp = () => new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
+function saveSession() {
+  const state = Object.fromEntries(SESSION_KEYS.map((k) => [k, S[k]]));
+  const ses = { format: 'tem-view-session/1', saved: new Date().toISOString(), note: 'Seeing with Electrons (TEM-view) session', state };
+  download(new Blob([JSON.stringify(ses, null, 1)], { type: 'application/json' }), `tem-view-session-${stamp()}.json`);
+  explainChange('session');
+}
+// a saved session, or an instrument profile on its own
+function loadSessionFile(text) {
+  const o = JSON.parse(text);
+  if (o.format?.startsWith('tem-view-profile')) { setProfile(sanitizeProfile(o), 'calibrated'); return; }
+  if (!o.format?.startsWith('tem-view-session') || !o.state) throw new Error('not a TEM-view session or profile');
+  const st = o.state, d = defaultState(), mode = typeof st.mode === 'string' && KEYS[st.mode] ? st.mode : S.mode;
+  for (const k of SESSION_KEYS) {
+    if (!(k in st) || k === 'mode') continue;
+    if (k === 'profile') S.profile = sanitizeProfile(st.profile);
+    else if (k === 'spec') { if (P.SPECIMENS[st.spec]) S.spec = st.spec; }
+    else if (k === 'ab' || k === 'dfFam') { if (st[k] && typeof st[k] === 'object') S[k] = { ...d[k], ...Object.fromEntries(Object.entries(st[k]).filter(([, v]) => typeof v === 'number')) }; }
+    else if (typeof st[k] === typeof d[k]) S[k] = st[k];
+  }
+  sim.freshArea();
+  resetVdet();
+  sim.invalidate('spec');
+  S.mode = '';
+  setMode(mode);
+  refreshControls();
+  explainChange('loaded');
+}
+function exportData() {
+  const data = collectData(sim, S);
+  if (!Object.keys(data.arrays).length) return;
+  download(new Blob([toNpz(data)], { type: 'application/zip' }), `tem-view-${S.mode}-${S.spec}-${stamp()}.npz`);
+  explainChange('exported');
+}
+
+function updateTwin() {
+  const tb = $('#twinBody');
+  if (!tb || tb.closest('[hidden]')) return;
+  const pr = S.profile, cal = pr.calibrated || {}, rows = [
+    ['Gun', `${pr.gun}, ΔE ${pr.dE.toFixed(2)} eV${cal.zlp ? ' ✓' : ''}`],
+    ['Cc / Cs (uncorrected)', `${pr.Cc} / ${pr.CsUnc} mm`],
+    ['Focal spread Δ', `${sim.focalSpread().toFixed(0)} Å`],
+    ['Information limit', `${sim.infoLimit().toFixed(2)} Å`],
+  ];
+  if (cal.ctf) rows.push(['Last Thon-ring fit', `${(cal.ctf.df / 10).toFixed(0)} nm, A1 ${(cal.ctf.A1 / 10).toFixed(1)} nm (${cal.ctf.fitRes.toFixed(1)} Å)`]);
+  tb.innerHTML = rows.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('');
+}
 function updateTable() {
+  updateTwin();
   const rows = dataRows(S, sim);
   $('#dataBody').innerHTML = rows.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('');
 }
@@ -588,6 +698,13 @@ function wire() {
   $('#btnLabels').addEventListener('click', () => set('showLabels', !S.showLabels));
   $('#btnFull').addEventListener('click', () => { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.(); });
   $('#btnHelp').addEventListener('click', () => ($('#help').hidden = false));
+  $('#fileSession').addEventListener('change', async (e) => {
+    const f = e.target.files[0];
+    e.target.value = '';
+    if (!f) return;
+    try { loadSessionFile(await f.text()); }
+    catch (err) { $('#change').hidden = false; $('#change').innerHTML = `<small>Could not load ${f.name.replace(/[<>&]/g, '')}</small><p>${String(err.message).replace(/[<>&]/g, '')}</p>`; }
+  });
   $('#infoMore').addEventListener('click', () => { infoOpen = !infoOpen; renderInfo(); });
   $('#btnExpand').addEventListener('click', () => setExpanded(!document.body.classList.contains('detBig')));
   $('#btnPopout').addEventListener('click', openPopout);
@@ -625,7 +742,7 @@ function wire() {
     if (S.mode === 'diff') { e.preventDefault(); set('camL', clamp(S.camL * Math.pow(1.0015, -e.deltaY), 80, 2000), 'camL'); return; }
     if (!['tem', 'stem', '4d', 'eds', 'eels'].includes(S.mode)) return;
     e.preventDefault();
-    set('fov', clamp(S.fov * Math.pow(1.0015, e.deltaY), 1.5, 30), 'fov');
+    set('fov', clamp(S.fov * Math.pow(1.0015, e.deltaY), 1.5, 120), 'fov');
   }, { passive: false });
 
   let sdrag = null;

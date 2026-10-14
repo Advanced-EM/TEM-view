@@ -1,6 +1,6 @@
 // Draws the detector views (main image + secondary panel) for each mode.
 import * as P from './physics.js';
-import { stemDetType, AP_MRAD } from './sim.js';
+import { stemDetType, AP_MRAD, ZPP_CUTON } from './sim.js';
 import { drawRonch, drawCBED } from './techniques.js';
 import { drawOAH, drawILH } from './holography.js';
 
@@ -11,8 +11,11 @@ const C = {
 const MONO = '"IBM Plex Mono", ui-monospace, monospace';
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 // Narrow layouts can shrink panels to nothing; never hand the canvas a negative radius.
-const _arc = CanvasRenderingContext2D.prototype.arc;
-CanvasRenderingContext2D.prototype.arc = function (x, y, r, ...rest) { return _arc.call(this, x, y, Math.max(0, r), ...rest); };
+// (Guarded so the simulation core can also run headless, in Node or a worker, where there is no canvas.)
+if (typeof CanvasRenderingContext2D !== 'undefined') {
+  const _arc = CanvasRenderingContext2D.prototype.arc;
+  CanvasRenderingContext2D.prototype.arc = function (x, y, r, ...rest) { return _arc.call(this, x, y, Math.max(0, r), ...rest); };
+}
 
 function lut(stops) {
   const L = new Uint8ClampedArray(256 * 3);
@@ -174,17 +177,24 @@ export function draw(sim, S, mainCv, secCv, hover) {
   s.ctx.fillStyle = C.bg; s.ctx.fillRect(0, 0, s.W, s.H);
   const fn = { tem: drawTEM, stem: drawSTEM, diff: drawDiff, '4d': draw4D, eds: drawEDS, eels: drawEELS, ronch: drawRonch, cbed: drawCBED, oah: drawOAH, ilh: drawILH }[S.mode];
   fn(sim, S, m, s, performance.now() / 1000);
+  cryoLabel(m.ctx, sim, S, m.W, m.H, m.dpr);
   if (sim.single?.hits && sim.single.count && !['4d', 'eds', 'eels', 'ilh'].includes(S.mode)) {
     m.ctx.fillStyle = C.bg; m.ctx.fillRect(0, 0, m.W, m.H);
     drawHits(m.ctx, sim.single, [0, 0, m.W, m.H], m.dpr);
   }
   if (sim.spec.beamSensitive && S.mode !== 'ronch') {
     const D = sim.doseAcc || 0, c = Math.exp(-D / sim.critDose());
-    label(m.ctx, `dose ${D < 10 ? D.toFixed(1) : Math.round(D)} e⁻/Å² · crystallinity ${Math.round(100 * c)} %`, 10 * m.dpr, m.H - 34 * m.dpr, m.dpr, { color: c < 0.5 ? C.warm : C.accent, size: 9 });
+    label(m.ctx, `dose ${D < 10 ? D.toFixed(1) : Math.round(D)} e⁻/Å² · ${sim.spec.bio ? 'high-resolution detail' : 'crystallinity'} ${Math.round(100 * c)} %`, 10 * m.dpr, m.H - 34 * m.dpr, m.dpr, { color: c < 0.5 ? C.warm : C.accent, size: 9 });
   }
 }
 
 const real = (S) => S.clarity === 'real';
+
+// shared overlay: room-temperature biological specimen, or a cryo holder that is still drifting
+function cryoLabel(ctx, sim, S, W, H, dpr) {
+  if (sim.spec.bio && !S.cryo) label(ctx, 'room temperature: the ice has sublimed', W / 2, H / 2, dpr, { color: C.warm, align: 'center' });
+  else if (S.cryo && sim.driftSpeed() > 0.4) label(ctx, `cryo holder settling · drift ${sim.driftSpeed().toFixed(1)} Å/s`, 10 * dpr, H - 54 * dpr, dpr, { color: C.warm, size: 9 });
+}
 
 function drawTEM(sim, S, m, s) {
   const t = sim.tem;
@@ -201,6 +211,7 @@ function drawTEM(sim, S, m, s) {
   scaleBar(ctx, dst, S.fov * 10, dpr);
   if (!real(S)) specimenLabels(ctx, sim.spec, S, dst, S.fov * 10, dpr);
   if (S.objAp === 'df') label(ctx, 'DARK FIELD · one Bragg beam', 10 * dpr, 16 * dpr, dpr, { color: C.warm });
+  if (S.objAp === 'zpp') label(ctx, 'ZERNIKE PHASE PLATE · π/2', 10 * dpr, 16 * dpr, dpr, { color: C.warm });
   damageLabel(ctx, sim, S, W, dpr);
 
   // diffractogram
@@ -214,7 +225,7 @@ function drawTEM(sim, S, m, s) {
     q.beginPath(); q.arc(cx + t.apCenter[0] * kPx, cy + t.apCenter[1] * kPx, t.apK * kPx, 0, 7); q.stroke();
   }
   const lam = sim.lam, Cs = sim.CsA();
-  const pr = P.pointResolution(Cs, lam), il = P.infoLimit(lam, 32);
+  const pr = P.pointResolution(Cs, lam), il = sim.infoLimit();
   q.setLineDash([3 * s.dpr, 4 * s.dpr]);
   q.strokeStyle = 'rgba(111,214,255,0.5)';
   q.beginPath(); q.arc(cx, cy, (1 / il) * kPx, 0, 7); q.stroke();
@@ -242,7 +253,8 @@ function drawCTF(q, sim, S, r, dpr, t) {
   q.beginPath(); q.moveTo(x0, y0 + h / 2); q.lineTo(x0 + w, y0 + h / 2); q.stroke();
   font(q, 9, dpr);
   q.fillStyle = C.muted; q.textBaseline = 'top';
-  for (let k = 0.2; k <= kmax + 1e-6; k += 0.2) {
+  const tick = kmax > 0.8 ? 0.2 : kmax > 0.4 ? 0.1 : kmax > 0.15 ? 0.05 : 0.02;
+  for (let k = tick; k <= kmax + 1e-6; k += tick) {
     const x = x0 + (k / kmax) * w;
     q.fillRect(x, y0 + h / 2 - 2 * dpr, 1 * dpr, 4 * dpr);
     q.textAlign = 'center';
@@ -250,10 +262,13 @@ function drawCTF(q, sim, S, r, dpr, t) {
   }
   q.textAlign = 'left';
   // envelope
+  const D = sim.focalSpread(), ac = sim.convTEM(), zpp = S.objAp === 'zpp';
   const env = (k) => {
     const k2 = k * k, g = df * lam * k + Cs * lam ** 3 * k * k2;
-    return Math.exp(-0.5 * Math.PI ** 2 * lam ** 2 * 32 ** 2 * k2 * k2) * Math.exp(-Math.pow((Math.PI * 0.08e-3) / lam, 2) * g * g);
+    return Math.exp(-0.5 * Math.PI ** 2 * lam ** 2 * D ** 2 * k2 * k2) * Math.exp(-Math.pow((Math.PI * ac) / lam, 2) * g * g);
   };
+  // with a Zernike plate, frequencies outside the hole transfer as cos χ instead of −sin χ
+  const ctf = (k) => (zpp && k > ZPP_CUTON ? Math.cos(P.chi(k * k, lam, df, Cs)) : -Math.sin(P.chi(k * k, lam, df, Cs)));
   q.strokeStyle = 'rgba(111,214,255,0.35)';
   q.setLineDash([3 * dpr, 3 * dpr]);
   q.beginPath();
@@ -264,7 +279,7 @@ function drawCTF(q, sim, S, r, dpr, t) {
   q.beginPath();
   for (let i = 0; i <= 600; i++) {
     const k = (i / 600) * kmax, x = x0 + (i / 600) * w;
-    const v = k > ap ? 0 : -Math.sin(P.chi(k * k, lam, df, Cs)) * env(k);
+    const v = k > ap ? 0 : ctf(k) * env(k);
     const y = y0 + h / 2 - v * (h / 2) * 0.92;
     i ? q.lineTo(x, y) : q.moveTo(x, y);
   }
@@ -274,7 +289,7 @@ function drawCTF(q, sim, S, r, dpr, t) {
   // point resolution marker (first zero crossing)
   let kz = null, prev = 0;
   for (let i = 1; i <= 600; i++) {
-    const k = (i / 600) * kmax, v = -Math.sin(P.chi(k * k, lam, df, Cs));
+    const k = (i / 600) * kmax, v = ctf(k);
     if (i > 5 && Math.sign(v) !== Math.sign(prev) && prev !== 0) { kz = k; break; }
     prev = v;
   }
@@ -284,7 +299,7 @@ function drawCTF(q, sim, S, r, dpr, t) {
     q.beginPath(); q.moveTo(x, y0); q.lineTo(x, y0 + h); q.stroke();
     label(q, `1st zero ${(1 / kz).toFixed(2)} Å`, Math.min(x + 4 * dpr, x0 + w - 110 * dpr), y0 + 10 * dpr, dpr, { color: C.warm, size: 9 });
   }
-  label(q, 'contrast transfer  −sin χ(k)', x0, y0 + h - 4 * dpr, dpr, { color: C.muted, size: 9 });
+  label(q, zpp ? 'contrast transfer with Zernike plate  cos χ(k)' : 'contrast transfer  −sin χ(k)', x0, y0 + h - 4 * dpr, dpr, { color: C.muted, size: 9 });
 }
 
 function drawSTEM(sim, S, m, s) {

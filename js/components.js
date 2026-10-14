@@ -2,7 +2,7 @@
 // Each entry: what it does, the physics behind it, typical specifications,
 // how it is measured / calibrated in practice, what limits it, and live values from the current state.
 import * as P from './physics.js';
-import { AP_MRAD, FOCAL_SPREAD, stemDetType } from './sim.js';
+import { AP_MRAD, stemDetType } from './sim.js';
 import { biprism } from './holography.js';
 
 const f2 = (v) => v.toFixed(2), f1 = (v) => v.toFixed(1);
@@ -16,7 +16,7 @@ export const COMPONENTS = {
     specs: [['Reduced brightness', '~1 × 10⁸ A m⁻² sr⁻¹ V⁻¹'], ['Energy spread (Schottky)', '0.6–0.8 eV'], ['Energy spread (cold FEG)', '0.3–0.4 eV'], ['Virtual source size', '~15 nm'], ['Emission current', '50–200 µA']],
     metrology: 'Energy spread is read directly as the <b>FWHM of the zero-loss peak</b> in EELS. Brightness comes from measuring probe current (Faraday cup or calibrated screen current) against probe size and convergence angle. Emission stability is logged as %/hour.',
     limits: 'Brightness caps how much current fits into an atomic probe; energy spread couples to chromatic aberration and sets the information limit.',
-    live: (S, sim) => [['Assumed focal spread Δ', `${FOCAL_SPREAD} Å`], ['Information limit', `${f2(P.infoLimit(lamOf(S), FOCAL_SPREAD))} Å`]],
+    live: (S, sim) => [['Energy spread (profile)', `${S.profile.dE.toFixed(2)} eV`], ['Focal spread Δ', `${sim.focalSpread().toFixed(0)} Å`], ['Information limit', `${f2(sim.infoLimit())} Å`]],
   },
   'High-voltage accelerator': {
     kicker: 'Acceleration',
@@ -113,6 +113,24 @@ export const COMPONENTS = {
       const m = AP_MRAD[S.objAp];
       return [['Setting', S.objAp === 'none' ? 'open' : S.objAp === 'df' ? 'dark field' : `${S.objAp} µm`], ['Finest spacing passed', isFinite(m) ? `${f2(lamOf(S) / (m * 1e-3))} Å` : 'all']];
     },
+  },
+  'Zernike phase plate': {
+    kicker: 'Phase contrast',
+    role: 'Makes <b>weak phase objects visible in focus</b> by shifting the phase of the scattered waves by a quarter wave relative to the unscattered beam, the electron version of Zernike\'s 1930s phase-contrast light microscope.',
+    physics: 'A thin amorphous carbon film (~25 nm, chosen so the mean inner potential gives a π/2 shift at the working voltage) sits in the back focal plane with a hole of ~1 µm for the unscattered beam. The contrast transfer function changes from −sin χ to cos χ, so the transfer is maximal at focus and low frequencies are kept. The hole edge gives a <b>cut-on frequency</b> below which nothing is shifted, which produces bright halos around particles. The Volta phase plate (2014) is a continuous heated film whose phase shift is created by the beam itself, building up over the exposure.',
+    specs: [['Phase shift', 'π/2 (Zernike), π/4–π/2 building (Volta)'], ['Film', '~25 nm amorphous carbon'], ['Hole / cut-on', '~1 µm / ~1/(20–30 nm)'], ['Lifetime', 'hours to days before charging']],
+    metrology: 'The phase shift is read from the Thon rings: with a π/2 plate the first ring moves to where cos χ, not sin χ, crosses zero, and fitting the power spectrum (as in the calibration dialog) returns both defocus and the shift. Charging shows up as a drifting, uneven shift, so plates are heated to stay clean and the beam is centered on the hole.',
+    limits: 'Charging and contamination of the film, the hole edge (halos, cut-on), the extra scattering from the film (about 10–20 % fewer elastic electrons), and alignment. Many cryo-EM groups use moderate defocus instead.',
+    live: (S) => [['In use', S.mode === 'tem' && S.objAp === 'zpp' ? 'yes' : 'no (select it under Objective aperture, TEM)'], ['Cut-on', '≈ 25 nm']],
+  },
+  'Cryo holder': {
+    kicker: 'Specimen environment',
+    role: 'Keeps the specimen at about <b>−180 °C</b>, so vitreous ice and hydrated biological specimens survive the vacuum and radiolysis is slowed.',
+    physics: 'A copper rod or braid runs from the specimen tip to a liquid-nitrogen dewar on the holder. Below about −135 °C, ice that was frozen too fast to crystallize stays <b>vitreous</b> (amorphous). Cooling slows the diffusion of radicals and fragments formed by ionization, raising the dose a sensitive specimen tolerates by roughly 3–5×. It does nothing for knock-on damage, which is a direct collision. Because the holder is long and has a thermal gradient, it <b>drifts</b> as it settles, typically from several Å/s down to well under 1 Å/s.',
+    specs: [['Tip temperature', '−170 to −190 °C'], ['Drift (settled)', '< 0.5–1 nm/min'], ['Tilt range', '±60–70°'], ['Hold time', '4–8 h per dewar fill']],
+    metrology: 'Temperature is read by a sensor near the tip and checked against devitrification of ice (it turns crystalline above about −135 °C, and diffraction rings appear). Drift is measured from image cross-correlation over a series, and contamination from the growth of an ice layer, seen in EELS thickness or the O K edge, over time. Autoloader systems keep many grids cold inside the column and avoid most holder drift.',
+    limits: 'Drift (especially just after insertion or tilting), ice contamination building up on the cold specimen, vibration from boiling nitrogen, and a limited tilt range.',
+    live: (S, sim) => [['Cooling', S.cryo ? 'on' : 'off'], ['Drift now', `${sim.driftSpeed().toFixed(2)} Å/s`], ['Critical dose (this specimen)', sim.spec.beamSensitive ? `${sim.critDose().toFixed(1)} e⁻/Å²` : 'not beam-sensitive']],
   },
   'Back focal plane': {
     kicker: 'Fourier plane',
