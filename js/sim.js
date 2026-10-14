@@ -69,6 +69,9 @@ export class Sim {
   focalSpread() { return focalSpread(this.S.profile, this.S.kV); } // Å
   convTEM() { return this.S.profile.convTEM * 1e-3; } // rad
   infoLimit() { return P.infoLimit(this.lam, this.focalSpread()); } // Å
+  // true field of view, Å: the nominal value times the instrument's magnification calibration
+  fovA() { return this.S.fov * 10 * this.S.profile.magCal; }
+  camLTrue() { return this.S.camL * this.S.profile.camLCal; } // mm
   // cryo-holder drift, Å/s: fast after cooling or inserting a grid, settling over about half a minute
   driftSpeed() {
     if (!this.S.cryo) return 0;
@@ -167,7 +170,7 @@ export class Sim {
   }
 
   computeTEM() {
-    const S = this.S, n = 256, c = 224, dx = (S.fov * 10) / c;
+    const S = this.S, n = 256, c = 224, dx = this.fovA() / c;
     const maps = this.maps({ n, dx });
     const lam = this.lam;
     let apK = AP_MRAD[S.objAp] * 1e-3 / lam, apCenter = [0, 0];
@@ -243,7 +246,7 @@ export class Sim {
   }
 
   computeSTEM() {
-    const S = this.S, n = 256, c = 224, dx = (S.fov * 10) / c, lam = this.lam, a = this.alpha();
+    const S = this.S, n = 256, c = 224, dx = this.fovA() / c, lam = this.lam, a = this.alpha();
     const maps = this.maps({ n, dx });
     const type = stemDetType(S.detIn, S.detOut, S.alpha);
     let img;
@@ -273,7 +276,8 @@ export class Sim {
       let src;
       if (type === 'ABF') src = maps.phase;
       else {
-        const f = clamp((S.detIn / S.alpha - 1) / 2, 0, 1);
+        // collection angles scale as 1/L: a longer true camera length than nominal means smaller angles
+        const f = clamp((S.detIn / S.profile.camLCal / S.alpha - 1) / 2, 0, 1);
         let mh = 0, ml = 0;
         for (let i = 0; i < n * n; i++) { if (maps.zHi[i] > mh) mh = maps.zHi[i]; if (maps.zLo[i] > ml) ml = maps.zLo[i]; }
         src = new Float32Array(n * n);
@@ -292,8 +296,9 @@ export class Sim {
       for (let i = 0; i < n * n; i++) img[i] = type === 'ABF' ? 1 - 0.55 * (sr[i] / (mx || 1)) : Math.max(0, sr[i]);
     }
     // finite effective source size (~0.7 Å FWHM) blurs every real STEM image a little
-    blur(img, n, 0.3 / dx);
+    blur(img, n, S.profile.sourceSize / 2.355 / dx);
     this.scanDrift(img, n, dx);
+    this.scanDistort(img, n);
     this.stemImg = { img: cropArr(img, n, c), c, dx, type };
     this._stemPass = this.frameNoise;
     this.main = { arr: this.stemImg.img, w: c, h: c };
@@ -345,11 +350,14 @@ export class Sim {
     const d = this.diff, S = this.S;
     if (!d) return;
     const W = 256, halfMM = 22; // detector half-width, mm
-    const kPerPx = (2 * halfMM) / (S.camL * this.lam) / W;
+    const kPerPx = (2 * halfMM) / (this.camLTrue() * this.lam) / W;
+    // projector distortion: the pattern is stretched by (1 + e/2) along ellipAng and squeezed across it
+    const e = S.profile.ellip, ca = Math.cos((S.profile.ellipAng * Math.PI) / 180), sa = Math.sin((S.profile.ellipAng * Math.PI) / 180);
     const out = new Float32Array(W * W);
     for (let y = 0; y < W; y++)
       for (let x = 0; x < W; x++) {
-        const kx = (x - W / 2 + 0.5) * kPerPx, ky = (y - W / 2 + 0.5) * kPerPx;
+        let kx = (x - W / 2 + 0.5) * kPerPx, ky = (y - W / 2 + 0.5) * kPerPx;
+        if (e) { const u = (kx * ca + ky * sa) / (1 + e / 2), v = (-kx * sa + ky * ca) / (1 - e / 2); kx = u * ca - v * sa; ky = u * sa + v * ca; }
         const fx = kx / d.dk + d.n / 2, fy = ky / d.dk + d.n / 2;
         const x0 = Math.floor(fx), y0 = Math.floor(fy);
         if (x0 < 0 || y0 < 0 || x0 >= d.n - 1 || y0 >= d.n - 1) continue;
@@ -363,7 +371,7 @@ export class Sim {
   // ------------------------------------------------------------ 4D-STEM
   start4D() {
     const S = this.S, n4 = 64, dx = 0.18, N = 40, lam = this.lam;
-    const scan = clamp(S.fov * 10 * 0.6, 14, 36), step = scan / N;
+    const scan = clamp(this.fovA() * 0.6, 14, 36), step = scan / N;
     const gridN = Math.ceil(scan / dx) + n4 + 8;
     // Multislice specimen: K slices with Fresnel propagation between them, so thick-specimen effects
     // (beam spreading, channeling) are in the recorded patterns. On Au/C the particles sit on top of the film.
@@ -660,11 +668,11 @@ export class Sim {
 
   // ------------------------------------------------------------ spectrum imaging (EDS / EELS)
   computeSI() {
-    const S = this.S, n = 128, dx = (S.fov * 10) / n, spec = this.spec;
+    const S = this.S, n = 128, dx = this.fovA() / n, spec = this.spec;
     const maps = this.maps({ n, dx, elements: true });
     if (this.stale.probe) this.computeProbe();
     const s = Math.hypot(this.probe.fwhm / 2.355, (this.driftSpeed() * 20) / 3.5) / dx;
-    const els = spec.elements.map((e) => ({ idx: e, key: P.EL[e].key || P.EL[e].sym, sym: P.EL[e].sym, map: blur(Float32Array.from(maps.elem[e]), n, s) }));
+    const els = spec.elements.map((e) => { const map = blur(Float32Array.from(maps.elem[e]), n, s); this.scanDistort(map, n); return { idx: e, key: P.EL[e].key || P.EL[e].sym, sym: P.EL[e].sym, map }; });
     const tau = new Float32Array(n * n), totN = new Float32Array(n * n);
     for (let y = 0; y < n; y++)
       for (let x = 0; x < n; x++) {
@@ -701,7 +709,7 @@ export class Sim {
     let zMean = 0;
     for (const e of si.els) zMean += si.comp[e.key] * P.EL[e.idx].Z;
     const addLine = (E, amp) => {
-      const s = P.edsFWHM(E) / 2.355;
+      const s = P.edsFWHM(E, S.profile.edsFWHM) / 2.355;
       const b0 = Math.max(0, Math.floor((E - 4 * s) / dE)), b1 = Math.min(nb - 1, Math.ceil((E + 4 * s) / dE));
       for (let b = b0; b <= b1; b++) {
         const e = (b + 0.5) * dE;
@@ -906,7 +914,7 @@ export class Sim {
     const relP = Math.pow(Math.max(0, (S.kV - 86) / 114), 1.5), relE = Math.pow(Math.max(0, (S.kV - 55) / 145), 1.3) * 5;
     const rMax = Math.max(relP, relE);
     if (!rMax) return;
-    const A = spec.atoms, half = (S.fov * 10) / 2, ids = [];
+    const A = spec.atoms, half = this.fovA() / 2, ids = [];
     A.query(S.cx - half, S.cy - half, S.cx + half, S.cy + half, (i) => { if (!A.dead[i] && Math.abs(A.x[i] - S.cx) < half && Math.abs(A.y[i] - S.cy) < half) ids.push(i); });
     if (!ids.length) return;
     // scaled so pristine graphene at 200 kV loses ~1 atom/s from a 6 nm field at the default dose
@@ -972,6 +980,18 @@ export class Sim {
       }
   }
 
+  // STEM scan calibration: the y pixel size differs from x by scanAspect, and the axes are sheared by
+  // scanShear (non-orthogonal or mis-scaled scan coils). Image pixel (x, y) shows the specimen at (x + y·tanγ, y·a).
+  scanDistort(img, n) {
+    const a = this.S.profile.scanAspect, t = Math.tan((this.S.profile.scanShear * Math.PI) / 180);
+    if (Math.abs(a - 1) < 1e-4 && Math.abs(t) < 1e-4) return;
+    const src = Float32Array.from(img), c = n / 2;
+    for (let y = 0; y < n; y++)
+      for (let x = 0; x < n; x++) {
+        const fx = clamp(c + (x - c) + t * (y - c), 0, n - 1.001), fy = clamp(c + a * (y - c), 0, n - 1.001), x0 = fx | 0, y0 = fy | 0, ax = fx - x0, ay = fy - y0;
+        img[y * n + x] = (src[y0 * n + x0] * (1 - ax) + src[y0 * n + x0 + 1] * ax) * (1 - ay) + (src[(y0 + 1) * n + x0] * (1 - ax) + src[(y0 + 1) * n + x0 + 1] * ax) * ay;
+      }
+  }
   // a scanned frame takes ~2.4 s; the specimen drifts while the rows are recorded, shearing the image
   scanDrift(img, n, dx, tFrame = 2.4) {
     const v = this.driftSpeed() / dx;
@@ -1003,8 +1023,8 @@ export class Sim {
     this._soft = false;
     if (m === 'diff') {
       if (this.stale.diff) { this.computeDiff(); this.stale.diff = 0; this.version++; }
-      else if (this.diffDisp && this._camL !== S.camL + this.lam) { this.resampleDiff(); this.version++; }
-      this._camL = S.camL + this.lam;
+      else if (this.diffDisp && this._camL !== `${this.camLTrue()}|${this.lam}|${S.profile.ellip}|${S.profile.ellipAng}`) { this.resampleDiff(); this.version++; }
+      this._camL = `${this.camLTrue()}|${this.lam}|${S.profile.ellip}|${S.profile.ellipAng}`;
     }
     if (m === '4d') {
       if (this.stale.fd) { this.start4D(); this.stale.fd = 0; }

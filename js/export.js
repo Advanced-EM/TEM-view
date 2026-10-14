@@ -20,10 +20,10 @@ export function collectData(sim, S) {
     arrays.datacube = A(f.data, [f.N, f.N, f.n4, f.n4], 'counts (a.u.); axes: scan y, scan x, ky, kx');
     arrays.virtual_image = A(f.vimg, [f.N, f.N], `virtual ${S.vdet}`);
     arrays.com_x = A(f.comX, [f.N, f.N], 'mrad'); arrays.com_y = A(f.comY, [f.N, f.N], 'mrad');
-    Object.assign(cal, { scan_step_A: f.step, detector_mrad_per_px: f.mradPx, positions_recorded: f.done });
+    Object.assign(cal, { scan_step_A: f.step, detector_mrad_per_px: f.mradPx, detector_mrad_per_px_nominal: f.mradPx * S.profile.camLCal, positions_recorded: f.done });
   } else if (m === 'diff' && sim.diffDisp) {
     arrays.pattern = A(sim.diffDisp.arr, [sim.diffDisp.W, sim.diffDisp.W], 'intensity');
-    cal.k_per_px_invA = sim.diffDisp.kPerPx;
+    Object.assign(cal, { k_per_px_invA: sim.diffDisp.kPerPx, camera_length_mm_nominal: S.camL, camera_length_mm_true: sim.camLTrue(), ellipticity: S.profile.ellip, ellipticity_axis_deg: S.profile.ellipAng });
   } else if ((m === 'cbed' || m === 'ronch') && sim[m === 'cbed' ? 'cbed' : 'ronch'].disp) {
     const d = sim[m === 'cbed' ? 'cbed' : 'ronch'].disp;
     arrays.pattern = A(d.arr, [d.W, d.W], 'intensity');

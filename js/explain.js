@@ -70,7 +70,7 @@ export function modeInfo(S, sim) {
       body: `When a beam electron knocks out an inner-shell electron, an outer one drops into the hole and the atom emits an <b>X-ray</b> whose energy fingerprints the element (Moseley: E ∝ (Z − 1)²). A silicon-drift detector beside the specimen counts them. Only a tiny fraction of electrons ever produce a detected X-ray, so maps build up slowly and noisily; switch to realistic mode to watch them accumulate. The <b>Cu</b> peaks are a classic trap: they come from the copper grid holding the sample.`,
       stats: [
         ['X-rays counted', sim.acc ? Math.round(sim.acc.total).toLocaleString() : '—', `in ${sim.acc ? f1(sim.acc.t) : 0} s`],
-        ['Detector resolution', '128 eV', 'FWHM at Mn Kα (5.9 keV)'],
+        ['Detector resolution', `${Math.round(S.profile.edsFWHM)} eV`, 'FWHM at Mn Kα (5.9 keV), from the profile'],
         ['Probe size', probe ? `${f2(probe)} Å` : '—', 'sets the map resolution'],
       ],
     };
@@ -99,7 +99,7 @@ export function modeInfo(S, sim) {
       };
     }
     case 'oah': {
-      const d = sim.oah.disp, bp = biprism(S.biprism);
+      const d = sim.oah.disp, bp = biprism(S.biprism, S.profile);
       return {
         title: 'Recording the <em>phase</em> itself',
         body: `Every camera records only intensity, |ψ|², so the electron wave's <b>phase</b> is lost. Off-axis holography gets it back with a <b>Möllenstedt biprism</b>: a wire thinner than a micron, held at a positive voltage below the specimen. Part of the beam passes through the specimen (the object wave), part through the vacuum beside it (the reference wave), and the wire bends the two toward each other so they overlap and <b>interfere</b>. The fringes shift sideways wherever the specimen delays the wave, so the hologram stores the phase as fringe displacements. In the Fourier transform the hologram splits into a center band and two <b>sidebands</b>: one of them is the complete image wave. Cut it out, center it, transform back, and you have amplitude and phase. Because the result is a complex wave, the lens aberrations can then be <b>removed numerically</b>. Holography maps electric and magnetic fields, mean inner potentials and dopant profiles. In 1989 Tonomura recorded a biprism pattern one electron at a time: try the single-electron experiment here.`,
@@ -208,10 +208,17 @@ export function changeText(key, S, sim) {
     case 'cryo': return S.cryo
       ? ['Cryo holder', `The specimen tip is cooled to about <b>−180 °C</b> by a liquid-nitrogen dewar on the holder. Cold matters in three ways. <b>Radiation damage</b> slows: fragments broken by ionization stay trapped instead of diffusing away, so organic and hybrid materials survive several times the dose${spec.beamSensitive ? ` (critical dose now <b>${sim.critDose().toFixed(0)} e⁻/Å²</b> at ${S.kV} kV)` : ''}. Knock-on damage in graphene is not helped, since it is a direct collision. <b>Vitreous ice</b> can exist, so hydrated biological specimens can be imaged at all. And the holder <b>drifts</b> while it settles: watch the blur in TEM and the shear in STEM fade over about half a minute (now ${sim.driftSpeed().toFixed(1)} Å/s). A direct detector's movie mode removes most of the drift by aligning frames afterwards (motion correction). Atomic vibrations also shrink a little, which slightly strengthens high-angle diffraction.`]
       : ['Room temperature', `The holder is warm. ${spec.bio ? '<span class="warn">The vitreous ice has sublimed in the vacuum and the proteins have dried out; their contrast is now that of a dried, collapsing specimen, and they are destroyed within a few e⁻/Å².</span>' : spec.beamSensitive ? `<span class="warn">Without cooling, radiolysis is faster: the critical dose drops to ${sim.critDose().toFixed(1)} e⁻/Å².</span>` : 'For most inorganic specimens this is the normal way to work; cooling mostly helps beam-sensitive and hydrated materials.'}`];
-    case 'profile': return ['Instrument profile', `The twin now models a <b>${S.profile.name}</b>: energy spread ${S.profile.dE} eV, C<sub>c</sub> ${S.profile.Cc} mm, uncorrected C<sub>s</sub> ${S.profile.CsUnc} mm${S.profile.corrector ? ', with an aberration corrector' : ''}. With these, the focal spread is <b>${sim.focalSpread().toFixed(0)} Å</b> and the information limit <b>${f2(sim.infoLimit())} Å</b> at ${S.kV} kV. Every simulated image, pattern and spectrum uses them.`];
+    case 'profile': return ['Instrument profile', `The twin now models a <b>${S.profile.name}</b>: energy spread ${S.profile.dE} eV, C<sub>c</sub> ${S.profile.Cc} mm, uncorrected C<sub>s</sub> ${S.profile.CsUnc} mm${S.profile.corrector ? ', with an aberration corrector' : ''}. With these, the focal spread is <b>${sim.focalSpread().toFixed(0)} Å</b> and the information limit <b>${f2(sim.infoLimit())} Å</b> at ${S.kV} kV. Its magnification, camera length, scan, EDS and holography calibrations start at their nominal values; the calibration dialog measures each of them from your data, mode by mode.`];
     case 'calibrated': {
-      const c = S.profile.calibrated || {};
-      return ['Twin calibrated', `${c.ctf ? `From the Thon rings: defocus <b>${(c.ctf.df / 10).toFixed(1)} nm</b>, two-fold astigmatism <b>${(c.ctf.A1 / 10).toFixed(1)} nm</b> at ${Math.round(c.ctf.A1a)}°, matched to ${c.ctf.fitRes.toFixed(1)} Å. ` : ''}${c.zlp ? `From the zero-loss peak: energy spread <b>${c.zlp.dE.toFixed(2)} eV</b>, so the information limit is now <b>${f2(sim.infoLimit())} Å</b>. ` : ''}The twin's images now use these values; compare its diffractogram with your own. Save the session to keep the calibration.`];
+      const c = S.profile.calibrated || {}, pr = S.profile, parts = [];
+      if (c.ctf) parts.push(`<b>TEM</b>: defocus ${(c.ctf.df / 10).toFixed(1)} nm and two-fold astigmatism ${(c.ctf.A1 / 10).toFixed(1)} nm at ${Math.round(c.ctf.A1a)}° from the Thon rings (matched to ${c.ctf.fitRes.toFixed(1)} Å)`);
+      if (c.lattice) parts.push(`<b>Image scale</b>: magnification ×${pr.magCal.toFixed(4)}${c.lattice.scanAspect != null ? `, STEM scan aspect ${pr.scanAspect.toFixed(4)} and shear ${pr.scanShear.toFixed(2)}°` : ''} from a ${c.lattice.d} Å lattice`);
+      if (c.rings) parts.push(`<b>Diffraction</b>: camera length ×${pr.camLCal.toFixed(4)} and ${(pr.ellip * 100).toFixed(2)} % ellipticity from a ring standard`);
+      if (c.disk) parts.push(`<b>Detector angles</b> (4D-STEM, CBED, Ronchigram): ${c.disk.mradPx.toFixed(4)} mrad per pixel`);
+      if (c.eds) parts.push(`<b>EDS</b>: ${pr.edsFWHM.toFixed(0)} eV resolution at Mn Kα`);
+      if (c.zlp) parts.push(`<b>EELS and TEM</b>: energy spread ${pr.dE.toFixed(2)} eV, information limit ${f2(sim.infoLimit())} Å`);
+      if (c.holo) parts.push(`<b>Holography</b>: fringe contrast μ₀ ${pr.holoMu0.toFixed(2)}`);
+      return ['Twin calibrated', `${parts.length ? `${parts.join('; ')}.` : `Profile set: <b>${pr.name}</b>.`} Every mode that depends on these values now uses them. Save the session to keep the calibration.`];
     }
     case 'session': return ['Session saved', 'Everything that defines this experiment (specimen, mode, optics, detectors, the instrument profile and its calibrations) is in the JSON file. Load it here later, share it, or run it without a browser with <code>node tools/headless.mjs --session file.json</code>.'];
     case 'loaded': return ['Session loaded', `Restored ${sim.spec.name} in ${S.mode.toUpperCase()} mode with the profile <b>${S.profile.name}</b>.`];
@@ -262,7 +269,7 @@ export function changeText(key, S, sim) {
     case 'strain': return ['Lattice strain', `Lattice parameter changed by <b>${S.strain >= 0 ? '+' : ''}${S.strain.toFixed(2)} %</b>. HOLZ lines come from reflections with large g, where the Bragg condition is extremely sensitive to d-spacing, so they shift visibly for 0.1 % strain. That’s how CBED measures local strain in transistors. The same shift results from a change in accelerating voltage, which is why HOLZ lines also calibrate kV.`];
     case 'holz': return ['HOLZ lines', S.holz ? 'Showing higher-order Laue zone lines: fine deficiency lines where a reflection in the next reciprocal-lattice layer is exactly excited.' : 'HOLZ lines hidden: only zero-order (ZOLZ) dynamical contrast remains.'];
     case 'biprism': {
-      const bp = biprism(S.biprism), d = sim.oah.disp;
+      const bp = biprism(S.biprism, S.profile), d = sim.oah.disp;
       return ['Biprism voltage', `<b>${S.biprism} V</b> on the wire. A higher voltage deflects the two waves more steeply, so they overlap over a wider region (<b>${f1(bp.W)} nm</b>) with finer fringes (<b>${f2(bp.s)} Å</b>). Finer fringes allow a larger sideband aperture and so better resolution, but the two waves must stay coherent across the whole overlap, so <b>fringe contrast drops</b> (now ${Math.round(bp.mu * 100)} %) and the phase gets noisier.${d?.under ? ' <span class="warn">The fringes are now finer than the detector can sample; reduce the field of view (raise the magnification).</span>' : ''}`];
     }
     case 'sbR': {

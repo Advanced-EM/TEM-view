@@ -10,10 +10,10 @@ const real = (S) => S.clarity === 'real';
 
 // Exhibit-scale biprism: a higher wire voltage deflects the two waves more, giving finer fringes and a
 // wider overlap, but the wider overlap needs coherence over a longer distance, so fringe contrast falls.
-export function biprism(U) {
+export function biprism(U, pr = { holoMu0: 0.8, holoCoh: 25 }) {
   const s = 80 / U; // fringe spacing in the object plane, Å
   const W = 0.12 * U; // overlap (hologram) width, nm
-  const mu = 0.8 * Math.exp(-((W / 25) ** 2)); // fringe contrast: detector MTF × spatial coherence
+  const mu = pr.holoMu0 * Math.exp(-((W / pr.holoCoh) ** 2)); // fringe contrast: detector MTF × spatial coherence
   return { s, W, mu };
 }
 
@@ -74,11 +74,11 @@ export class OffAxis {
 
   compute() {
     this.stale = false;
-    const sim = this.sim, S = sim.S, n = 256, c = 224, dx = (S.fov * 10) / c, L = n * dx;
+    const sim = this.sim, S = sim.S, n = 256, c = 224, dx = sim.fovA() / c, L = n * dx;
     const maps = sim.maps({ n, dx });
     const exit = P.transmission(maps.phase, S.kV);
     const img = sim.lensWave(maps, { exit });
-    const bp = biprism(S.biprism);
+    const bp = biprism(S.biprism, S.profile);
     // carrier frequency on whole FFT bins, at most one fringe per 3 detector pixels
     const th = 20 * DEG, qMax = 1 / (3 * dx);
     const under = 1 / bp.s > qMax;
@@ -161,7 +161,7 @@ export class FocalSeries {
   start() {
     this.stale = false;
     // 128² keeps each iteration fast (2N FFTs); 112 px still sample finer than the information limit
-    const sim = this.sim, S = sim.S, n = 128, c = 112, dx = (S.fov * 10) / c, N = S.nFocal;
+    const sim = this.sim, S = sim.S, n = 128, c = 112, dx = sim.fovA() / c, N = S.nFocal;
     const maps = sim.maps({ n, dx });
     const exit = P.transmission(maps.phase, S.kV);
     const Fr = Float64Array.from(exit.re), Fi = Float64Array.from(exit.im);
@@ -340,7 +340,7 @@ export function drawOAH(sim, S, m, s) {
   if (d.under) label(ctx, `fringes finer than ${(3 * d.dx).toFixed(2)} Å are undersampled: reduce the field of view`, 10 * dpr, 36 * dpr, dpr, { color: C.warm, size: 9 });
   else if (d.cover < 0.98) label(ctx, `overlap ${d.W.toFixed(1)} nm < field of view: no fringes outside it`, 10 * dpr, 36 * dpr, dpr, { color: C.warm, size: 9 });
   if (S.numCorr && v !== 'holo') label(ctx, 'aberrations removed numerically', 10 * dpr, H - 30 * dpr, dpr, { color: C.muted, size: 9 });
-  scaleBar(ctx, dst, S.fov * 10, dpr);
+  scaleBar(ctx, dst, sim.fovA(), dpr);
 
   // secondary: hologram spectrum with the sideband aperture, phase profile, numbers
   // side by side normally; stacked when the panel is tall (enlarged or popped out)
@@ -402,7 +402,7 @@ export function drawILH(sim, S, m, s) {
     tag = `exit-wave phase · iteration ${st.it}/${st.maxIt}`;
   }
   if (tag) label(ctx, tag, 10 * dpr, 16 * dpr, dpr, { color: C.accent });
-  scaleBar(ctx, dst, S.fov * 10, dpr);
+  scaleBar(ctx, dst, sim.fovA(), dpr);
 
   // secondary: the focal series, convergence and a phase profile
   const tall = s.H > s.W * 0.85, q = s.ctx, cols = Math.ceil(Math.sqrt(st.N)), rows = Math.ceil(st.N / cols);

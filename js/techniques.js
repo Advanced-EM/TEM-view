@@ -223,7 +223,7 @@ export class CBED {
       return;
     }
     const L = this.lists(), lac = S.cbedKind === 'lacbed', a = sim.alpha();
-    const W = lac ? 200 : 256, span = lac ? a * 1.12 : Math.max(a * 1.3, 0.022 * (1000 / S.camL));
+    const W = lac ? 200 : 256, span = lac ? a * 1.12 : Math.max(a * 1.3, 0.022 * (1000 / (S.camL * S.profile.camLCal)));
     const tx0 = S.tiltX * DEG, ty0 = S.tiltY * DEG;
     const rotated = spec.grainRot.map((r) => {
       const c = Math.cos(r), s = Math.sin(r), rot = (o) => ({ ...o, gx: o.gx * c - o.gy * s, gy: o.gx * s + o.gy * c });

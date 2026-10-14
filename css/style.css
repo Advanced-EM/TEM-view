@@ -290,7 +290,7 @@ body.stacked.detBig #detSec { height: 46vh; }
 .crow .btn { flex: none; }
 .cgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 6px 0 8px; }
 .cgrid label, label.file { display: flex; flex-direction: column; gap: 4px; font: 500 10px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
-.cgrid input { padding: 7px 9px; border-radius: 8px; border: 1px solid var(--line-2); background: rgba(255, 255, 255, 0.03); color: var(--text); font: 13px var(--mono); }
+.cgrid input, .cgrid select { padding: 7px 9px; border-radius: 8px; border: 1px solid var(--line-2); background: rgba(255, 255, 255, 0.03); color: var(--text); font: 13px var(--mono); }
 label.file input { font: 12px var(--sans); color: #c3cad3; text-transform: none; letter-spacing: 0; }
 .btn.primary { border-color: rgba(111, 214, 255, 0.55); color: #fff; background: var(--accent-soft); flex: none; padding: 7px 16px; }
 .btn:disabled { opacity: 0.45; cursor: default; }

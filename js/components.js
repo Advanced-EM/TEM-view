@@ -70,7 +70,7 @@ export const COMPONENTS = {
     specs: [['Pixel dwell time', '0.1–100 µs'], ['Frame size', '256² – 4096²'], ['Flyback delay', '~100 µs per line']],
     metrology: 'Pixel size is calibrated against a known lattice (for example Si 111 = 3.135 Å). <b>Scan distortion and drift</b> are measured by acquiring the same area at 0° and 90° scan rotation and fitting a nonlinear correction. Pivot points are aligned so beam tilt doesn’t move the probe.',
     limits: 'Specimen drift (~0.5 nm/min), scan-coil hysteresis and line flyback artifacts; fast scans trade dose for distortion.',
-    live: (S) => [['Pixel size', `${f2((S.fov * 10) / 224)} Å`], ['Field of view', `${f1(S.fov)} nm`]],
+    live: (S, sim) => [['Pixel size (calibrated)', `${f2(sim.fovA() / 224)} Å`], ['Field of view', `${f1(S.fov)} nm nominal, ${f1(sim.fovA() / 10)} nm true`], ['Scan aspect / shear', `${S.profile.scanAspect.toFixed(3)} / ${S.profile.scanShear.toFixed(1)}°`]],
   },
   'Objective lens': {
     kicker: 'Resolution',
@@ -100,7 +100,7 @@ export const COMPONENTS = {
     specs: [['Resolution', '~125–130 eV at Mn Kα'], ['Solid angle', '0.1–4 sr'], ['Throughput', '10⁵–10⁶ counts/s']],
     metrology: 'Energy scale calibrated on known lines (Cu Kα 8.048 keV, Cu L). Quantification uses <b>Cliff–Lorimer k-factors</b> or the <b>ζ-factor</b> method, which needs the probe current measured. Spurious signals (the "hole count", Cu grid and system peaks) are measured on a blank area.',
     limits: 'Low collection efficiency, peak overlaps (for example Si Kα / Sr Lα), absorption of soft X-rays, dead time at high rates.',
-    live: (S) => [['Overvoltage for Au L', `${f1(S.kV / 11.92)}`], ['Resolution at Mn Kα', `${Math.round(P.edsFWHM(5.9) * 1000)} eV`]],
+    live: (S) => [['Overvoltage for Au L', `${f1(S.kV / 11.92)}`], ['Resolution at Mn Kα', `${Math.round(P.edsFWHM(5.899, S.profile.edsFWHM) * 1000)} eV`]],
   },
   'Objective aperture': {
     kicker: 'Contrast',
@@ -157,7 +157,7 @@ export const COMPONENTS = {
     specs: [['Wire diameter', '0.3–1 µm'], ['Wire voltage', '±0–300 V'], ['Fringe spacing', '0.02–10 nm (object plane)'], ['Fringe contrast', '10–80 %']],
     metrology: 'Fringe spacing and contrast are measured in a <b>vacuum reference hologram</b>, recorded without the specimen and used to remove distortions from the projector and detector. Phase sensitivity is quoted as 2π/N, from the noise in a reconstructed vacuum phase; it scales as √2 / (μ√N<sub>e</sub>), so contrast μ and dose N<sub>e</sub> per pixel both matter. Elliptical illumination, elongated perpendicular to the wire, maximizes coherence across the overlap.',
     limits: 'Spatial coherence of the illumination (contrast falls as the overlap widens), dose and detector MTF, Fresnel fringes from the wire edges, and the need for vacuum or a thin reference region within a few overlap widths of the area of interest.',
-    live: (S) => { const b = biprism(S.biprism); return [['Wire voltage', `${S.biprism} V`], ['Fringe spacing', `${(b.s).toFixed(2)} Å`], ['Overlap width', `${f1(b.W)} nm`], ['Fringe contrast μ', `${Math.round(b.mu * 100)} %`]]; },
+    live: (S) => { const b = biprism(S.biprism, S.profile); return [['Wire voltage', `${S.biprism} V`], ['Fringe spacing', `${(b.s).toFixed(2)} Å`], ['Overlap width', `${f1(b.W)} nm`], ['Fringe contrast μ', `${Math.round(b.mu * 100)} %`]]; },
   },
   'Intermediate lens': {
     kicker: 'Imaging system',

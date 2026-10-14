@@ -762,8 +762,10 @@ export const XRAY = [
   { el: 'Cu', line: 'Lα', E: 0.93, w: 0.25, y: 0 },
 ];
 export const detEff = (E) => Math.exp(-Math.pow(0.35 / E, 2)) * Math.exp(-E / 40);
-// Energy-dispersive detector resolution: 128 eV FWHM at Mn Kα, Fano-limited.
-export const edsFWHM = (E) => Math.sqrt(45.7 * 45.7 + 2.355 * 2.355 * 0.115 * 3.8 * E * 1000) / 1000;
+// Energy-dispersive detector resolution (keV): Fano-limited statistics plus electronic noise, set so the
+// FWHM at Mn Kα (5.899 keV) is fwhmMn eV (128 eV is a typical silicon drift detector).
+const FANO_TERM = 2.355 * 2.355 * 0.115 * 3.8; // eV per eV of photon energy
+export const edsFWHM = (E, fwhmMn = 128) => Math.sqrt(Math.max(0, fwhmMn * fwhmMn - FANO_TERM * 5899) + FANO_TERM * E * 1000) / 1000;
 
 // Core-loss edges (eV). h is per-atom edge height factor.
 export const EDGES = [
