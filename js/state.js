@@ -13,7 +13,7 @@ export const defaultState = () => ({
   ab: { A1: 0, A1a: 0, B2: 0, B2a: 0, A2: 0, A2a: 0, A3: 0, A3a: 0 }, ronchAp: 45,
   cbedKind: 'cbed', alphaCB: 3, alphaLA: 40, strain: 0, holz: true,
   biprism: 100, sbR: 0.33, numCorr: true, holoView: 'holo', nFocal: 10, focalStep: 5, ilhView: 'phase',
-  cryo: false, profile: newProfile('generic200'),
+  holder: 'room', tempSet: 293, profile: newProfile('generic200'),
 });
 
 // Keys a saved session may set (UI-only toggles are left alone).
@@ -21,5 +21,5 @@ export const SESSION_KEYS = [
   'mode', 'clarity', 'spec', 'thick', 'tiltX', 'tiltY', 'fov', 'cx', 'cy', 'kV', 'dose', 'df', 'dfFam', 'corrector', 'csUnc', 'csCor',
   'objAp', 'alpha', 'alpha4d', 'detIn', 'detOut', 'detPreset', 'camL', 'sa', 'beamStop', 'camera', 'vdet', 'vdIn', 'vdOut', 'vdX', 'vdY', 'vdR',
   'edsSel', 'eelsRange', 'eelsWin', 'eelsWidth', 'bgsub', 'ab', 'ronchAp', 'cbedKind', 'alphaCB', 'alphaLA', 'strain', 'holz',
-  'biprism', 'sbR', 'numCorr', 'holoView', 'nFocal', 'focalStep', 'ilhView', 'cryo', 'profile',
+  'biprism', 'sbR', 'numCorr', 'holoView', 'nFocal', 'focalStep', 'ilhView', 'holder', 'tempSet', 'profile',
 ];

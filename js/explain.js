@@ -137,6 +137,21 @@ export function modeInfo(S, sim) {
   }
 }
 
+// what the holder and its temperature are doing to this specimen
+function holderText(S, sim) {
+  const spec = sim.spec, T = sim.temp(), th = sim.thermal(), fT = (K) => `${K < 20 ? K.toFixed(1) : Math.round(K)} K`;
+  const u = (0.08 * Math.sqrt(th.u2r)).toFixed(3), strain = spec.alpha ? ` Thermal expansion strains the lattice by <b>${(th.eps * 100).toFixed(3)} %</b> relative to room temperature${spec.alpha < 0 ? ' (this material shrinks when heated)' : ''}, which moves CBED HOLZ lines.` : '';
+  const dmg = spec.beamSensitive ? ` Radiolysis: the critical dose is <b>${sim.critDose().toFixed(1)} e⁻/Å²</b> at ${S.kV} kV here${T < 60 ? ', a little higher than with liquid nitrogen (liquid helium adds ~20–50 % for most organic matter, not the factor of several that cooling to 90 K gives)' : T < 170 ? ', several times the room-temperature value: fragments stay trapped instead of diffusing away' : T > 293 ? ', lower than at room temperature: heat speeds the chemistry up' : ''}.` : '';
+  const heal = spec.twoD && T > 750 ? ' Hot graphene heals: vacancies fill with carbon from adatoms, and hydrocarbon contamination has desorbed (above ~450 K).' : spec.twoD && T > 450 ? ' The hydrocarbon contamination has desorbed from the hot graphene.' : '';
+  const ice = spec.bio ? (T > 165 ? ' <span class="warn">Above ~165 K the ice sublimes in the vacuum, and the proteins will dry out.</span>' : T > 140 ? ' <span class="warn">Above ~140 K vitreous ice crystallizes, irreversibly.</span>' : ' The ice stays vitreous.') : '';
+  const decomp = spec.thermalLimit && T > spec.thermalLimit ? ` <span class="warn">Above ~${spec.thermalLimit} K ${spec.bio ? 'the protein denatures' : 'the framework decomposes'} even without the beam.</span>` : '';
+  const H = { room: ['Room temperature', 'The holder is at the room temperature of the column.'],
+    ln2: ['Liquid-nitrogen cryo holder', 'A copper braid connects the tip to a liquid-nitrogen dewar (77 K); the grid sits a few kelvin warmer, and a heater can hold it anywhere up to room temperature.'],
+    lhe: ['Liquid-helium cryo holder', 'Helium flows through the tip (4.2 K), but the grid lags behind: typically 8–15 K, with ±1–2 K fluctuations from boiling helium and more vibration and drift than a nitrogen holder.'],
+    heat: ['MEMS heating holder', 'The specimen sits on a thin membrane with an embedded heater; it reaches 1200 °C in milliseconds with little drift, but its temperature reading is only good to about 1 %.'] }[S.holder];
+  return [H[0], `${H[1]} Specimen now <b>${fT(T)}</b> (${Math.round(T - 273.15)} °C). Atoms vibrate with u_rms ≈ <b>${u} Å</b>${T < 30 ? ', almost only zero-point motion' : ''}: this broadens each atom, weakens high-order diffraction (Debye–Waller factor) and ${th.u2r > 1 ? 'strengthens' : 'weakens'} thermal-diffuse scattering into the HAADF detector.${strain}${dmg}${heal}${ice}${decomp} Drift: ${sim.driftSpeed().toFixed(2)} Å/s.`];
+}
+
 export function changeText(key, S, sim) {
   const o = optics(S, sim), spec = sim.spec;
   const probe = sim.probe?.fwhm;
@@ -146,7 +161,7 @@ export function changeText(key, S, sim) {
     case 'kV': return ['Accelerating voltage', `At <b>${S.kV} kV</b> each electron travels at <b>${f2(o.beta)} c</b> and weighs ${o.gam.toFixed(2)}× its rest mass. Its wavelength is <b>${f2(o.lam * 100)} pm</b>. A shorter wavelength means smaller Bragg angles (watch the diffraction spots pull inward) and deeper penetration. The cost: above ~86 kV a head-on hit can knock a carbon atom clean out of graphene, so fragile materials are imaged at 60–80 kV. ${S.kV > 86 ? `<span class="warn">You are above the knock-on threshold for carbon.${spec.twoD ? ' Watch the graphene: in TEM or STEM, atoms are being sputtered and holes grow.' : ''}${spec.beamSensitive ? ` For ${spec.short} the danger is radiolysis, not knock-on: the critical dose is now ${sim.critDose().toFixed(1)} e⁻/Å², and it drops at lower voltage because slower electrons ionize more strongly.` : ''}</span>` : `<span class="ok">Below the knock-on threshold for carbon.${spec.twoD && S.kV > 55 ? ' Only weakly bonded edge atoms can still be displaced.' : ''}</span>${spec.beamSensitive ? ` <span class="warn">But for ${spec.short} lower voltage is worse: radiolysis grows as 1/β², so the critical dose falls to ${sim.critDose().toFixed(1)} e⁻/Å².</span>` : ''}`}`];
     case 'dose': {
       const dx = (S.fov * 10) / 224;
-      if (spec.bio) return ['Electron dose', `<b>${S.dose} e⁻/Å²</b> per image. Proteins keep their finest (~3 Å) detail for only about <b>${sim.critDose().toFixed(0)} e⁻/Å²</b> at ${S.kV} kV${S.cryo ? ' at liquid-nitrogen temperature' : ', warm'}; coarse features last longer. Single-particle cryo-EM spends ~40–60 e⁻/Å² spread over a movie of 40 or more frames, then weights the early, undamaged frames most. Past roughly four critical doses (~80–100 e⁻/Å² when cold), hydrogen gas forms <b>bubbles</b> inside the protein. ${S.clarity === 'real' ? 'At these doses shot noise dominates every image: that is why cryo-EM averages tens of thousands of particles.' : 'Switch to “physically realistic” to see how noisy a low-dose image is.'}`];
+      if (spec.bio) return ['Electron dose', `<b>${S.dose} e⁻/Å²</b> per image. Proteins keep their finest (~3 Å) detail for only about <b>${sim.critDose().toFixed(0)} e⁻/Å²</b> at ${S.kV} kV${sim.isCold() ? ` at ${Math.round(sim.temp())} K` : ', warm'}; coarse features last longer. Single-particle cryo-EM spends ~40–60 e⁻/Å² spread over a movie of 40 or more frames, then weights the early, undamaged frames most. Past roughly four critical doses (~80–100 e⁻/Å² when cold), hydrogen gas forms <b>bubbles</b> inside the protein. ${S.clarity === 'real' ? 'At these doses shot noise dominates every image: that is why cryo-EM averages tens of thousands of particles.' : 'Switch to “physically realistic” to see how noisy a low-dose image is.'}`];
       if (spec.beamSensitive) return ['Electron dose', `<b>${S.dose} e⁻/Å²</b> per image. ${spec.short} tolerates only about <b>${sim.critDose().toFixed(1)} e⁻/Å²</b> in total at ${S.kV} kV before its lattice is gone, so every image spends part of the budget. Radiolysis breaks the linkers first: the fine detail and high-order diffraction spots disappear before the coarse ones. ${S.clarity === 'real' ? 'At these doses shot noise dominates: this is why MOF imaging needs direct electron detectors and dose-efficient methods.' : 'Switch to “physically realistic” to see how noisy a low-dose image is.'}`];
       return ['Electron dose', `<b>${Math.round(S.dose).toLocaleString()} electrons per Å²</b>, about ${Math.round(S.dose * dx * dx).toLocaleString()} per pixel. Images are built from individual electrons, so they carry <b>Poisson shot noise</b>: signal-to-noise grows only as √dose. Twice the clarity costs four times the electrons, and every electron can damage the sample. Cryo-EM of proteins survives only ~30 e⁻/Å² in total. ${S.clarity === 'real' ? '' : '<i>Switch to “physically realistic” to see the noise.</i>'}`];
     }
@@ -205,9 +220,9 @@ export function changeText(key, S, sim) {
     case 'fresh': return ['Fresh area', `The stage moved to an unexposed region: crystallinity is back to 100 %. At ${S.kV} kV the critical dose is about <b>${sim.critDose().toFixed(1)} e⁻/Å²</b>, so at ${S.dose} e⁻/Å² per image you get roughly ${Math.max(1, Math.round(sim.critDose() / S.dose))} good image(s). Low-dose workflows focus on a neighboring area and only then blank the beam onto the region of interest.`];
     case 'restore': return ['Pristine again', 'All sputtered atoms are back. At 60–80 kV the lattice survives indefinitely; above the ~86 kV knock-on threshold, holes nucleate at defects and grow from their edges, where atoms have fewer bonds and a lower displacement threshold.'];
     case 'damage': return null;
-    case 'cryo': return S.cryo
-      ? ['Cryo holder', `The specimen tip is cooled to about <b>−180 °C</b> by a liquid-nitrogen dewar on the holder. Cold matters in three ways. <b>Radiation damage</b> slows: fragments broken by ionization stay trapped instead of diffusing away, so organic and hybrid materials survive several times the dose${spec.beamSensitive ? ` (critical dose now <b>${sim.critDose().toFixed(0)} e⁻/Å²</b> at ${S.kV} kV)` : ''}. Knock-on damage in graphene is not helped, since it is a direct collision. <b>Vitreous ice</b> can exist, so hydrated biological specimens can be imaged at all. And the holder <b>drifts</b> while it settles: watch the blur in TEM and the shear in STEM fade over about half a minute (now ${sim.driftSpeed().toFixed(1)} Å/s). A direct detector's movie mode removes most of the drift by aligning frames afterwards (motion correction). Atomic vibrations also shrink a little, which slightly strengthens high-angle diffraction.`]
-      : ['Room temperature', `The holder is warm. ${spec.bio ? '<span class="warn">The vitreous ice has sublimed in the vacuum and the proteins have dried out; their contrast is now that of a dried, collapsing specimen, and they are destroyed within a few e⁻/Å².</span>' : spec.beamSensitive ? `<span class="warn">Without cooling, radiolysis is faster: the critical dose drops to ${sim.critDose().toFixed(1)} e⁻/Å².</span>` : 'For most inorganic specimens this is the normal way to work; cooling mostly helps beam-sensitive and hydrated materials.'}`];
+    case 'holder': case 'tempSet': return holderText(S, sim);
+    case 'newGrid': return ['Fresh grid', 'A new grid, plunge-frozen and never warmed: vitreous ice again, no dose so far. The holder drifts for a while after insertion.'];
+    case 'cryo': return holderText(S, sim);
     case 'profile': return ['Instrument profile', `The twin now models a <b>${S.profile.name}</b>: energy spread ${S.profile.dE} eV, C<sub>c</sub> ${S.profile.Cc} mm, uncorrected C<sub>s</sub> ${S.profile.CsUnc} mm${S.profile.corrector ? ', with an aberration corrector' : ''}. With these, the focal spread is <b>${sim.focalSpread().toFixed(0)} Å</b> and the information limit <b>${f2(sim.infoLimit())} Å</b> at ${S.kV} kV. Its magnification, camera length, scan, EDS and holography calibrations start at their nominal values; the calibration dialog measures each of them from your data, mode by mode.`];
     case 'calibrated': {
       const c = S.profile.calibrated || {}, pr = S.profile, parts = [];
@@ -293,6 +308,7 @@ export function changeText(key, S, sim) {
 }
 
 export function dataRows(S, sim) {
+  const spec = sim.spec;
   const o = optics(S, sim), a = (S.mode === '4d' ? S.alpha4d : S.alpha) * 1e-3;
   const rows = [
     ['Accelerating voltage', `${S.kV} kV`],
@@ -312,7 +328,9 @@ export function dataRows(S, sim) {
   rows.push(['Residual A1 / B2 / A2', `${S.ab.A1} / ${S.ab.B2} / ${S.ab.A2} nm`]);
   rows.push(['Residual A3', `${S.ab.A3} µm`]);
   rows.push(['Dose', `${Math.round(S.dose).toLocaleString()} e⁻/Å²`]);
-  rows.push(['Specimen temperature', S.cryo ? `≈ −180 °C, drift ${sim.driftSpeed().toFixed(2)} Å/s` : 'room temperature']);
+  const T = sim.temp(), th = sim.thermal();
+  rows.push(['Specimen temperature', `${T < 20 ? T.toFixed(1) : Math.round(T)} K (${Math.round(T - 273.15)} °C), drift ${sim.driftSpeed().toFixed(2)} Å/s`]);
+  rows.push(['Atomic vibration u_rms', `${(0.08 * Math.sqrt(th.u2r)).toFixed(3)} Å${spec.alpha ? `, thermal strain ${(th.eps * 100).toFixed(3)} %` : ''}`]);
   if (sim.spec.beamSensitive) rows.push([`Critical dose (${sim.spec.short})`, `${sim.critDose().toFixed(1)} e⁻/Å²`], ['Accumulated dose', `${(sim.doseAcc || 0).toFixed(1)} e⁻/Å²`]);
   rows.push(['Inelastic mean free path', `${Math.round(P.imfp(S.kV, sim.spec.zeff))} nm`]);
   rows.push(['Knock-on damage (C)', S.kV > 86 ? 'above threshold' : 'below threshold']);

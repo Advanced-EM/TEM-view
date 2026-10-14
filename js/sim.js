@@ -3,6 +3,7 @@ import * as P from './physics.js';
 import { Ronch, CBED } from './techniques.js';
 import { OffAxis, FocalSeries } from './holography.js';
 import { focalSpread } from './profile.js';
+import { HOLDERS, specimenT, u2Ratio, thermalStrain, radiolysisFactor, iceSublimation, DEVITRIFY_K } from './holder.js';
 
 const SP = P.SPECIMENS;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -72,12 +73,24 @@ export class Sim {
   // true field of view, Å: the nominal value times the instrument's magnification calibration
   fovA() { return this.S.fov * 10 * this.S.profile.magCal; }
   camLTrue() { return this.S.camL * this.S.profile.camLCal; } // mm
-  // cryo-holder drift, Å/s: fast after cooling or inserting a grid, settling over about half a minute
-  driftSpeed() {
-    if (!this.S.cryo) return 0;
-    const t = this.cryoT || 0;
-    return 2.5 * Math.exp(-t / 30) + 0.05;
+  // ------------------------------------------------------------ specimen temperature (holder.js)
+  temp() { return specimenT(this.S.holder, this.S.tempSet, this.clock || 0); } // K, at the specimen
+  isCold() { return this.temp() < 170; } // cold enough to keep ice (and slow radiolysis)
+  // thermal state used by the maps: vibration amplitude relative to 293 K and thermal strain
+  thermal() {
+    const T = this.temp();
+    return { T, u2r: Math.round(u2Ratio(T) * 20) / 20, eps: Math.round(thermalStrain(T, this.spec.alpha ?? 0) * 1e4) / 1e4 };
   }
+  strainPct() { return this.S.strain + this.thermal().eps * 100; } // set strain plus thermal expansion, %
+  // vitreous ice left on the grid (Å) and whether it has crystallized
+  ice() { return { t: Math.max(0, this.S.thick * 10 - (this.iceLoss || 0) * 10), cryst: !!this.devitrified }; }
+  // holder drift, Å/s: each holder's steady drift plus a kick (inserting, cooling, a temperature step) that settles
+  driftSpeed() {
+    const H = HOLDERS[this.S.holder] ?? HOLDERS.room, t = (this.clock || 0) - (this.kickT || 0);
+    return H.base + (this.kick || 0) * Math.exp(-t / H.tau);
+  }
+  // a disturbance adds to whatever drift is left; a new holder (replace) starts settling from scratch
+  kickDrift(v, replace = false) { this.kick = (replace ? 0 : this.driftSpeed() - (HOLDERS[this.S.holder]?.base ?? 0)) + v; this.kickT = this.clock || 0; }
   driftDir() { return [Math.cos(0.6), Math.sin(0.6)]; }
   alpha() {
     const S = this.S;
@@ -98,6 +111,7 @@ export class Sim {
       // progressive beam damage: refresh images and patterns in place, but don't restart 4D scans or spectrum accumulation
       damage: ['tem', 'stem', 'diff', 'probe'],
       drift: ['tem', 'stem'],
+      // temperature: the projected specimen changes (vibrations, expansion), so everything is recomputed
     };
     for (const k of map[key] ?? all) this.stale[k] = 1;
     const view = ['mode', 'edsSel', 'camera', 'beamStop', 'vdet', 'bgsub', 'eelsWin', 'eelsRange', 'holoView', 'ilhView'];
@@ -110,13 +124,15 @@ export class Sim {
 
   maps(opts) {
     const S = this.S;
-    const key = [S.spec, S.cryo ? 1 : 0, this.spec.damageVer ?? 0, S.cx.toFixed(2), S.cy.toFixed(2), S.thick, S.tiltX, S.tiltY, opts.n, opts.dx.toFixed(4), !!opts.elements, !!opts.noTilt, opts.part ?? ''].join('|');
+    const th = this.thermal(), ice = this.ice();
+    const key = [S.spec, th.u2r, th.eps, Math.round(ice.t), ice.cryst ? 1 : 0, this.spec.damageVer ?? 0, S.cx.toFixed(2), S.cy.toFixed(2), S.thick, S.tiltX, S.tiltY, opts.n, opts.dx.toFixed(4), !!opts.elements, !!opts.noTilt, opts.part ?? ''].join('|');
     let m = this.mapCache.get(key);
     if (!m) {
       const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
       m = P.projectMaps(this.spec, {
         cx: S.cx, cy: S.cy, n: opts.n, dx: opts.dx, thick: S.thick * 10,
-        tiltX: (S.tiltX * Math.PI) / 180, tiltY: (S.tiltY * Math.PI) / 180, elements: opts.elements, noTilt: opts.noTilt, part: opts.part, cryo: S.cryo,
+        tiltX: (S.tiltX * Math.PI) / 180, tiltY: (S.tiltY * Math.PI) / 180, elements: opts.elements, noTilt: opts.noTilt, part: opts.part,
+        T: th.T, u2r: th.u2r, eps: th.eps, iceT: ice.t, iceCryst: ice.cryst,
       });
       this._mapsMs = (typeof performance !== 'undefined' ? performance.now() : 0) - t0;
       this.mapCache.set(key, m);
@@ -910,7 +926,16 @@ export class Sim {
   // lattice; edge atoms (fewer bonds) go at lower voltage. Holes nucleate at defects and grow from their edges.
   sputter(dt) {
     const S = this.S, spec = this.spec;
-    if (!spec.twoD || S.paused || !['tem', 'stem'].includes(S.mode)) return;
+    if (!spec.twoD || S.paused) return;
+    // hot graphene heals: above ~750 K carbon from the contamination and adatoms fills vacancies
+    const T = this.temp();
+    if (T > 750 && spec.sputtered > 0) {
+      const A = spec.atoms, p = Math.min(1, 0.03 * Math.exp((T - 1000) / 120) * dt * S.speed);
+      let healed = 0;
+      for (let i = 0; i < A.count; i++) if (A.dead[i] && Math.random() < p) { A.dead[i] = 0; healed++; }
+      if (healed) { spec.sputtered = Math.max(0, spec.sputtered - healed); spec.damageVer++; this.invalidate('damage'); this._soft = true; }
+    }
+    if (!['tem', 'stem'].includes(S.mode)) return;
     const relP = Math.pow(Math.max(0, (S.kV - 86) / 114), 1.5), relE = Math.pow(Math.max(0, (S.kV - 55) / 145), 1.3) * 5;
     const rMax = Math.max(relP, relE);
     if (!rMax) return;
@@ -933,11 +958,13 @@ export class Sim {
   // Radiolysis in beam-sensitive crystals (MOFs): the dose set per image accumulates while the beam is on.
   // Critical dose Dc ∝ β² (inelastic cross-section ∝ 1/β²), so lower voltage destroys the crystal faster.
   // radiolysis: falls as β² at lower voltage; cooling to liquid-nitrogen temperature slows it several-fold
-  critDose() { return this.spec.Dc300 * Math.pow(P.betaOf(this.S.kV) / P.betaOf(300), 2) * (this.S.cryo ? this.spec.cryoProtect ?? 3 : 1); }
+  critDose() { return this.spec.Dc300 * Math.pow(P.betaOf(this.S.kV) / P.betaOf(300), 2) * radiolysisFactor(this.temp(), this.spec.cryoProtect ?? 3); }
   radiolysis(dt) {
     const S = this.S, spec = this.spec;
     if (!spec.beamSensitive || S.paused || S.mode === 'ronch') return;
     this.doseAcc = (this.doseAcc || 0) + S.dose * 0.5 * dt * S.speed;
+    // too hot: the framework or the protein decomposes even without the beam (expressed as equivalent dose)
+    if (spec.thermalLimit && this.temp() > spec.thermalLimit) this.doseAcc += this.critDose() * 0.08 * Math.exp((this.temp() - spec.thermalLimit) / 40) * dt * S.speed;
     const q = 1 - Math.exp(-this.doseAcc / this.critDose()), qs = Math.round(q * 40) / 40;
     // refresh at most ~3× a second, and never spend more than about a third of the time recomputing the
     // projected specimen (the expensive part, e.g. ~0.3 s for proteins in ice)
@@ -956,12 +983,31 @@ export class Sim {
     this.invalidate('damage');
   }
 
-  // cryo holder: track time since cooling and refresh images as the drift settles
-  cryoStep(dt) {
-    if (!this.S.cryo || this.S.paused) return;
-    this.cryoT = (this.cryoT || 0) + dt * this.S.speed;
+  // holder: advance the clock, refresh as the drift settles, follow the temperature, and let ice crystallize
+  // or sublime when the grid is too warm
+  thermalStep(dt) {
+    if (this.S.paused) return;
+    const t = dt * this.S.speed;
+    this.clock = (this.clock || 0) + t;
     const q = Math.round(this.driftSpeed() * 10) / 10;
     if (q !== this._driftQ) { this._driftQ = q; this.invalidate('drift'); this._soft = true; this.oah.stale = true; }
+    const th = this.thermal(), tk = `${th.u2r}|${th.eps}`;
+    if (tk !== this._thermQ) { const first = this._thermQ === undefined; this._thermQ = tk; if (!first) { this.invalidate('temp'); this._soft = true; } }
+    if (this.spec.bio) {
+      const T = th.T;
+      if (T > DEVITRIFY_K && !this.devitrified) { this.devitrified = true; this.invalidate('damage'); this._soft = true; }
+      const loss = iceSublimation(T) * t;
+      if (loss > 0) {
+        const before = Math.round(this.ice().t / 10);
+        this.iceLoss = Math.min(this.S.thick, (this.iceLoss || 0) + loss);
+        if (Math.round(this.ice().t / 10) !== before) { this.invalidate('damage'); this._soft = true; }
+      }
+    }
+  }
+  // a new grid: fresh vitreous ice, nothing sublimed, and the holder drifts again after insertion
+  newGrid() {
+    this.iceLoss = 0; this.devitrified = false; this.freshArea();
+    this.kickDrift(HOLDERS[this.S.holder]?.kick ?? 0, true);
   }
   // blur along the drift direction during one exposure (TEM 1 s; a direct detector's motion-corrected movie
   // leaves ~10 % of it)
@@ -1009,7 +1055,7 @@ export class Sim {
   update(dt) {
     this.sputter(dt);
     this.radiolysis(dt);
-    this.cryoStep(dt);
+    this.thermalStep(dt);
     const S = this.S, m = S.mode;
     if (this.stale.probe && !['tem', 'diff', 'oah', 'ilh'].includes(m)) { this.computeProbe(); this.stale.probe = 0; }
     if (m === 'tem' && this.stale.tem) { this.computeTEM(); this.stale.tem = 0; this.version++; }
