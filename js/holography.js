@@ -1,7 +1,6 @@
 // Electron holography: off-axis (Möllenstedt biprism) and in-line (focal-series exit-wave reconstruction).
 // Both recover the complex image wave, amplitude and phase, that an ordinary image throws away.
 import * as P from './physics.js';
-import { FOCAL_SPREAD, CONV_TEM } from './sim.js';
 import { paint, label, font, LUT, range, scaleBar } from './render2d.js';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -44,7 +43,7 @@ function relPhase(re, im, n, c, mask) {
 
 // Objective-lens transfer function H(k)·exp(−iχ(k)) at defocus df (Å), as in Sim.lensWave.
 function transfer(sim, n, dx, df) {
-  const lam = sim.lam, Cs = sim.CsA(), ab = sim.abA(), D = FOCAL_SPREAD, ac = CONV_TEM;
+  const lam = sim.lam, Cs = sim.CsA(), ab = sim.abA(), D = sim.focalSpread(), ac = sim.convTEM();
   const re = new Float32Array(n * n), im = new Float32Array(n * n);
   for (let y = 0; y < n; y++) {
     const ky = P.freq(y, n, dx);
@@ -86,7 +85,10 @@ export class OffAxis {
     const q = Math.min(1 / bp.s, qMax);
     const bx = Math.round(q * Math.cos(th) * L), by = Math.round(q * Math.sin(th) * L);
     const qx = bx / L, qy = by / L, qm = Math.hypot(qx, qy), ux = qx / qm, uy = qy / qm;
-    const Wa = bp.W * 10, mu = bp.mu, h = (n * dx) / 2;
+    // specimen drift during a 2 s exposure smears the fringes and lowers their contrast (sinc of the shift)
+    const [vx, vy] = sim.driftDir(), shift = Math.abs((vx * ux + vy * uy) * sim.driftSpeed() * 2) * qm;
+    const mu = Math.max(0.02, bp.mu * (shift > 1e-6 ? Math.abs(Math.sin(Math.PI * shift) / (Math.PI * shift)) : 1));
+    const Wa = bp.W * 10, h = (n * dx) / 2;
     const I = new Float64Array(n * n), inOv = new Uint8Array(c * c), o = (n - c) / 2;
     for (let y = 0; y < n; y++)
       for (let x = 0; x < n; x++) {
@@ -145,7 +147,7 @@ export class OffAxis {
     const res = 1 / rk, Npx = (S.dose * res * res) / Math.PI;
     this.disp = {
       c, n, dx, holo: crop(I, n, c), ph: rec.ph, amp: rec.amp, truePh: truth.ph, inOv, fft,
-      bx, by, rb, s: 1 / qm, under, sReq: bp.s, mu, W: bp.W, res, sig: Math.SQRT2 / (mu * Math.sqrt(Npx)),
+      bx, by, rb, s: 1 / qm, under, sReq: bp.s, mu, mu0: bp.mu, W: bp.W, res, sig: Math.SQRT2 / (mu * Math.sqrt(Npx)),
       cover: inOv.reduce((a, v) => a + v, 0) / (c * c),
     };
   }
@@ -171,7 +173,7 @@ export class FocalSeries {
       it: 0, j: 0, maxIt: 30, err: [], errAcc: 0, Ire: null, Iim: null, nr: null, ni: null, rec: null,
     };
     const tr = Float64Array.from(exit.re), ti = Float64Array.from(exit.im);
-    lowpass(tr, ti, n, dx, 1 / P.infoLimit(sim.lam, FOCAL_SPREAD));
+    lowpass(tr, ti, n, dx, 1 / sim.infoLimit());
     this.st.truth = relPhase(tr, ti, n, c, null);
   }
 

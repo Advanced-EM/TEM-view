@@ -160,7 +160,7 @@ table.data td:last-child { text-align: right; font: 12px var(--mono); color: var
 .tourcap.in { animation: capIn 0.6s ease-out; }
 @keyframes capIn { from { opacity: 0; transform: translate(-50%, 8px); } }
 
-.modal { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; background: rgba(0, 0, 0, 0.55); padding: 20px; }
+.modal { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; background: rgba(0, 0, 0, 0.55); padding: 20px; }
 .modal .card { position: relative; width: min(640px, 100%); max-height: calc(100vh - 40px); overflow-y: auto; padding: 24px 28px; background: var(--panel-solid); }
 .modal ul { padding-left: 18px; margin: 0 0 18px; }
 .modal li { margin-bottom: 8px; color: #c3cad3; font-size: 13.5px; }
@@ -279,3 +279,25 @@ body.detBig #detMain { max-width: 52%; }
 body.stacked.detBig .detector { position: fixed; margin: 0; top: 12px; bottom: 12px; left: 8px; right: 8px; overflow-y: auto; }
 body.stacked.detBig #detMain { max-width: none; }
 body.stacked.detBig #detSec { height: 46vh; }
+
+/* digital twin: calibration dialog */
+.calib .card { width: min(760px, 100%); }
+.calib h2 { margin: 0 0 12px; font: 400 29px/1.05 var(--serif); }
+.ctabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 12px; }
+.ctabs button { padding: 6px 12px; border-radius: 99px; border: 1px solid var(--line-2); font-size: 12px; color: #c3cad3; }
+.ctabs button.on { border-color: var(--accent); background: var(--accent-soft); color: #fff; }
+.crow { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 10px 0; }
+.crow .btn { flex: none; }
+.cgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 6px 0 8px; }
+.cgrid label, label.file { display: flex; flex-direction: column; gap: 4px; font: 500 10px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.cgrid input { padding: 7px 9px; border-radius: 8px; border: 1px solid var(--line-2); background: rgba(255, 255, 255, 0.03); color: var(--text); font: 13px var(--mono); }
+label.file input { font: 12px var(--sans); color: #c3cad3; text-transform: none; letter-spacing: 0; }
+.btn.primary { border-color: rgba(111, 214, 255, 0.55); color: #fff; background: var(--accent-soft); flex: none; padding: 7px 16px; }
+.btn:disabled { opacity: 0.45; cursor: default; }
+.cres { display: grid; grid-template-columns: 1fr 1.4fr; gap: 10px; margin: 12px 0; }
+.cres canvas { width: 100%; aspect-ratio: 1; border-radius: 8px; background: #06080b; }
+.cres canvas + canvas { aspect-ratio: auto; height: 100%; min-height: 160px; }
+.cres canvas.wide { grid-column: 1 / -1; aspect-ratio: 3; }
+.calib table.data { width: 100%; margin: 6px 0; }
+table.data.twin td:last-child { white-space: normal; }
+@media (max-width: 640px) { .cres { grid-template-columns: 1fr; } .cres canvas + canvas { min-height: 180px; } }

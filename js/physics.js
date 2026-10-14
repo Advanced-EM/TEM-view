@@ -190,8 +190,12 @@ export const EL = [
   { sym: 'Sr', Z: 38, name: 'Strontium', color: '#5fe3a8' },
   { sym: 'Au', Z: 79, name: 'Gold', color: '#ffcf5a' },
   { sym: 'Zr', Z: 40, name: 'Zirconium', color: '#7fe3ff' },
+  { sym: 'N', Z: 7, name: 'Nitrogen', color: '#8fa8ff' },
+  { sym: 'S', Z: 16, name: 'Sulfur', color: '#ffe066' },
+  { sym: 'P', Z: 15, name: 'Phosphorus', color: '#ff9e4a' },
+  { sym: 'Fe', Z: 26, name: 'Iron', color: '#ff6a3d' },
 ];
-export const EI = { C: 0, O: 1, Si: 2, SiOx: 3, Ti: 4, Sr: 5, Au: 6, Zr: 7 };
+export const EI = { C: 0, O: 1, Si: 2, SiOx: 3, Ti: 4, Sr: 5, Au: 6, Zr: 7, N: 8, S: 9, P: 10, Fe: 11 };
 export const VP = EL.map((e) => Math.pow(e.Z, 0.75)); // projected-potential weight per atom
 export const ZH = EL.map((e) => Math.pow(e.Z, 1.7)); // high-angle (Rutherford-like) weight
 export const ZL = EL.map((e) => Math.pow(e.Z, 1.2)); // low-angle ADF weight
@@ -517,16 +521,99 @@ function makeUiO66() {
   };
 }
 
-export const SPECIMENS = { au: makeGold(), si: makeSilicon(), sto: makeSTO(), gr: makeGraphene(), mof: makeUiO66() };
+// Biological specimen: apoferritin and ferritin particles and a lipid vesicle in vitreous ice, across a hole
+// in a carbon support film. Everything here is amorphous: the material along each column is computed from
+// exact chord lengths through spheres and spherical shells, then seeded as pseudo-atoms.
+// Apoferritin: 24-subunit protein shell, 12 nm outside, 8 nm cavity. Ferritin adds a ferrihydrite core.
+function makeBio() {
+  const rng = mulberry32(7351);
+  const chord = (R, d2) => (d2 < R * R ? 2 * Math.sqrt(R * R - d2) : 0);
+  const parts = [];
+  const tryPlace = (type, R, n) => {
+    for (let k = 0, tries = 0; k < n && tries < 4000; tries++) {
+      const x = -230 + rng() * 560, y = -280 + rng() * 560;
+      if (parts.some((p) => Math.hypot(p.x - x, p.y - y) < p.R + R + 8)) continue;
+      parts.push({ type, x, y, R, rot: rng() * Math.PI }); k++;
+    }
+  };
+  parts.push({ type: 'vesicle', x: 150, y: 120, R: 175 });
+  tryPlace('ferritin', 60, 3);
+  tryPlace('apo', 60, 16);
+  const edge = (y) => -300 + 18 * Math.sin(y / 70) + 6 * Math.sin(y / 23); // carbon film to the left
+  const CF = 120; // carbon film, Å
+  const spec = {
+    id: 'bio', name: 'Apoferritin and a liposome in vitreous ice', short: 'Proteins in ice',
+    bio: true, beamSensitive: true, Dc300: 5, cryoProtect: 4, noCBED: true, smoothAmorph: true,
+    amorphCells: [2.2, 3.1],
+    grainRot: [0], grainAt() { return -1; },
+    atoms: (() => { const A = new AtomList(); A.finalize(); return A; })(),
+    // no crystal: a pseudo-lattice at the ice spacing keeps the diffraction beam drawings sensible
+    grains: [{ a1: [3.7, 0], a2: [0, 3.7], label: () => 'ice' }],
+    period: 3.7, center: [0, 0], fov: 60, zone: '—',
+    elements: [EI.C, EI.N, EI.O, EI.S, EI.P, EI.Fe],
+    parts,
+    // material along the column at (x, y); ctx.thick is the ice thickness from the slider
+    amorph(x, y, ctx) {
+      const out = [];
+      let solid = 0;
+      if (x < edge(y)) { out.push(['C', CF]); }
+      for (const p of parts) {
+        const dx = x - p.x, dy = y - p.y, d2 = dx * dx + dy * dy;
+        if (d2 > p.R * p.R) continue;
+        if (p.type === 'vesicle') {
+          const head = chord(p.R, d2) - chord(p.R - 10, d2) + chord(p.R - 30, d2) - chord(p.R - 40, d2);
+          const tail = chord(p.R - 10, d2) - chord(p.R - 30, d2);
+          out.push(['head', head], ['lipid', tail]); solid += head + tail;
+        } else {
+          // the shell's 24 subunits show four-fold symmetry along this view
+          const sh = (chord(p.R, d2) - chord(40, d2)) * (1 + 0.22 * Math.cos(4 * (Math.atan2(dy, dx) - p.rot)) * Math.min(1, Math.sqrt(d2) / 45));
+          out.push(['protein', sh]); solid += sh;
+          if (p.type === 'ferritin') { const c = chord(30, d2); out.push(['ferrihydrite', c]); solid += c; }
+        }
+      }
+      // vitreous ice exists only while the grid is cold: at room temperature it sublimes in the vacuum
+      if (ctx.cryo) out.push(['ice', Math.max(0, ctx.thick - solid)]);
+      return out;
+    },
+    thicknessAt(x, y, t) { return t; },
+    tauAt(x, y, t, kV) { return (t + (x < edge(y) ? CF : 0)) / (10 * imfp(kV, 7)); },
+    rings: [{ d: 3.7, hkl: 'ice' }, { d: 2.14, hkl: 'ice' }],
+    labels: [
+      { x: -360, y: 40, text: 'carbon film' },
+      ...parts.filter((p) => p.type === 'ferritin').slice(0, 1).map((p) => ({ x: p.x, y: p.y + 78, text: 'ferritin (iron core)' })),
+      ...parts.filter((p) => p.type === 'apo').slice(0, 1).map((p) => ({ x: p.x, y: p.y + 78, text: 'apoferritin' })),
+      { x: 150, y: 120, text: 'liposome (lipid bilayer)' },
+    ],
+    plasmon: [{ Ep: 21, G: 13, frac: 1 }],
+    zeff: 7, dmg: 0, damageVer: 0,
+  };
+  return spec;
+}
+
+export const SPECIMENS = { au: makeGold(), si: makeSilicon(), sto: makeSTO(), gr: makeGraphene(), mof: makeUiO66(), bio: makeBio() };
 for (const s of Object.values(SPECIMENS)) {
   for (const g of s.grains) g.b = reciprocal(g.a1, g.a2);
 }
+
+// ---------------------------------------------------------------- amorphous materials
+// dens: atoms per Å³ (non-hydrogen); pick(r) chooses the element of one pseudo-atom; cell: seeding cell, Å
+// (ice uses ~3.1 Å, the mean spacing of water molecules, so its diffuse ring sits near 3.7 Å).
+const MAT = {
+  C: { cell: 2.2, dens: 0.1, mix: [[EI.C, 1]] },
+  SiO2: { cell: 2.2, dens: 0.066, mix: [[EI.SiOx, 0.333], [EI.O, 0.667]] },
+  ice: { cell: 3.1, dens: 0.033, mix: [[EI.O, 1]] },
+  protein: { cell: 2.2, dens: 0.077, bio: true, mix: [[EI.C, 0.63], [EI.N, 0.17], [EI.O, 0.19], [EI.S, 0.01]] },
+  lipid: { cell: 2.2, dens: 0.055, bio: true, mix: [[EI.C, 1]] },
+  head: { cell: 2.2, dens: 0.075, bio: true, mix: [[EI.P, 0.12], [EI.O, 0.5], [EI.C, 0.32], [EI.N, 0.06]] },
+  ferrihydrite: { cell: 2.2, dens: 0.09, mix: [[EI.Fe, 0.4], [EI.O, 0.6]] },
+};
+for (const M of Object.values(MAT)) M.pick = (r) => { for (const [e, f] of M.mix) { if (r < f) return e; r -= f; } return M.mix[M.mix.length - 1][0]; };
 
 // ---------------------------------------------------------------- projected maps
 // Splat atoms onto an n×n grid (pixel size dx, centered at cx,cy). Tilting a crystal
 // smears each column along the tilt direction by L·tanθ, which is what kills lattice contrast off-axis.
 // part: 'cryst' or 'amorph' projects only that component (used to stack slices in depth)
-export function projectMaps(spec, { cx, cy, n, dx, thick, tiltX = 0, tiltY = 0, elements = false, noTilt = false, part = null }) {
+export function projectMaps(spec, { cx, cy, n, dx, thick, tiltX = 0, tiltY = 0, elements = false, noTilt = false, part = null, cryo = false }) {
   const N2 = n * n;
   const phase = new Float32Array(N2), zHi = new Float32Array(N2), zLo = new Float32Array(N2);
   const elem = elements ? EL.map(() => new Float32Array(N2)) : null;
@@ -572,27 +659,54 @@ export function projectMaps(spec, { cx, cy, n, dx, thick, tiltX = 0, tiltY = 0, 
     splat((ax - x0) / dx - 0.5, (ay - y0) / dx - 0.5, sA2, l2, e, VP[e] * N, ZH[e] * Math.pow(N, 0.85), ZL[e] * N, N);
   });
 
-  // amorphous material: seeded per 2.2 Å cell so it is stable as the stage moves
-  const cell = 2.2;
+  // amorphous material: seeded per cell so it is stable as the stage moves. spec.amorph(x, y, ctx) returns a
+  // material name (thickness from amorphThick or the slider) or a list of [material, thickness Å] pairs.
   if (part === 'cryst') return { phase, zHi, zLo, elem, n, dx, x0, y0 };
-  const i0 = Math.floor(x0 / cell) - 1, i1 = Math.floor((x0 + n * dx) / cell) + 1;
-  const j0 = Math.floor(y0 / cell) - 1, j1 = Math.floor((y0 + n * dx) / cell) + 1;
-  for (let j = j0; j <= j1; j++)
-    for (let i = i0; i <= i1; i++) {
-      const rng = mulberry32(hash2(i, j, 77));
-      const cnt = rng() < 0.45 ? 2 : 1;
-      for (let k = 0; k < cnt; k++) {
-        const x = (i + rng()) * cell, y = (j + rng()) * cell;
-        const r1 = rng(), r2 = rng();
-        const mat = spec.amorph(x, y);
-        if (!mat) continue;
-        let e, dens;
-        if (mat === 'C') { e = EI.C; dens = 0.1; }
-        else { e = r1 < 0.333 ? EI.SiOx : EI.O; dens = 0.066; }
-        const N = ((dens * cell * cell * (spec.amorphThick ?? thick)) / 1.45) * (0.75 + 0.5 * r2);
-        splat((x - x0) / dx - 0.5, (y - y0) / dx - 0.5, sB2, 0, e, VP[e] * N, ZH[e] * N, ZL[e] * N, N);
+  const ctx = { thick, cryo, dmg: spec.dmg || 0 };
+  for (const cell of spec.amorphCells ?? [2.2]) {
+    const i0 = Math.floor(x0 / cell) - 1, i1 = Math.floor((x0 + n * dx) / cell) + 1;
+    const j0 = Math.floor(y0 / cell) - 1, j1 = Math.floor((y0 + n * dx) / cell) + 1;
+    for (let j = j0; j <= j1; j++)
+      for (let i = i0; i <= i1; i++) {
+        const rng = mulberry32(hash2(i, j, cell === 2.2 ? 77 : 91));
+        const cnt = rng() < 0.45 ? 2 : 1;
+        for (let k = 0; k < cnt; k++) {
+          let x = (i + rng()) * cell, y = (j + rng()) * cell;
+          const r1 = rng(), r2 = rng(), r3 = rng();
+          const m = spec.amorph(x, y, ctx);
+          if (!m) continue;
+          const list = typeof m === 'string' ? [[m, spec.amorphThick ?? thick]] : m;
+          for (const [mat, t] of list) {
+            const M = MAT[mat];
+            if (!M || M.cell !== cell || t <= 0) continue;
+            const e = M.pick(r1);
+            let N = ((M.dens * cell * cell * t) / 1.45) * (0.75 + 0.5 * r2);
+            // thick layers: a column through them holds many atoms, so the projected texture is only ~1/√N
+            // strong; the rest is laid down as a smooth continuum (one broad blob per cell, below)
+            if (spec.smoothAmorph) N *= Math.min(1, 1.5 / Math.sqrt(M.dens * cell * cell * t));
+            if (M.bio && ctx.dmg) { // radiolysis of organic matter: mass loss, then hydrogen bubbles
+              N *= 1 - 0.35 * ctx.dmg;
+              if (ctx.dmg > 0.96 && hash2(Math.floor(x / 9), Math.floor(y / 9), 13) / 4294967296 < (ctx.dmg - 0.95) * 8) N *= 0.15; // bubbles past ~4 critical doses
+              x += 5 * ctx.dmg * (r3 - 0.5);
+            }
+            splat((x - x0) / dx - 0.5, (y - y0) / dx - 0.5, sB2, 0, e, VP[e] * N, ZH[e] * N, ZL[e] * N, N);
+          }
+        }
+        if (spec.smoothAmorph) { // continuum part, mass-conserving: broad blobs on the cell grid sum to a flat layer
+          const xc = (i + 0.5) * cell, yc = (j + 0.5) * cell, m = spec.amorph(xc, yc, ctx);
+          if (!m || typeof m === 'string') continue;
+          const sC = (0.6 * cell) / dx, sC2 = sC * sC;
+          for (const [mat, t] of m) {
+            const M = MAT[mat];
+            if (!M || M.cell !== cell || t <= 0) continue;
+            const f = 1 - Math.min(1, 1.5 / Math.sqrt(M.dens * cell * cell * t));
+            let W = (f * M.dens * cell * cell * t * sB2) / sC2;
+            if (M.bio && ctx.dmg) W *= 1 - 0.35 * ctx.dmg;
+            for (const [e, fr] of M.mix) splat((xc - x0) / dx - 0.5, (yc - y0) / dx - 0.5, sC2, 0, e, VP[e] * W * fr, ZH[e] * W * fr, ZL[e] * W * fr, W * fr);
+          }
+        }
       }
-    }
+  }
   return { phase, zHi, zLo, elem, n, dx, x0, y0 };
 }
 
@@ -637,6 +751,12 @@ export const XRAY = [
   { el: 'Zr', line: 'Lβ', E: 2.124, w: 0.5, y: 0.9 },
   { el: 'Zr', line: 'Kα', E: 15.775, w: 0.9, y: 1.0 },
   { el: 'Zr', line: 'Kβ', E: 17.667, w: 0.16, y: 1.0 },
+  { el: 'N', line: 'Kα', E: 0.392, w: 1, y: 0.3 },
+  { el: 'P', line: 'Kα', E: 2.013, w: 1, y: 1.0 },
+  { el: 'S', line: 'Kα', E: 2.307, w: 1, y: 1.0 },
+  { el: 'Fe', line: 'Lα', E: 0.705, w: 0.1, y: 1.0 },
+  { el: 'Fe', line: 'Kα', E: 6.404, w: 1, y: 1.0 },
+  { el: 'Fe', line: 'Kβ', E: 7.058, w: 0.13, y: 1.0 },
   { el: 'Cu', line: 'Kα', E: 8.048, w: 1, y: 0 },
   { el: 'Cu', line: 'Kβ', E: 8.905, w: 0.13, y: 0 },
   { el: 'Cu', line: 'Lα', E: 0.93, w: 0.25, y: 0 },
@@ -660,6 +780,10 @@ export const EDGES = [
   { key: 'Au', el: 'Au', name: 'Au M₄,₅', E: 2206, kind: 'delayed', h: 0.11, delay: 55 },
   { key: 'Zr', el: 'Zr', name: 'Zr M₄,₅', E: 180, kind: 'delayed', h: 1.0, delay: 25 },
   { key: 'Zr', el: 'Zr', name: 'Zr L₃', E: 2222, kind: 'sharp', h: 0.1 },
+  { key: 'N', el: 'N', name: 'N K', E: 401, kind: 'sharp', h: 0.85, elnes: [[401.5, 1.2, 0.6], [407, 4, 0.4]] },
+  { key: 'P', el: 'P', name: 'P L₂,₃', E: 132, kind: 'delayed', h: 1.8, delay: 6 },
+  { key: 'S', el: 'S', name: 'S L₂,₃', E: 165, kind: 'delayed', h: 1.6, delay: 7 },
+  { key: 'Fe', el: 'Fe', name: 'Fe L₃,₂', E: 708, kind: 'sharp', h: 0.45, elnes: [[709.5, 1.2, 1.6], [722.5, 1.4, 0.8]] },
 ];
 const erf = (x) => {
   const t = 1 / (1 + 0.3275911 * Math.abs(x));

@@ -312,6 +312,20 @@ export class Scene3D {
     const cup = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.03, 10, 40), M.plat);
     cup.rotation.x = -Math.PI / 2;
     this.holder.add(rod, knob, disk, cup);
+    // cryo holder: a liquid-nitrogen dewar on the end of the rod, cooling the tip through a copper braid
+    this.dewar = new THREE.Group();
+    this.frostMat = new THREE.MeshStandardMaterial({ color: 0xdfe9f2, metalness: 0.3, roughness: 0.7, emissive: 0x6fd6ff, emissiveIntensity: 0.08 });
+    const dw = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.28, 1.0, 28), this.frostMat);
+    dw.position.set(4.45, 0.42, 0);
+    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.32, 14), M.plat);
+    neck.position.set(4.45, 1.06, 0);
+    const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.33, 0.33, 0.06, 28), M.iron);
+    lid.position.set(4.45, 0.95, 0);
+    this.vapor = this.sprite(0xcfefff, 0.32);
+    this.vapor.position.set(4.45, 1.32, 0);
+    this.dewar.add(dw, neck, lid, this.vapor);
+    this.dewar.visible = false;
+    this.holder.add(this.dewar);
     col.add(this.holder);
     this.specGlow = this.sprite(0x8dffae, 0.5);
     col.add(this.specGlow);
@@ -467,7 +481,9 @@ export class Scene3D {
       ['Objective lens', [1.6, Y.objTop - 0.1, 0], null],
       ['Specimen', [0.9, Y.spec + 0.1, 0.1], null],
       ['EDS X-ray detector', [-1.3, Y.spec + 0.9, -0.8], ['eds'], 'left'],
-      ['Objective aperture', [-0.5, Y.bfp, 0], ['tem'], 'left'],
+      ['Objective aperture', [-0.5, Y.bfp, 0], (S) => S.mode === 'tem' && S.objAp !== 'zpp', 'left'],
+      ['Zernike phase plate', [-0.5, Y.bfp, 0], (S) => S.mode === 'tem' && S.objAp === 'zpp', 'left'],
+      ['Cryo holder', [3.9, Y.spec + 0.75, 0], (S) => S.cryo],
       ['Back focal plane', [-0.5, Y.bfp, 0], ['diff', 'stem', '4d', 'eds', 'eels', 'ronch', 'cbed', 'oah', 'ilh'], 'left'],
       ['Selected-area aperture', [0.5, Y.sa, 0], ['diff']],
       ['Electron biprism', [0.5, Y.sa + 0.06, 0], ['oah']],
@@ -544,10 +560,10 @@ export class Scene3D {
       B.push({ id: 'up', keys: V(upperTEM), color: cyan, I: 1, kids: [] });
       const gs = this.gvecs(S);
       const apMrad = AP_MRAD[S.objAp];
-      const apR = m === 'tem' && isFinite(apMrad) ? (0.36 * apMrad * 1e-3) / LAM200 : 9;
+      const apR = m === 'tem' && isFinite(apMrad) ? (0.36 * apMrad * 1e-3) / LAM200 : 9; // a phase plate passes every beam
       let apC = [0, 0];
       if (m === 'tem' && S.objAp === 'df') { const g = gs[0]; apC = [g.x * kScale, g.z * kScale]; }
-      this.anim.objApT = m === 'tem' && S.objAp !== 'none' ? apR : null;
+      this.anim.objApT = m === 'tem' && S.objAp === 'zpp' ? 0.025 : m === 'tem' && S.objAp !== 'none' ? apR : null;
       this.anim.objApC = apC;
       const saR = m === 'diff' ? clamp(S.sa * 0.028, 0.06, 0.34) : 0.34;
       this.anim.saT = m === 'diff' ? saR : null;
@@ -748,6 +764,8 @@ export class Scene3D {
     }
     // holder tilt (exaggerated ×6 so it reads)
     // holder tilt (exaggerated ×6 so it reads)
+    this.dewar.visible = !!S.cryo;
+    if (S.cryo) { this.vapor.material.opacity = 0.25 + 0.15 * Math.sin(this.time * 2.3); this.vapor.position.y = 1.32 + 0.05 * Math.sin(this.time * 1.7); }
     this.holder.rotation.x = (S.tiltY * Math.PI / 180) * 6;
     this.holder.rotation.z = (S.tiltX * Math.PI / 180) * 6;
     this.corrector.visible = S.corrector;
@@ -856,7 +874,7 @@ export class Scene3D {
     const show = S.showLabels, v = new THREE.Vector3();
     const w = this.W, h = this.H;
     for (const L of this.labels) {
-      const on = show && (!L.modes || L.modes.includes(S.mode) || L.modes.includes(`${S.mode}:${S.camera}`) || (L.modes.includes('corr') && S.corrector));
+      const on = show && (!L.modes || (typeof L.modes === 'function' ? L.modes(S) : L.modes.includes(S.mode) || L.modes.includes(`${S.mode}:${S.camera}`) || (L.modes.includes('corr') && S.corrector)));
       if (!on) { L.el.style.opacity = 0; L.el.classList.add('off'); continue; }
       v.copy(L.pos).project(this.camera);
       if (v.z > 1) { L.el.style.opacity = 0; L.el.classList.add('off'); continue; }

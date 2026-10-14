@@ -122,5 +122,13 @@
  "male/general/Electron biprism": "male/general/electron-biprism.mp3",
  "male/physics/mode-oah": "male/physics/mode-oah.mp3",
  "male/physics/mode-ilh": "male/physics/mode-ilh.mp3",
- "male/physics/Electron biprism": "male/physics/electron-biprism.mp3"
+ "male/physics/Electron biprism": "male/physics/electron-biprism.mp3",
+ "female/general/Zernike phase plate": "female/general/zernike-phase-plate.mp3",
+ "female/general/Cryo holder": "female/general/cryo-holder.mp3",
+ "female/physics/Zernike phase plate": "female/physics/zernike-phase-plate.mp3",
+ "female/physics/Cryo holder": "female/physics/cryo-holder.mp3",
+ "male/general/Zernike phase plate": "male/general/zernike-phase-plate.mp3",
+ "male/general/Cryo holder": "male/general/cryo-holder.mp3",
+ "male/physics/Zernike phase plate": "male/physics/zernike-phase-plate.mp3",
+ "male/physics/Cryo holder": "male/physics/cryo-holder.mp3"
 }
