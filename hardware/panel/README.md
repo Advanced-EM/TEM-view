@@ -83,6 +83,10 @@ It decodes the encoders with a quadrature table, which rejects contact bounce. I
 
 The USB vendor/product ID is the pid.codes test pair (0x1209 / 0x0001), which is only for development. Request a dedicated product ID from pid.codes (free for open hardware) before distributing panels.
 
+## Without hardware
+
+The exhibit's **on-screen panel** (key `V`, or the panel dialog) has the same knobs and buttons, driven by keyboard, mouse or touch, and can pop out into its own window. It is a quick way to try the layout before building one, and a fallback for visitors without a panel.
+
 ## Testing a panel
 
 1. Open the exhibit, click the gamepad icon in the Controls header, and press any button on the panel: browsers only reveal a controller after it has been used.
