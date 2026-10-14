@@ -8,6 +8,7 @@ import * as N from './narration.js';
 import { defaultState, SESSION_KEYS } from './state.js';
 import { PRESETS, newProfile, sanitizeProfile } from './profile.js';
 import { HOLDERS } from './holder.js';
+import { Panel } from './panel.js';
 import { collectData, toNpz } from './export.js';
 import { openCalibration } from './calibui.js';
 
@@ -568,6 +569,24 @@ function updateDetectorHeader() {
   $('#secTitle').textContent = names[1];
 }
 
+// ------------------------------------------------------------------ hardware control panel (panel.js)
+const hwPanel = new Panel({
+  S, sim,
+  set, explain: (k) => explainChange(k), refresh: () => refreshControls(), action: (id) => action(id),
+  // quiet change for the wobbler: no explanation, no control rebuild
+  setRaw: (k, v, inv) => { S[k] = v; if (k === 'df') S.dfFam[fam(S.mode)] = v; sim.invalidate(inv); },
+  moveStage: (dx, dy) => { S.cx += dx; S.cy += dy; sim.invalidate('stage'); },
+  cycleMode: (d) => { const i = MODES.findIndex((m) => m[0] === S.mode); setMode(MODES[(i + d + MODES.length) % MODES.length][0]); },
+  toggle: (k) => {
+    if (k === 'pause') action('pause');
+    else if (k === 'clarity') { S.clarity = S.clarity === 'edu' ? 'real' : 'edu'; sim.invalidate('clarity'); refreshControls(); explainChange('clarity'); }
+    else if (k === 'labels') set('showLabels', !S.showLabels);
+    else if (k === 'narrate') setAutoNarrate(!autoNarrate);
+    else if (k === 'expand') setExpanded(!document.body.classList.contains('detBig'));
+    else if (k === 'calib') action('calib');
+  },
+});
+
 // ------------------------------------------------------------------ results panel: enlarge or pop out
 function setExpanded(on) {
   document.body.classList.toggle('detBig', on);
@@ -749,6 +768,8 @@ function wire() {
     catch (err) { $('#change').hidden = false; $('#change').innerHTML = `<small>Could not load ${f.name.replace(/[<>&]/g, '')}</small><p>${String(err.message).replace(/[<>&]/g, '')}</p>`; }
   });
   $('#infoMore').addEventListener('click', () => { infoOpen = !infoOpen; renderInfo(); });
+  $('#btnPanel').addEventListener('click', () => { $('#panelCfg').hidden = false; hwPanel.renderConfig($('#panelCfg .pBody')); });
+  $('#panelCfg').addEventListener('click', (e) => { if (e.target.id === 'panelCfg' || e.target.closest('.close')) $('#panelCfg').hidden = true; });
   $('#btnExpand').addEventListener('click', () => setExpanded(!document.body.classList.contains('detBig')));
   $('#btnPopout').addEventListener('click', openPopout);
   $('#help').addEventListener('click', (e) => { if (e.target.id === 'help' || e.target.closest('.close')) $('#help').hidden = true; });
@@ -773,7 +794,7 @@ function wire() {
       sim.invalidate('tilt'); refreshControls(); explainChange('tilt');
       return;
     }
-    const sc = (S.mode === 'cbed' ? (S.cbedKind === 'lacbed' ? 440 : 60) : S.fov * 10) / w;
+    const sc = (S.mode === 'cbed' ? (S.cbedKind === 'lacbed' ? 440 : 60) : sim.fovA()) / w;
     S.cx = drag.cx - dx * sc; S.cy = drag.cy - dy * sc;
     sim.invalidate('stage');
   });
@@ -877,6 +898,7 @@ function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
   try {
+    hwPanel.poll(dt);
     sim.update(dt);
     const live = S.clarity === 'real' && ['tem', 'stem', 'diff', 'ronch', 'cbed'].includes(S.mode) && !S.paused;
     if (sim.version !== lastVer || (live && now - lastDraw > 70) || redraw) {
@@ -903,6 +925,8 @@ function frame(now) {
   if (now - lastSlow > 300) {
     lastSlow = now;
     updateTable();
+    hwPanel.hud($('#panelHud'));
+    if (!$('#panelCfg').hidden) { if (hwPanel.pad && !$('#pLive')) hwPanel.renderConfig($('#panelCfg .pBody')); hwPanel.renderLive($('#pLive')); }
     // live readouts (temperature, drift, ice) change by themselves
     const stk = document.body.classList.contains('stacked');
     for (const b of bound) if (b.c.pFn && (!b.el.dataset.modes || b.el.dataset.modes.split(' ').includes(S.mode)) && !(stk && folded.has(b.sec))) {
@@ -991,4 +1015,4 @@ updateDetectorHeader();
 explainChange('spec');
 resize();
 requestAnimationFrame(() => { resize(); requestAnimationFrame(frame); });
-window.__tem = { S, sim, scene };
+window.__tem = { S, sim, scene, panel: hwPanel };

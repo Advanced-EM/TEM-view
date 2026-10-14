@@ -50,6 +50,7 @@ An interactive transmission electron microscope in the browser, built as a small
   - *Sessions*: save and load the complete state, profile and calibrations as JSON.
   - *Export*: what the detectors recorded in the current mode as a NumPy `.npz` (images, 4D datacube, spectra, holograms, focal series) with `metadata.json` (calibrated pixel sizes, optics, state).
   - *Headless*: the simulator runs without a browser: `node tools/headless.mjs --mode tem --spec bio --cryo --df -1500 --out tem.npz` (or `--holder lhe --temp 4.2`, `--holder heat --temp 1000`), or `--session file.json` to replay a saved session.
+- **Control panel:** a physical panel laid out like a microscope's hand panels (focus, magnification, intensity, multifunction knobs, stage joystick) drives the exhibit through the Gamepad API, with no drivers; ordinary game controllers work as a stand-in. Knob functions follow the mode (magnification becomes camera length in diffraction, a context knob sets convergence, selected area, biprism voltage or temperature). A heads-up display shows the multifunction mode and the last change; the panel dialog (gamepad icon) shows live input and remaps axes and buttons. Protocol, reference RP2040 firmware, pin map and parts list: [`hardware/panel`](hardware/panel/README.md).
 - **Phones and tablets:** below 1100 px the exhibit becomes one scrolling page: title, a sticky swipeable mode bar, the column, the results, then the explanation (folded to a few lines) and the controls (sections fold). Vertical swipes scroll the page; horizontal drags rotate the column or move the stage, and pinch zooms.
 - **Educational ↔ realistic toggle:** a clean, labeled, false-color view, or Poisson shot noise, grayscale detectors, accumulating counts and log spectra.
 - **Voice narration:** a speaker button on every component card and on the mode panel, plus an *Auto-narrate* toggle (`N`) that reads each mode and component as you open it. Two levels, **General** (for a broad audience) and **Physics** (equations, limits and metrology, in words), each in a **female** or **male** voice. Clips are generated with ElevenLabs into `audio/narration/<voice>/<level>/` (`ELEVENLABS_API_KEY=… node tools/narrate.mjs`, which only regenerates changed scripts); any clip not yet generated falls back to the browser's speech synthesis.
@@ -84,6 +85,8 @@ Drag the column to orbit and scroll to zoom. Keys `1`–`9` and `0` switch modes
 | `js/calibrate.js`, `js/calibui.js` | Thon-ring and zero-loss fits, file readers (.mrc, .npy, images), calibration dialog |
 | `js/export.js`, `js/npy.js` | Data export to NumPy `.npz` |
 | `tools/headless.mjs` | Run the simulator in Node and save `.npz` |
+| `js/panel.js` | Hardware control panel and game controllers (Gamepad API) |
+| `hardware/panel/` | Panel protocol, reference firmware (RP2040), pin map, parts |
 | `js/components.js` | Instrument-physics cards for the column labels |
 | `js/render2d.js` | Detector views, spectra, overlays |
 | `js/scene3d.js` | Three.js column, beams, electrons, labels, tour |
