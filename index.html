@@ -8,28 +8,28 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=202610141948">
+<link rel="stylesheet" href="css/style.css?v=202610142031">
 <script type="importmap">
 {
  "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
-  "./js/calibrate.js": "./js/calibrate.js?v=202610141948",
-  "./js/calibui.js": "./js/calibui.js?v=202610141948",
-  "./js/components.js": "./js/components.js?v=202610141948",
-  "./js/explain.js": "./js/explain.js?v=202610141948",
-  "./js/export.js": "./js/export.js?v=202610141948",
-  "./js/holography.js": "./js/holography.js?v=202610141948",
-  "./js/main.js": "./js/main.js?v=202610141948",
-  "./js/narration.js": "./js/narration.js?v=202610141948",
-  "./js/npy.js": "./js/npy.js?v=202610141948",
-  "./js/physics.js": "./js/physics.js?v=202610141948",
-  "./js/profile.js": "./js/profile.js?v=202610141948",
-  "./js/render2d.js": "./js/render2d.js?v=202610141948",
-  "./js/scene3d.js": "./js/scene3d.js?v=202610141948",
-  "./js/sim.js": "./js/sim.js?v=202610141948",
-  "./js/state.js": "./js/state.js?v=202610141948",
-  "./js/techniques.js": "./js/techniques.js?v=202610141948"
+  "./js/calibrate.js": "./js/calibrate.js?v=202610142031",
+  "./js/calibui.js": "./js/calibui.js?v=202610142031",
+  "./js/components.js": "./js/components.js?v=202610142031",
+  "./js/explain.js": "./js/explain.js?v=202610142031",
+  "./js/export.js": "./js/export.js?v=202610142031",
+  "./js/holography.js": "./js/holography.js?v=202610142031",
+  "./js/main.js": "./js/main.js?v=202610142031",
+  "./js/narration.js": "./js/narration.js?v=202610142031",
+  "./js/npy.js": "./js/npy.js?v=202610142031",
+  "./js/physics.js": "./js/physics.js?v=202610142031",
+  "./js/profile.js": "./js/profile.js?v=202610142031",
+  "./js/render2d.js": "./js/render2d.js?v=202610142031",
+  "./js/scene3d.js": "./js/scene3d.js?v=202610142031",
+  "./js/sim.js": "./js/sim.js?v=202610142031",
+  "./js/state.js": "./js/state.js?v=202610142031",
+  "./js/techniques.js": "./js/techniques.js?v=202610142031"
  }
 }
 </script>
@@ -109,7 +109,7 @@
       <li><b>4D-STEM:</b> hover the virtual image to read individual diffraction patterns; drag on the pattern to reshape the virtual detector.</li>
       <li><b>EDS:</b> click a peak to map that element. <b>EELS:</b> drag on the spectrum to move the energy window.</li>
       <li><b>Ronchigram:</b> press Scramble, then null the aberrations with the sliders (watch the π/4 circle grow), or press Auto-tune. <b>CBED:</b> thicken the sample to read thickness from the fringes; drag strain to move HOLZ lines.</li>
-      <li><b>Digital twin</b> (bottom of the controls): choose an instrument profile, calibrate it from your own image (Thon rings) or zero-loss spectrum, save and load sessions, and export the recorded data as NumPy <code>.npz</code>.</li>
+      <li><b>Digital twin</b> (bottom of the controls): choose or edit an instrument profile, then calibrate it from your own data in any mode: Thon rings (TEM), a crystal lattice (magnification, STEM scan distortion), a ring standard (camera length, ellipticity), a vacuum disk (4D-STEM angles), known EDS peaks, the EELS zero-loss peak, or a vacuum hologram. Save and load sessions, and export the recorded data as NumPy <code>.npz</code>.</li>
       <li><b>Proteins in ice:</b> try TEM at −1.5 µm defocus, then move to focus and select the <b>Zernike phase plate</b>. Turn the <b>cryo holder</b> off to see what happens to a hydrated specimen in vacuum.</li>
       <li><b>Holography:</b> in off-axis mode, raise the biprism voltage for finer fringes and watch the contrast and phase precision fall; switch between hologram, phase and phase contours. In in-line mode, widen the focal step to recover large, slowly varying features.</li>
     </ul>
@@ -123,6 +123,6 @@
 <input id="fileSession" type="file" accept=".json,application/json" hidden>
 <div id="calib" class="modal calib" hidden><div class="card"><button class="close" aria-label="Close">×</button><div class="calibBody"></div></div></div>
 
-<script type="module" src="js/main.js?v=202610141948"></script>
+<script type="module" src="js/main.js?v=202610142031"></script>
 </body>
 </html>

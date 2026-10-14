@@ -208,8 +208,8 @@ function drawTEM(sim, S, m, s) {
   paint(ctx, t.img, t.c, t.c, dst, { lo, hi, noise, lut: scr ? LUT.phosphor : LUT.gray });
   ctx.filter = 'none';
   label(ctx, scr ? 'fluorescent screen' : 'direct electron detector · counting', W - 10 * dpr, 16 * dpr, dpr, { color: scr ? '#9be39b' : C.accent, size: 9, align: 'right' });
-  scaleBar(ctx, dst, S.fov * 10, dpr);
-  if (!real(S)) specimenLabels(ctx, sim.spec, S, dst, S.fov * 10, dpr);
+  scaleBar(ctx, dst, sim.fovA(), dpr);
+  if (!real(S)) specimenLabels(ctx, sim.spec, S, dst, sim.fovA(), dpr);
   if (S.objAp === 'df') label(ctx, 'DARK FIELD · one Bragg beam', 10 * dpr, 16 * dpr, dpr, { color: C.warm });
   if (S.objAp === 'zpp') label(ctx, 'ZERNIKE PHASE PLATE · π/2', 10 * dpr, 16 * dpr, dpr, { color: C.warm });
   damageLabel(ctx, sim, S, W, dpr);
@@ -316,8 +316,8 @@ function drawSTEM(sim, S, m, s) {
   const g = ctx.createLinearGradient(0, y - 10 * dpr, 0, y + 2 * dpr);
   g.addColorStop(0, 'rgba(111,214,255,0)'); g.addColorStop(1, 'rgba(111,214,255,0.55)');
   ctx.fillStyle = g; ctx.fillRect(0, y - 10 * dpr, W, 12 * dpr);
-  scaleBar(ctx, dst, S.fov * 10, dpr);
-  if (!real(S)) specimenLabels(ctx, sim.spec, S, dst, S.fov * 10, dpr);
+  scaleBar(ctx, dst, sim.fovA(), dpr);
+  if (!real(S)) specimenLabels(ctx, sim.spec, S, dst, sim.fovA(), dpr);
   damageLabel(ctx, sim, S, W, dpr);
 
   // secondary: probe | detector geometry
@@ -636,7 +636,7 @@ function drawEDS(sim, S, m, s) {
   oc.putImageData(id, 0, 0);
   ctx.imageSmoothingEnabled = !real(S);
   ctx.drawImage(c, 0, 0, n, n, 0, 0, W, H);
-  scaleBar(ctx, dst, S.fov * 10, dpr);
+  scaleBar(ctx, dst, sim.fovA(), dpr);
   let y = 16 * dpr;
   for (const sym of syms) { label(ctx, sym, 10 * dpr, y, dpr, { color: symColor(sym) }); y += 20 * dpr; }
   label(ctx, `${a.t.toFixed(1)} s · ${Math.round(a.total).toLocaleString()} X-rays`, W - 10 * dpr, 16 * dpr, dpr, { color: C.muted, size: 9, align: 'right' });
@@ -697,7 +697,7 @@ function drawEELS(sim, S, m, s) {
     for (let i = 0; i < n * n; i++) mx = Math.max(mx, a.map[i]);
     paint(ctx, a.map, n, n, dst, { lo: 0, hi: mx || 1, lut: LUT.gray });
   } else paint(ctx, e.map, n, n, dst, { lo: 0, hi: 1, lut: LUT.ice });
-  scaleBar(ctx, dst, S.fov * 10, dpr);
+  scaleBar(ctx, dst, sim.fovA(), dpr);
   const w0 = S.eelsWin - S.eelsWidth / 2, w1 = S.eelsWin + S.eelsWidth / 2;
   label(ctx, `${w0.toFixed(0)}–${w1.toFixed(0)} eV${e.sub ? ' · background removed' : ''}`, 10 * dpr, 16 * dpr, dpr, { color: C.accent });
   const inWin = P.EDGES.filter((ed) => sim.si.comp[ed.key] && ed.E < w1 && ed.E > w0 - 40);

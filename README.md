@@ -14,11 +14,35 @@ An interactive transmission electron microscope in the browser, built as a small
 - **Zernike phase plate** (TEM): a π/2 plate in the back focal plane turns −sin χ into cos χ, so weak phase objects show strong contrast in focus, with the characteristic halos below the cut-on frequency.
 - **Electron holography:** *Off-axis*: a Möllenstedt biprism overlaps the object wave with a vacuum reference wave; the hologram's Fourier transform shows the center band and sidebands, and the selected sideband is reconstructed into amplitude, phase and phase contours, with optional numerical removal of the lens aberrations. Biprism voltage trades fringe spacing and overlap width against fringe contrast, and the phase precision (2π/N) follows from contrast and dose. *In-line*: a focal series is recorded and the exit wave is recovered by iterative focal-series reconstruction, with a live convergence curve; the focal range controls how well slowly varying phase is recovered.
 - **Results panel:** enlarge it in place (`X`) or open it in a separate window for a second screen.
-- **Digital twin:**
-  - *Instrument profile*: energy spread, Cc, Cs, illumination and stability of one particular microscope (generic presets: 200 kV Schottky with corrector, 300 kV cryo-TEM, 300 kV cold-FEG STEM). The focal spread and information limit are computed from it.
-  - *Calibrate from data* (in the browser; files never leave it): fit defocus and two-fold astigmatism to the Thon rings of an image of an amorphous film (.mrc, .npy, .png, .jpg, .tif), as CTFFIND/Gctf do, and the gun's energy spread to an EELS zero-loss peak (.csv, .txt, .msa). On simulated data the fit recovers defocus to within 0.3 % and astigmatism to a few nm.
+- **Digital twin, across all modalities:**
+  - *Instrument profile*: the parameters that belong to one particular microscope, each used by the modes it affects:
+
+    | Modes | Profile parameters |
+    | --- | --- |
+    | TEM, in-line holography | energy spread, Cc, Cs, illumination angle, HV and lens stability (focal spread, information limit) |
+    | TEM, STEM, spectrum-image maps | magnification calibration |
+    | STEM, EDS/EELS maps | effective source size, scan aspect ratio and shear |
+    | SAED, STEM detectors, 4D-STEM, CBED, Ronchigram | camera-length calibration; projector ellipticity (SAED) |
+    | EDS | detector resolution at Mn Kα |
+    | EELS | energy spread |
+    | Off-axis holography | fringe contrast μ₀ and coherence width |
+
+    Three generic presets (200 kV Schottky with corrector, 300 kV cryo-TEM, 300 kV cold-FEG STEM), plus an editor for your own values.
+  - *Calibrate from data*, one fit per modality, in the browser (files never leave it):
+
+    | Modality | Data | Measures |
+    | --- | --- | --- |
+    | TEM | image of an amorphous film (.mrc, .npy, .png, .jpg, .tif) | defocus, two-fold astigmatism (Thon rings) |
+    | TEM / STEM | atomic-resolution image of a single crystal with a known spacing | magnification; STEM scan aspect and shear |
+    | Diffraction | ring pattern of a gold, aluminum or silicon standard | camera length, projector ellipticity |
+    | 4D-STEM, CBED, Ronchigram | vacuum pattern at a known convergence angle | mrad per pixel (camera length) |
+    | EDS | spectrum with known, isolated lines | resolution at Mn Kα, energy gain and offset |
+    | EELS | zero-loss peak | gun energy spread |
+    | Off-axis holography | vacuum hologram | fringe spacing and contrast |
+
+    Every tab can also simulate data from a "mystery" instrument with hidden miscalibrations, so the fits can be tried and checked. On such data they recover magnification, scan aspect and shear to ~0.02 %, defocus to ~2 nm, camera length to <1 %, detector angles to <0.1 %, energy spread to ~0.01 eV, EDS resolution to ~4 % and fringe contrast exactly.
   - *Sessions*: save and load the complete state, profile and calibrations as JSON.
-  - *Export*: what the detectors recorded in the current mode as a NumPy `.npz` (images, 4D datacube, spectra, holograms, focal series) with `metadata.json` (pixel sizes, optics, state).
+  - *Export*: what the detectors recorded in the current mode as a NumPy `.npz` (images, 4D datacube, spectra, holograms, focal series) with `metadata.json` (calibrated pixel sizes, optics, state).
   - *Headless*: the simulator runs without a browser: `node tools/headless.mjs --mode tem --spec bio --cryo --df -1500 --out tem.npz`, or `--session file.json` to replay a saved session.
 - **Phones and tablets:** below 1100 px the exhibit becomes one scrolling page: title, a sticky swipeable mode bar, the column, the results, then the explanation (folded to a few lines) and the controls (sections fold). Vertical swipes scroll the page; horizontal drags rotate the column or move the stage, and pinch zooms.
 - **Educational ↔ realistic toggle:** a clean, labeled, false-color view, or Poisson shot noise, grayscale detectors, accumulating counts and log spectra.

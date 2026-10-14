@@ -612,6 +612,24 @@ function applyCalibration(r) {
   } else if (r.type === 'zlp') {
     pr.dE = +r.dE.toFixed(3);
     pr.calibrated.zlp = { fwhm: r.fwhm, dE: r.dE, source: r.source, when };
+  } else if (r.type === 'lattice') {
+    pr.magCal = +r.magCal.toFixed(5);
+    if (r.scanAspect != null) { pr.scanAspect = +r.scanAspect.toFixed(5); pr.scanShear = +r.scanShear.toFixed(3); }
+    pr.calibrated.lattice = { magCal: r.magCal, scanAspect: r.scanAspect, scanShear: r.scanShear, d: r.d, source: r.source, when };
+  } else if (r.type === 'rings') {
+    Object.assign(pr, { camLCal: +r.camLCal.toFixed(5), ellip: +r.ellip.toFixed(5), ellipAng: +r.ellipAng.toFixed(1) });
+    pr.calibrated.rings = { camLCal: r.camLCal, ellip: r.ellip, ellipAng: r.ellipAng, source: r.source, when };
+  } else if (r.type === 'disk') {
+    pr.camLCal = +r.camLCal.toFixed(5);
+    pr.calibrated.disk = { camLCal: r.camLCal, mradPx: r.mradPx, source: r.source, when };
+  } else if (r.type === 'eds') {
+    pr.edsFWHM = +r.fwhmMn.toFixed(1);
+    pr.calibrated.eds = { fwhmMn: r.fwhmMn, gain: r.gain, offset: r.offset, source: r.source, when };
+  } else if (r.type === 'holo') {
+    pr.holoMu0 = +r.mu0.toFixed(4);
+    pr.calibrated.holo = { mu0: r.mu0, mu: r.mu, U: r.U, source: r.source, when };
+  } else if (r.type === 'profile') {
+    Object.assign(pr, r.profile, { calibrated: pr.calibrated });
   }
   setProfile(pr, 'calibrated');
   sim.invalidate('ab');
@@ -661,13 +679,19 @@ function exportData() {
 function updateTwin() {
   const tb = $('#twinBody');
   if (!tb || tb.closest('[hidden]')) return;
-  const pr = S.profile, cal = pr.calibrated || {}, rows = [
-    ['Gun', `${pr.gun}, ΔE ${pr.dE.toFixed(2)} eV${cal.zlp ? ' ✓' : ''}`],
-    ['Cc / Cs (uncorrected)', `${pr.Cc} / ${pr.CsUnc} mm`],
-    ['Focal spread Δ', `${sim.focalSpread().toFixed(0)} Å`],
-    ['Information limit', `${sim.infoLimit().toFixed(2)} Å`],
-  ];
-  if (cal.ctf) rows.push(['Last Thon-ring fit', `${(cal.ctf.df / 10).toFixed(0)} nm, A1 ${(cal.ctf.A1 / 10).toFixed(1)} nm (${cal.ctf.fitRes.toFixed(1)} Å)`]);
+  // what the current mode depends on; ✓ marks a value measured from data
+  const pr = S.profile, cal = pr.calibrated || {}, m = S.mode, ok = (k) => (cal[k] ? ' ✓' : ''), rows = [];
+  if (['tem', 'ilh', 'oah', 'diff'].includes(m)) rows.push(['Gun', `${pr.gun}, ΔE ${pr.dE.toFixed(2)} eV${ok('zlp')}`], ['Focal spread / info limit', `${sim.focalSpread().toFixed(0)} Å / ${sim.infoLimit().toFixed(2)} Å`]);
+  if (['tem', 'ilh', 'oah'].includes(m)) rows.push(['Cc / Cs (uncorrected)', `${pr.Cc} / ${pr.CsUnc} mm`]);
+  if (['tem', 'ilh', 'oah', 'stem', '4d', 'eds', 'eels'].includes(m)) rows.push(['Magnification calibration', `×${pr.magCal.toFixed(4)}${ok('lattice')}`]);
+  if (['stem', 'eds', 'eels'].includes(m)) rows.push(['Scan aspect / shear', `${pr.scanAspect.toFixed(4)} / ${pr.scanShear.toFixed(2)}°${ok('lattice')}`], ['Source size', `${pr.sourceSize} Å`]);
+  if (['diff', 'stem', '4d', 'cbed', 'ronch'].includes(m)) rows.push(['Camera-length calibration', `×${pr.camLCal.toFixed(4)}${ok('rings') || ok('disk')}`]);
+  if (m === 'diff') rows.push(['Projector ellipticity', `${(pr.ellip * 100).toFixed(2)} % at ${pr.ellipAng}°${ok('rings')}`]);
+  if (m === 'eds') rows.push(['EDS resolution (Mn Kα)', `${pr.edsFWHM.toFixed(0)} eV${ok('eds')}`]);
+  if (m === 'eels') rows.push(['Energy spread / resolution', `${pr.dE.toFixed(2)} / ${sim.eelsRes().toFixed(2)} eV${ok('zlp')}`]);
+  if (m === 'oah') rows.push(['Fringe contrast μ₀ / coherence', `${pr.holoMu0.toFixed(2)} / ${pr.holoCoh} nm${ok('holo')}`]);
+  if (cal.ctf && ['tem', 'ilh'].includes(m)) rows.push(['Last Thon-ring fit', `${(cal.ctf.df / 10).toFixed(0)} nm, A1 ${(cal.ctf.A1 / 10).toFixed(1)} nm (${cal.ctf.fitRes.toFixed(1)} Å)`]);
+  rows.push(['Measured from data', `${Object.keys(cal).length ? Object.keys(cal).map((k) => ({ ctf: 'Thon rings', zlp: 'zero loss', lattice: 'lattice', rings: 'rings', disk: 'disk', eds: 'EDS', holo: 'hologram' })[k]).join(', ') : 'nothing yet'}`]);
   tb.innerHTML = rows.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('');
 }
 function updateTable() {
