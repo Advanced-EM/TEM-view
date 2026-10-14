@@ -9,6 +9,7 @@ import { defaultState, SESSION_KEYS } from './state.js';
 import { PRESETS, newProfile, sanitizeProfile } from './profile.js';
 import { HOLDERS } from './holder.js';
 import { Panel } from './panel.js';
+import { VirtualPanel } from './vpanel.js';
 import { collectData, toNpz } from './export.js';
 import { openCalibration } from './calibui.js';
 
@@ -576,6 +577,7 @@ const hwPanel = new Panel({
   // quiet change for the wobbler: no explanation, no control rebuild
   setRaw: (k, v, inv) => { S[k] = v; if (k === 'df') S.dfFam[fam(S.mode)] = v; sim.invalidate(inv); },
   moveStage: (dx, dy) => { S.cx += dx; S.cy += dy; sim.invalidate('stage'); },
+  openVirtual: (where) => (where === 'window' ? vPanel.openWindow() : vPanel.openDock()),
   cycleMode: (d) => { const i = MODES.findIndex((m) => m[0] === S.mode); setMode(MODES[(i + d + MODES.length) % MODES.length][0]); },
   toggle: (k) => {
     if (k === 'pause') action('pause');
@@ -586,6 +588,8 @@ const hwPanel = new Panel({
     else if (k === 'calib') action('calib');
   },
 });
+
+const vPanel = new VirtualPanel(hwPanel);
 
 // ------------------------------------------------------------------ results panel: enlarge or pop out
 function setExpanded(on) {
@@ -860,6 +864,7 @@ function wire() {
     else if (e.key === 'e' || e.key === 'E') set('showElectrons', !S.showElectrons);
     else if (e.key === 'r' || e.key === 'R') scene.resetView();
     else if (e.key === 'c' || e.key === 'C') { S.clarity = S.clarity === 'edu' ? 'real' : 'edu'; sim.invalidate('clarity'); refreshControls(); explainChange('clarity'); }
+    else if (e.key === 'v' || e.key === 'V') vPanel.openDock();
     else if (e.key === 'x' || e.key === 'X') setExpanded(!document.body.classList.contains('detBig'));
     else if (e.key === 'Escape') { setExpanded(false); $('#help').hidden = true; if (scene.tour) scene.stopTour(); }
   });
@@ -926,6 +931,7 @@ function frame(now) {
     lastSlow = now;
     updateTable();
     hwPanel.hud($('#panelHud'));
+    vPanel.update();
     if (!$('#panelCfg').hidden) { if (hwPanel.pad && !$('#pLive')) hwPanel.renderConfig($('#panelCfg .pBody')); hwPanel.renderLive($('#pLive')); }
     // live readouts (temperature, drift, ice) change by themselves
     const stk = document.body.classList.contains('stacked');
@@ -1015,4 +1021,4 @@ updateDetectorHeader();
 explainChange('spec');
 resize();
 requestAnimationFrame(() => { resize(); requestAnimationFrame(frame); });
-window.__tem = { S, sim, scene, panel: hwPanel };
+window.__tem = { S, sim, scene, panel: hwPanel, vpanel: vPanel };

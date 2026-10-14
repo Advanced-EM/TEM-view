@@ -326,3 +326,44 @@ table.pin select { background: rgba(255, 255, 255, 0.03); color: var(--text); bo
 .plive .bt { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 6px; border: 1px solid var(--line); font: 10px var(--mono); color: var(--muted); }
 .plive .bt.on { background: var(--accent); color: #05070a; border-color: var(--accent); }
 @media (max-width: 640px) { .pgrid { grid-template-columns: 1fr; } }
+
+/* on-screen control panel (keyboard and mouse) */
+.vpanel { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 28; width: min(860px, calc(100vw - 24px)); padding: 10px 14px 8px; background: rgba(9, 12, 16, 0.96); box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55); user-select: none; }
+.vpanel.inwin { position: static; transform: none; width: auto; min-height: calc(100vh - 24px); margin: 12px; box-sizing: border-box; }
+body.vwin { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 var(--sans); overflow: auto; }
+.vhead { display: flex; align-items: center; gap: 10px; cursor: move; margin-bottom: 8px; }
+.vpanel.inwin .vhead { cursor: default; }
+.vhead b { font: 500 10.5px var(--mono); letter-spacing: 0.14em; text-transform: uppercase; }
+.vhead span { font-size: 11px; color: var(--muted); }
+.vhead .sp { flex: 1; }
+.vhead button { width: 26px; height: 26px; border-radius: 7px; border: 1px solid var(--line); color: var(--muted); font-size: 15px; }
+.vhead button:hover { color: var(--text); border-color: var(--accent); }
+.vbody { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.vside { display: flex; flex-direction: column; gap: 8px; padding: 8px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255, 255, 255, 0.015); }
+.knobs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.knob { display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: ns-resize; touch-action: none; outline: none; text-align: center; }
+.knob .dial { width: 54px; height: 54px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #4a5361, #1b2027 70%); border: 1px solid var(--line-2); box-shadow: inset 0 -3px 6px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.4); position: relative; transition: transform 0.08s; }
+.knob.big .dial { width: 68px; height: 68px; }
+.knob .dial i { position: absolute; left: 50%; top: 6px; width: 3px; height: 12px; margin-left: -1.5px; border-radius: 2px; background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+.knob:hover .dial, .knob:focus .dial { border-color: var(--accent); }
+.knob b { font: 500 9.5px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.knob em { font: 11px var(--mono); font-style: normal; color: var(--accent); min-height: 1.3em; }
+.vpanel kbd { font: 9.5px var(--mono); color: var(--dim); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+.vbtns { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.vbtn { display: flex; justify-content: space-between; align-items: center; gap: 4px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line-2); font-size: 12px; color: #c3cad3; background: rgba(255, 255, 255, 0.02); }
+.vbtn:hover { border-color: var(--accent); color: #fff; }
+.vbtn.on { background: var(--accent-soft); border-color: var(--accent); color: #fff; }
+.vrow { display: flex; gap: 10px; align-items: center; justify-content: space-between; }
+.mfsel { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.mfsel button { font-size: 11px; padding: 3px 8px; border-radius: 99px; border: 1px solid var(--line-2); color: var(--muted); }
+.mfsel button.on { border-color: var(--accent); color: #fff; background: var(--accent-soft); }
+.stagepad { width: 96px; height: 96px; flex: none; border-radius: 50%; border: 1px solid var(--line-2); background: radial-gradient(circle, rgba(111, 214, 255, 0.08), transparent 70%); position: relative; display: grid; place-items: center; touch-action: none; cursor: grab; }
+.stagepad i { width: 26px; height: 26px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #5b6574, #20262e); border: 1px solid var(--accent); transition: transform 0.12s; }
+.stagepad small { position: absolute; bottom: -16px; font: 9px var(--mono); color: var(--dim); white-space: nowrap; }
+.vmsg { margin: 14px 0 0; font: 11.5px var(--mono); color: var(--muted); min-height: 1.4em; }
+.vmsg.fresh { color: var(--accent); }
+@media (max-width: 760px) {
+  .vbody { grid-template-columns: 1fr; }
+  .vpanel:not(.inwin) { bottom: 0; border-radius: 14px 14px 0 0; max-height: 70vh; overflow-y: auto; }
+  .knob .dial { width: 46px; height: 46px; } .knob.big .dial { width: 56px; height: 56px; }
+}

@@ -12,6 +12,7 @@ export const AXES = [
   ['stageX', 'Stage X (joystick)'], ['stageY', 'Stage Y (joystick)'], ['focus', 'Focus'], ['mag', 'Magnification / camera length'],
   ['intensity', 'Intensity (dose)'], ['mfX', 'Multifunction X'], ['mfY', 'Multifunction Y'], ['context', 'Context knob'],
 ];
+export { MF };
 export const BUTTONS = [
   ['modePrev', 'Previous mode'], ['modeNext', 'Next mode'], ['mfSelect', 'Multifunction: stigmator / shift / tilt'], ['wobbler', 'Focus wobbler'],
   ['focusFine', 'Focus fine / coarse'], ['optFocus', 'Optimal focus'], ['pause', 'Pause beam'], ['clarity', 'Educational / realistic'],
@@ -54,7 +55,7 @@ export class Panel {
   poll(dt) {
     const pads = typeof navigator !== 'undefined' && navigator.getGamepads ? [...navigator.getGamepads()].filter(Boolean) : [];
     const gp = pads.find((p) => /TEM-view/i.test(p.id)) ?? pads[0] ?? null;
-    if (!gp) { this.pad = null; return; }
+    if (!gp) { this.pad = null; this.stageV = this.vstage; this.wobble(dt); this.flush(dt); return; }
     if (!this.pad || this.pad.index !== gp.index) { this.prevAxes = null; this.prevButtons = []; }
     this.pad = gp;
     this.kind = /TEM-view/i.test(gp.id) || gp.mapping !== 'standard' ? 'panel' : 'standard';
@@ -85,21 +86,49 @@ export class Panel {
     }
     // stage joystick: a rate, scaled to the field of view
     const sx = dz(A('stageX')), sy = dz(A('stageY'));
-    if (sx || sy) add('stage', 1), (this.stageV = [sx, sy]);
-    else this.stageV = null;
+    this.stageV = sx || sy ? [sx, sy] : this.vstage;
     // buttons
-    if (pressed('modePrev')) this.api.cycleMode(-1);
-    if (pressed('modeNext')) this.api.cycleMode(1);
-    if (pressed('mfSelect')) { const i = MF.findIndex((m) => m[0] === this.mf); this.mf = MF[(i + 1) % MF.length][0]; this.say(`Multifunction knobs: ${MF.find((m) => m[0] === this.mf)[1]}`); }
-    if (pressed('focusFine')) { this.fine = !this.fine; this.say(`Focus ${this.fine ? 'fine' : 'coarse'}`); }
-    if (pressed('wobbler')) this.toggleWobbler();
-    if (pressed('optFocus')) { this.api.action('optfocus'); this.say('Optimal focus'); }
-    for (const k of ['pause', 'clarity', 'labels', 'narrate', 'expand', 'calib']) if (pressed(k)) this.api.toggle(k);
+    for (const [k] of BUTTONS) if (pressed(k)) this.button(k);
     this.prevButtons = bt;
     this.wobble(dt);
-    // apply accumulated motion at most ~20× a second (each change recomputes part of the simulation)
+    this.flush(dt);
+  }
+
+  // apply accumulated motion at most ~20× a second (each change recomputes part of the simulation)
+  flush() {
+    if (this.stageV) this.acc.stage = 1;
     const now = performance.now();
-    if (now - this.lastApply > 50 && Object.keys(this.acc).length) { this.lastApply = now; this.apply(dt); }
+    if (now - this.lastApply > 50 && Object.keys(this.acc).length) { this.lastApply = now; this.apply(); }
+  }
+
+  // ---------------------------------------------------------------- input from the on-screen panel (keyboard, mouse)
+  turn(axis, detents) { this.acc[axis] = (this.acc[axis] ?? 0) + detents; }
+  setStage(vx, vy) { this.vstage = vx || vy ? [vx, vy] : null; }
+  button(k) {
+    if (k === 'modePrev') this.api.cycleMode(-1);
+    else if (k === 'modeNext') this.api.cycleMode(1);
+    else if (k === 'mfSelect') { const i = MF.findIndex((m) => m[0] === this.mf); this.setMF(MF[(i + 1) % MF.length][0]); }
+    else if (k === 'focusFine') { this.fine = !this.fine; this.say(`Focus ${this.fine ? 'fine' : 'coarse'}`); }
+    else if (k === 'wobbler') this.toggleWobbler();
+    else if (k === 'optFocus') { this.api.action('optfocus'); this.say('Optimal focus'); }
+    else this.api.toggle(k);
+  }
+  setMF(k) { this.mf = k; this.say(`Multifunction knobs: ${MF.find((m) => m[0] === k)[1]}`); }
+  // what each knob is doing right now, for the on-screen panel
+  readouts() {
+    const { S } = this.api, m = S.mode, f1 = (v) => v.toFixed(1);
+    const diffMag = m === 'diff' || (m === 'cbed' && S.cbedKind === 'cbed');
+    const ctx = m === 'stem' || m === 'eds' || m === 'eels' ? ['Convergence', `${S.alpha} mrad`] : m === '4d' ? ['Convergence', `${S.alpha4d} mrad`]
+      : m === 'diff' ? ['Selected area', `${f1(S.sa)} nm`] : m === 'cbed' ? ['Convergence', `${S.cbedKind === 'cbed' ? S.alphaCB : S.alphaLA} mrad`]
+      : m === 'ronch' ? ['Ronchigram aperture', `${S.ronchAp} mrad`] : m === 'oah' ? ['Biprism', `${S.biprism} V`] : m === 'ilh' ? ['Focal step', `${f1(S.focalStep)} nm`]
+      : S.holder !== 'room' ? ['Temperature', `${S.tempSet < 20 ? S.tempSet.toFixed(1) : Math.round(S.tempSet)} K`] : ['Fine focus', `${S.df.toFixed(2)} nm`];
+    const mfv = this.mf === 'stig' ? `A1 ${S.ab.A1.toFixed(1)} nm, ${S.ab.A1a}°` : this.mf === 'tilt' ? `${S.tiltX.toFixed(2)}°, ${S.tiltY.toFixed(2)}°` : `${(S.cx / 10).toFixed(1)}, ${(S.cy / 10).toFixed(1)} nm`;
+    return {
+      focus: ['Focus', `${S.df > 0 ? '+' : ''}${S.df.toFixed(1)} nm · ${this.fine ? 'fine' : 'coarse'}`],
+      mag: diffMag ? ['Camera length', `${S.camL} mm`] : ['Magnification', `${S.fov.toFixed(1)} nm field`],
+      intensity: ['Intensity', `${S.dose < 10 ? S.dose.toFixed(1) : Math.round(S.dose)} e⁻/Å²`],
+      mf: [MF.find((x) => x[0] === this.mf)[1], mfv], context: ctx,
+    };
   }
 
   apply() {
@@ -183,7 +212,7 @@ export class Panel {
 
   // heads-up display
   hud(el) {
-    if (!this.pad) { el.hidden = true; return; }
+    if (!this.pad || this.virtual) { el.hidden = true; return; } // the on-screen panel shows the same itself
     el.hidden = false;
     const fresh = performance.now() - this.msgT < 2500;
     el.innerHTML = `<b>${esc(shortName(this.pad.id))}</b><span>${this.kind === 'panel' ? 'panel' : 'controller'}</span>
@@ -195,10 +224,13 @@ export class Panel {
   // configuration dialog: live inputs, mapping, inversion, sensitivity
   renderConfig(el) {
     const gp = this.pad, M = gp ? this.map() : null;
+    const vbtns = `<div class="crow"><button class="btn primary" data-vp="dock">On-screen panel (V)</button><button class="btn" data-vp="window">Pop out panel</button><span class="muted">Drive the microscope with the keyboard and mouse: the same knobs and buttons as the hardware panel.</span></div>`;
+    const wireV = () => el.querySelectorAll('[data-vp]').forEach((b) => b.addEventListener('click', () => { el.closest('.modal').hidden = true; this.api.openVirtual(b.dataset.vp); }));
     if (!gp) {
-      el.innerHTML = `<p class="eyebrow">Control panel</p><h2>Connect a <em>panel</em></h2>
+      el.innerHTML = `<p class="eyebrow">Control panel</p><h2>Connect a <em>panel</em>, or use the keyboard</h2>${vbtns}
         <p>Plug in a TEM-view panel or any game controller over USB or Bluetooth, then <b>press one of its buttons</b>: browsers only reveal a controller after it has been used.</p>
         <p class="muted">The panel is a USB joystick ("TEM-view Panel", 8 axes, 16 buttons). Its reference firmware and wiring are in the repository under <code>hardware/panel</code>.</p>`;
+      wireV();
       return;
     }
     const opt = (n, sel) => `<option value="-1">—</option>${Array.from({ length: n }, (_, i) => `<option value="${i}" ${i === sel ? 'selected' : ''}>${i}</option>`).join('')}`;
@@ -213,7 +245,8 @@ export class Panel {
       </div>
       <h4>Live input</h4><div class="plive" id="pLive"></div>
       <h4>Sensitivity</h4><div class="cgrid">${Object.keys(M.sens).map((k) => `<label>${k}<input type="number" step="0.1" min="0.1" max="10" data-sens="${k}" value="${M.sens[k]}"></label>`).join('')}${this.kind === 'panel' ? `<label>Encoder counts per detent<input type="number" step="1" min="1" max="8" id="pCounts" value="${M.counts}"></label>` : ''}</div>
-      <div class="crow"><button class="btn" id="pReset">Reset to defaults</button></div>`;
+      <div class="crow"><button class="btn" id="pReset">Reset to defaults</button></div>${vbtns}`;
+    wireV();
     el.querySelectorAll('[data-ax]').forEach((s) => s.addEventListener('change', () => { const v = +s.value; if (v < 0) delete M.axes[s.dataset.ax]; else M.axes[s.dataset.ax] = v; this.prevAxes = null; this.saveMap(); }));
     el.querySelectorAll('[data-bt]').forEach((s) => s.addEventListener('change', () => { const v = +s.value; if (v < 0) delete M.buttons[s.dataset.bt]; else M.buttons[s.dataset.bt] = v; this.saveMap(); }));
     el.querySelectorAll('[data-inv]').forEach((c) => c.addEventListener('change', () => { M.invert[c.dataset.inv] = c.checked; this.saveMap(); }));
