@@ -7,6 +7,7 @@ import { renderComponent } from './components.js';
 import * as N from './narration.js';
 import { defaultState, SESSION_KEYS } from './state.js';
 import { PRESETS, newProfile, sanitizeProfile } from './profile.js';
+import { HOLDERS } from './holder.js';
 import { collectData, toNpz } from './export.js';
 import { openCalibration } from './calibui.js';
 
@@ -16,6 +17,7 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 // ------------------------------------------------------------------ state
 const S = defaultState();
 const fam = (m) => (['tem', 'diff', 'oah', 'ilh'].includes(m) ? 'tem' : 'probe');
+const fmtT = (K) => `${K < 20 ? K.toFixed(1) : Math.round(K)} K (${Math.round(K - 273.15)} °C)`;
 S.df = S.dfFam[fam(S.mode)];
 
 const sim = new Sim(S);
@@ -39,9 +41,12 @@ const TILTABLE = 'tem stem 4d diff eds eels cbed oah ilh';
 const CONTROLS = [
   { sec: 'The specimen' },
   { chips: 'spec', opts: [['au', 'Gold on carbon'], ['si', 'Si / SiO₂'], ['sto', 'SrTiO₃ boundary'], ['gr', 'Graphene'], ['mof', 'UiO-66 (MOF)'], ['bio', 'Proteins in ice']] },
-  { toggles: [['cryo', 'Cryo holder (−180 °C)']] },
+  { chips: 'holder', label: 'Specimen holder', opts: Object.entries(HOLDERS).map(([k, v]) => [k, v.short]) },
+  { slider: 'tempSet', label: 'Temperature setpoint', dyn: () => { const H = HOLDERS[S.holder]; return { min: H.min, max: H.max, step: H.step, log: H.log }; }, fmt: (v) => fmtT(v), show: () => S.holder !== 'room' },
+  { pFn: () => `Specimen at ${fmtT(sim.temp())}${S.holder === 'room' ? '' : ` (setpoint ${fmtT(S.tempSet)}; the grid runs ${S.holder === 'heat' ? 'about 1 % hotter than the reading' : 'warmer than the holder tip'} and fluctuates by ±${HOLDERS[S.holder].jitter} K)`}. Drift ${sim.driftSpeed().toFixed(2)} Å/s.` },
+  { buttons: [['newGrid', 'Load a fresh grid']], show: () => S.spec === 'bio' },
   { p: 'Thickness here is the ice layer. Proteins scatter only slightly more than the ice around them, so they are weak phase objects: use 1–3 µm underfocus in TEM, or the Zernike phase plate near focus.', show: () => S.spec === 'bio' },
-  { p: 'At room temperature the vitreous ice sublimes in the vacuum and the proteins dry out. Turn the cryo holder back on.', show: () => S.spec === 'bio' && !S.cryo },
+  { pFn: () => (sim.ice().t <= 0 ? 'The vitreous ice has sublimed in the vacuum and the proteins have dried out. Cool the grid below ~140 K and load a fresh grid.' : sim.devitrified ? 'The ice has crystallized (it went above ~140 K): crystallites now diffract and add patchy contrast. Only a fresh grid brings vitreous ice back.' : ''), show: () => S.spec === 'bio' && (sim.ice().t <= 0 || sim.devitrified) },
   { slider: 'thick', label: 'Thickness', min: 3, max: 150, step: 1, fmt: (v) => `${v} nm`, ends: ['thin', '', 'thick'], modes: NOT_RONCH, show: () => S.spec !== 'gr' },
   { p: 'Graphene is one atom (0.335 nm) thick, so there is no thickness to set. Above ~86 kV the beam knocks carbon atoms out: watch in TEM or STEM at 200–300 kV, then compare 60–80 kV.', modes: NOT_RONCH, show: () => S.spec === 'gr' },
   { buttons: [['restore', 'Restore pristine graphene']], modes: 'tem stem', show: () => S.spec === 'gr' },
@@ -208,10 +213,10 @@ function build() {
       el.innerHTML = `<span class="ico">${ICONS[c.icon]}</span><span><b>${c.title}</b><small>${c.desc}</small></span>`;
       el.addEventListener('click', () => action(c.exp, el));
       bound.push({ c, el });
-    } else if (c.p) {
+    } else if (c.p || c.pFn) {
       el = document.createElement('p');
       el.className = 'ctl note';
-      el.textContent = c.p;
+      el.textContent = c.p ?? '';
       bound.push({ c, el });
     } else if (c.twin) {
       el = document.createElement('table');
@@ -278,6 +283,7 @@ function refreshControls() {
       b.val.textContent = (d.fmt || b.c.fmt)(v);
     }
     if (b.box) renderChips(b);
+    if (b.c.pFn) b.el.textContent = b.c.pFn();
     if (b.c.toggles) b.el.querySelectorAll('.tog').forEach((t) => t.classList.toggle('on', !!S[t.dataset.key]));
   }
   document.querySelectorAll('[data-act="pause"]').forEach((b) => (b.textContent = S.paused ? 'Resume' : 'Pause'));
@@ -293,12 +299,14 @@ function refreshControls() {
 // ------------------------------------------------------------------ state changes
 function set(key, v, inv = key) {
   if (S[key] === v) return;
+  const prevT = S.tempSet;
   S[key] = v;
   if (key === 'df') S.dfFam[fam(S.mode)] = v;
   if (key === 'detIn' || key === 'detOut') { if (S.detOut < S.detIn + 5) S.detOut = S.detIn + 5; S.detPreset = null; }
   if (key === 'eelsWin' || key === 'eelsWidth') inv = 'eelsWin';
   if (key === 'alpha4d') resetVdet();
-  if (key === 'cryo') sim.cryoT = 0; // cooling (or warming) starts the holder drifting
+  // a temperature step makes the holder drift until it settles (MEMS heaters settle fastest)
+  if (key === 'tempSet') sim.kickDrift(Math.min(4, Math.abs(v - prevT) * (S.holder === 'heat' ? 0.0015 : 0.02)));
   if (!['speed', 'showLabels', 'showElectrons', 'showGlass', 'autoRotate', 'paused'].includes(key)) sim.invalidate(inv);
   refreshControls();
   explainChange(inv === 'cs' ? 'cs' : ['tiltX', 'tiltY'].includes(key) ? 'tilt' : ['detIn', 'detOut'].includes(key) ? 'det' : ['alpha', 'alpha4d'].includes(key) ? 'alpha' : ['eelsWin', 'eelsWidth'].includes(key) ? 'eelsWin' : key);
@@ -306,6 +314,14 @@ function set(key, v, inv = key) {
 
 function chip(key, v) {
   if (key === 'spec') return setSpec(v);
+  if (key === 'holder') {
+    S.holder = v;
+    S.tempSet = { room: 293, ln2: 90, lhe: 4.2, heat: 293 }[v];
+    sim.kickDrift(HOLDERS[v].kick, true);
+    sim.invalidate('temp');
+    refreshControls();
+    return explainChange('holder');
+  }
   if (key === 'profile') return setProfile(newProfile(v), 'profile');
   if (key === 'corrector') {
     S.corrector = v;
@@ -365,11 +381,11 @@ function setSpec(v) {
   if (v === 'mof') { S.dose = 2; S.kV = 300; S.thick = 20; S.camL = 4000; }
   else if (v === 'bio') {
     // single-particle cryo-EM conditions: frozen grid, 300 kV, no corrector, ~1.5 µm underfocus, ~30 e⁻/Å²
-    Object.assign(S, { cryo: true, kV: 300, dose: 30, thick: 30, corrector: false, csUnc: S.profile.CsUnc, objAp: 'none', camL: 2000 });
+    Object.assign(S, { holder: 'ln2', tempSet: 90, kV: 300, dose: 30, thick: 30, corrector: false, csUnc: S.profile.CsUnc, objAp: 'none', camL: 2000 });
     S.dfFam.tem = -1500; S.dfFam.probe = +(P.probeDefocus(S.profile.CsUnc * 1e7, P.wavelength(300)) / 10).toFixed(1);
     S.alpha = Math.min(S.alpha, 10);
     S.df = S.dfFam[fam(S.mode)];
-    sim.cryoT = 0; // a freshly inserted cryo holder drifts at first
+    sim.newGrid(); // fresh vitreous ice; a freshly inserted cryo holder drifts at first
   } else if (S.dose < 20) S.dose = 400;
   if (v !== 'bio' && prevSpec === 'bio') {
     S.corrector = S.profile.corrector; S.dfFam = { tem: -4, probe: 0 }; S.df = S.dfFam[fam(S.mode)];
@@ -410,6 +426,7 @@ function action(id, el) {
   }
   if (id === 'pause') { S.paused = !S.paused; refreshControls(); }
   if (id === 'refocus') { sim.invalidate('series'); explainChange('series'); }
+  if (id === 'newGrid') { sim.newGrid(); sim.invalidate('spec'); refreshControls(); explainChange('newGrid'); }
   if (id === 'calib') openCalibration({ S, sim, onApply: applyCalibration });
   if (id === 'saveSession') saveSession();
   if (id === 'loadSession') $('#fileSession').click();
@@ -654,8 +671,10 @@ function loadSessionFile(text) {
   if (o.format?.startsWith('tem-view-profile')) { setProfile(sanitizeProfile(o), 'calibrated'); return; }
   if (!o.format?.startsWith('tem-view-session') || !o.state) throw new Error('not a TEM-view session or profile');
   const st = o.state, d = defaultState(), mode = typeof st.mode === 'string' && KEYS[st.mode] ? st.mode : S.mode;
+  if (st.cryo === true && !st.holder) { st.holder = 'ln2'; st.tempSet = 90; } // sessions saved before the temperature setting
   for (const k of SESSION_KEYS) {
     if (!(k in st) || k === 'mode') continue;
+    if (k === 'holder' && !HOLDERS[st.holder]) continue;
     if (k === 'profile') S.profile = sanitizeProfile(st.profile);
     else if (k === 'spec') { if (P.SPECIMENS[st.spec]) S.spec = st.spec; }
     else if (k === 'ab' || k === 'dfFam') { if (st[k] && typeof st[k] === 'object') S[k] = { ...d[k], ...Object.fromEntries(Object.entries(st[k]).filter(([, v]) => typeof v === 'number')) }; }
@@ -884,6 +903,13 @@ function frame(now) {
   if (now - lastSlow > 300) {
     lastSlow = now;
     updateTable();
+    // live readouts (temperature, drift, ice) change by themselves
+    const stk = document.body.classList.contains('stacked');
+    for (const b of bound) if (b.c.pFn && (!b.el.dataset.modes || b.el.dataset.modes.split(' ').includes(S.mode)) && !(stk && folded.has(b.sec))) {
+      const vis = !b.c.show || b.c.show();
+      b.el.hidden = !vis;
+      if (vis) b.el.textContent = b.c.pFn();
+    }
     if (['eds', '4d', 'eels', 'stem', 'ronch', 'cbed', 'oah', 'ilh'].includes(S.mode)) renderInfo();
     $('#status').textContent = `· ${fps} fps`;
   }

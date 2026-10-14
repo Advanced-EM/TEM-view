@@ -326,6 +326,12 @@ export class Scene3D {
     this.dewar.add(dw, neck, lid, this.vapor);
     this.dewar.visible = false;
     this.holder.add(this.dewar);
+    // heating holder: current leads to a MEMS chip that glows when hot
+    this.heatLeads = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.03, 0.12), new THREE.MeshStandardMaterial({ color: 0xc28a3a, metalness: 0.9, roughness: 0.3 }));
+    this.heatLeads.position.set(1.6, 0.07, 0.12);
+    this.heatGlow = this.sprite(0xff8a3d, 0.35);
+    this.heatGlow.position.set(0, 0.03, 0);
+    this.holder.add(this.heatLeads, this.heatGlow);
     col.add(this.holder);
     this.specGlow = this.sprite(0x8dffae, 0.5);
     col.add(this.specGlow);
@@ -483,7 +489,8 @@ export class Scene3D {
       ['EDS X-ray detector', [-1.3, Y.spec + 0.9, -0.8], ['eds'], 'left'],
       ['Objective aperture', [-0.5, Y.bfp, 0], (S) => S.mode === 'tem' && S.objAp !== 'zpp', 'left'],
       ['Zernike phase plate', [-0.5, Y.bfp, 0], (S) => S.mode === 'tem' && S.objAp === 'zpp', 'left'],
-      ['Cryo holder', [3.9, Y.spec + 0.75, 0], (S) => S.cryo],
+      ['Cryo holder', [3.9, Y.spec + 0.75, 0], (S) => S.holder === 'ln2' || S.holder === 'lhe'],
+      ['Heating holder', [3.1, Y.spec + 0.35, 0], (S) => S.holder === 'heat'],
       ['Back focal plane', [-0.5, Y.bfp, 0], ['diff', 'stem', '4d', 'eds', 'eels', 'ronch', 'cbed', 'oah', 'ilh'], 'left'],
       ['Selected-area aperture', [0.5, Y.sa, 0], ['diff']],
       ['Electron biprism', [0.5, Y.sa + 0.06, 0], ['oah']],
@@ -764,8 +771,15 @@ export class Scene3D {
     }
     // holder tilt (exaggerated ×6 so it reads)
     // holder tilt (exaggerated ×6 so it reads)
-    this.dewar.visible = !!S.cryo;
-    if (S.cryo) { this.vapor.material.opacity = 0.25 + 0.15 * Math.sin(this.time * 2.3); this.vapor.position.y = 1.32 + 0.05 * Math.sin(this.time * 1.7); }
+    const cold = S.holder === 'ln2' || S.holder === 'lhe', T = sim.temp();
+    this.dewar.visible = cold;
+    if (cold) {
+      this.vapor.material.opacity = 0.25 + 0.15 * Math.sin(this.time * (S.holder === 'lhe' ? 4.1 : 2.3)); this.vapor.position.y = 1.32 + 0.05 * Math.sin(this.time * 1.7);
+      this.frostMat.color.set(S.holder === 'lhe' ? 0xcfe2ff : 0xdfe9f2); this.frostMat.emissiveIntensity = S.holder === 'lhe' ? 0.22 : 0.08;
+    }
+    this.heatLeads.visible = S.holder === 'heat';
+    this.heatGlow.visible = S.holder === 'heat' && T > 450;
+    if (this.heatGlow.visible) { const g = Math.min(1, (T - 450) / 900); this.heatGlow.material.opacity = 0.25 + 0.7 * g; this.heatGlow.material.color.setRGB(1, 0.35 + 0.5 * g, 0.12 + 0.6 * g * g); }
     this.holder.rotation.x = (S.tiltY * Math.PI / 180) * 6;
     this.holder.rotation.z = (S.tiltX * Math.PI / 180) * 6;
     this.corrector.visible = S.corrector;

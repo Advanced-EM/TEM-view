@@ -196,16 +196,18 @@ export class CBED {
     return (this._base = { id: spec.id, cr, zolz, folz, H });
   }
   lists() {
-    const sim = this.sim, S = sim.S, spec = sim.spec, sc = 1 + S.strain / 100, lam = sim.lam;
-    const key = [spec.id, S.strain, S.kV].join('|');
+    // strain = the set strain plus thermal expansion; Debye–Waller: F·exp(−ΔB·s²), B = 8π²⟨u²⟩ relative to 293 K
+    const sim = this.sim, S = sim.S, spec = sim.spec, th = sim.thermal(), sc = 1 + sim.strainPct() / 100, lam = sim.lam;
+    const key = [spec.id, sc, S.kV, th.u2r].join('|');
     if (this._key === key) return this._lists;
+    const dw = (g) => Math.exp(-0.4 * (th.u2r - 1) * (g / 2) ** 2);
     const B = this.base(spec), H = B.H / sc, GH = Math.sqrt((2 * H) / lam);
-    const zolz = B.zolz.map((z) => ({ ...z, gx: z.gx / sc, gy: z.gy / sc, g: z.g / sc, xi: P.extinction(B.cr, z.F, S.kV) }));
+    const zolz = B.zolz.map((z) => { const F = z.F * dw(z.g); return { ...z, F, gx: z.gx / sc, gy: z.gy / sc, g: z.g / sc, xi: P.extinction(B.cr, F, S.kV) }; });
     const layers = [];
     for (const o of B.folz) {
       const g = o.g / sc;
       if (Math.abs(g - GH) > 1.1) continue;
-      layers.push({ ...o, gx: o.gx / sc, gy: o.gy / sc, g, d: (H - (lam * (g * g + H * H)) / 2) / g });
+      layers.push({ ...o, F: o.F * dw(o.g), gx: o.gx / sc, gy: o.gy / sc, g, d: (H - (lam * (g * g + H * H)) / 2) / g });
     }
     const Fm = Math.max(1e-6, ...layers.map((x) => x.F));
     for (const x of layers) x.w = x.F / Fm;
@@ -400,7 +402,7 @@ export function drawCBED(sim, S, m, s) {
 
 function drawHOLZZoom(sim, S, s, d) {
   const q = s.ctx, cb = sim.cbed, gi = sim.spec.grainAt(S.cx, S.cy);
-  const lam = sim.lam, sc = 1 + S.strain / 100;
+  const lam = sim.lam, sc = 1 + sim.strainPct() / 100;
   const L = cb.lists();
   label(q, `HOLZ ring: H = ${L.H.toFixed(3)} Å⁻¹, G_H ≈ ${L.GH.toFixed(2)} Å⁻¹ (${(lam * L.GH * 1000).toFixed(0)} mrad)`, 10 * s.dpr, 14 * s.dpr, s.dpr, { color: C.muted, size: 9 });
   if (gi < 0 || !L.holz.length) { label(q, 'no HOLZ lines here (amorphous or no layer)', 10 * s.dpr, 38 * s.dpr, s.dpr, { color: C.warm, size: 9 }); return; }
@@ -427,5 +429,5 @@ function drawHOLZZoom(sim, S, s, d) {
     q.fillText(`${dd(G) >= 0 ? '+' : ''}${dd(G).toFixed(3)} mrad per 0.1 % strain`, 240 * s.dpr, y);
     y += 18 * s.dpr;
   }
-  label(q, `λ = ${(lam * 100).toFixed(3)} pm · strain ${S.strain >= 0 ? '+' : ''}${S.strain.toFixed(2)} % · a = ${(P.CRYST[sim.spec.id].a * sc).toFixed(4)} Å`, 10 * s.dpr, s.H - 14 * s.dpr, s.dpr, { color: C.muted, size: 9 });
+  label(q, `λ = ${(lam * 100).toFixed(3)} pm · strain ${sim.strainPct() >= 0 ? '+' : ''}${sim.strainPct().toFixed(2)} %${Math.abs(sim.thermal().eps) > 5e-5 ? ` (incl. thermal ${(sim.thermal().eps * 100).toFixed(2)} %)` : ''} · a = ${(P.CRYST[sim.spec.id].a * sc).toFixed(4)} Å`, 10 * s.dpr, s.H - 14 * s.dpr, s.dpr, { color: C.muted, size: 9 });
 }

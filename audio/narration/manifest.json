@@ -130,5 +130,8 @@
  "male/general/Zernike phase plate": "male/general/zernike-phase-plate.mp3",
  "male/general/Cryo holder": "male/general/cryo-holder.mp3",
  "male/physics/Zernike phase plate": "male/physics/zernike-phase-plate.mp3",
- "male/physics/Cryo holder": "male/physics/cryo-holder.mp3"
+ "male/physics/Cryo holder": "male/physics/cryo-holder.mp3",
+ "female/general/Heating holder": "female/general/heating-holder.mp3",
+ "female/physics/Heating holder": "female/physics/heating-holder.mp3",
+ "male/general/Heating holder": "male/general/heating-holder.mp3"
 }

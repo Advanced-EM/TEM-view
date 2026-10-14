@@ -124,11 +124,14 @@
  "male/physics/mode-ilh": "021abab39332",
  "male/physics/Electron biprism": "075f569ba565",
  "female/general/Zernike phase plate": "d017417cccb8",
- "female/general/Cryo holder": "dc6f06d9120d",
+ "female/general/Cryo holder": "053385dddb57",
  "female/physics/Zernike phase plate": "8d1620d256fa",
- "female/physics/Cryo holder": "9752585be0d0",
+ "female/physics/Cryo holder": "e2e7c9d12883",
  "male/general/Zernike phase plate": "9c1dbd36a65e",
- "male/general/Cryo holder": "718983f8b62f",
+ "male/general/Cryo holder": "9cd019c6e020",
  "male/physics/Zernike phase plate": "15c764bbc9b7",
- "male/physics/Cryo holder": "90e082e93847"
+ "male/physics/Cryo holder": "8decd61173a2",
+ "female/general/Heating holder": "c191542ab406",
+ "female/physics/Heating holder": "10777e800ef1",
+ "male/general/Heating holder": "7b88c82ab207"
 }

@@ -190,10 +190,12 @@ export function draw(sim, S, mainCv, secCv, hover) {
 
 const real = (S) => S.clarity === 'real';
 
-// shared overlay: room-temperature biological specimen, or a cryo holder that is still drifting
+// shared overlay: specimen temperature, a holder that is still drifting, and what heat has done to ice
 function cryoLabel(ctx, sim, S, W, H, dpr) {
-  if (sim.spec.bio && !S.cryo) label(ctx, 'room temperature: the ice has sublimed', W / 2, H / 2, dpr, { color: C.warm, align: 'center' });
-  else if (S.cryo && sim.driftSpeed() > 0.4) label(ctx, `cryo holder settling · drift ${sim.driftSpeed().toFixed(1)} Å/s`, 10 * dpr, H - 54 * dpr, dpr, { color: C.warm, size: 9 });
+  if (S.holder !== 'room') { const T = sim.temp(); label(ctx, `${T < 20 ? T.toFixed(1) : Math.round(T)} K`, W - 10 * dpr, H - 34 * dpr, dpr, { color: T < 170 ? C.accent : T > 400 ? C.warm : C.muted, size: 9, align: 'right' }); }
+  if (sim.spec.bio && sim.ice().t <= 0) label(ctx, 'the ice has sublimed: proteins dried out', W / 2, H / 2, dpr, { color: C.warm, align: 'center' });
+  else if (sim.spec.bio && sim.devitrified) label(ctx, 'crystalline ice (warmed above ~140 K)', 10 * dpr, H - 74 * dpr, dpr, { color: C.warm, size: 9 });
+  if (sim.driftSpeed() > 0.4) label(ctx, `holder settling · drift ${sim.driftSpeed().toFixed(1)} Å/s`, 10 * dpr, H - 54 * dpr, dpr, { color: C.warm, size: 9 });
 }
 
 function drawTEM(sim, S, m, s) {

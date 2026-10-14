@@ -118,7 +118,7 @@ function tabCTF(el) {
     // a mystery state: thin amorphous carbon at a hidden defocus and astigmatism, with the twin's Cs and voltage
     // defocus kept where 1.34 Å pixels still resolve the rings near Nyquist (larger defocus aliases them)
     const df = -Math.round(rnd(200, 600)), A1 = +rnd(2, 15).toFixed(1), A1a = Math.round(rnd(0, 180));
-    const sim = scratchSim({ mode: 'tem', spec: 'au', fov: 30, cx: -180, cy: 160, df, objAp: 'none', cryo: false, ab: { A1, A1a, B2: 0, B2a: 0, A2: 0, A2a: 0, A3: 0, A3a: 0 } });
+    const sim = scratchSim({ mode: 'tem', spec: 'au', fov: 30, cx: -180, cy: 160, df, objAp: 'none', holder: 'room', tempSet: 293, ab: { A1, A1a, B2: 0, B2a: 0, A2: 0, A2a: 0, A3: 0, A3a: 0 } });
     sim.computeTEM();
     const t = sim.tem;
     data.ctf = { data: noisy(t.img, 400), w: t.c, h: t.c, pixA: +t.dx.toFixed(4), kV: S.kV, name: 'simulated image of amorphous carbon', source: 'simulated', truth: `defocus ${df} nm, A1 ${A1} nm at ${A1a}°` };
@@ -159,7 +159,7 @@ function tabLattice(el) {
   $('#cKind').value = d?.kind ?? (S.mode === 'tem' ? 'tem' : 'stem');
   wireFile('image', () => {
     const kind = $('#cKind').value, mys = { magCal: +rnd(0.96, 1.04).toFixed(4), scanAspect: kind === 'stem' ? +rnd(0.97, 1.03).toFixed(4) : 1, scanShear: kind === 'stem' ? +rnd(-2.5, 2.5).toFixed(2) : 0 };
-    const sim = scratchSim({ mode: kind, spec: 'sto', fov: 8, cx: -70, cy: 0, tiltX: 0, tiltY: 0, cryo: false, corrector: true, csCor: 5, alpha: 22, objAp: 'none', ab: { A1: 0, A1a: 0, B2: 0, B2a: 0, A2: 0, A2a: 0, A3: 0, A3a: 0 }, df: kind === 'tem' ? -4 : 0 }, mys);
+    const sim = scratchSim({ mode: kind, spec: 'sto', fov: 8, cx: -70, cy: 0, tiltX: 0, tiltY: 0, holder: 'room', tempSet: 293, corrector: true, csCor: 5, alpha: 22, objAp: 'none', ab: { A1: 0, A1a: 0, B2: 0, B2a: 0, A2: 0, A2a: 0, A3: 0, A3a: 0 }, df: kind === 'tem' ? -4 : 0 }, mys);
     let img;
     if (kind === 'tem') { sim.computeTEM(); img = sim.tem; } else { sim.computeSTEM(); img = sim.stemImg; }
     data.lattice = { data: noisy(img.img, 300), w: img.c, h: img.c, pixA: +(80 / img.c).toFixed(4), dSp: 2.761, lattice: 'square', kind, name: `simulated ${kind.toUpperCase()} image of SrTiO₃ [001], one grain`, source: 'simulated', truth: `magnification ${mys.magCal}${kind === 'stem' ? `, scan aspect ${mys.scanAspect}, shear ${mys.scanShear}°` : ''}` };

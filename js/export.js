@@ -55,6 +55,7 @@ export function collectData(sim, S) {
   const meta = {
     format: 'tem-view-data/1', generator: 'Seeing with Electrons (TEM-view)', created: new Date().toISOString(),
     simulated: true, mode: m, specimen: sim.spec.name, calibration: cal,
+    specimen_temperature_K: sim.temp(), holder: S.holder,
     optics: { wavelength_A: sim.lam, focal_spread_A: sim.focalSpread(), information_limit_A: sim.infoLimit(), Cs_A: sim.CsA() },
     arrays: Object.fromEntries(Object.entries(arrays).map(([k, v]) => [k, { shape: v.shape, units: v.units }])),
     state,

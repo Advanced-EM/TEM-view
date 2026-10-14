@@ -4,6 +4,7 @@
 import * as P from './physics.js';
 import { AP_MRAD, stemDetType } from './sim.js';
 import { biprism } from './holography.js';
+import { HOLDERS } from './holder.js';
 
 const f2 = (v) => v.toFixed(2), f1 = (v) => v.toFixed(1);
 const lamOf = (S) => P.wavelength(S.kV);
@@ -125,12 +126,21 @@ export const COMPONENTS = {
   },
   'Cryo holder': {
     kicker: 'Specimen environment',
-    role: 'Keeps the specimen at about <b>−180 °C</b>, so vitreous ice and hydrated biological specimens survive the vacuum and radiolysis is slowed.',
+    role: 'Keeps the specimen cold: about <b>−180 °C</b> with liquid nitrogen, or down to <b>~10 K</b> with liquid helium, so vitreous ice and hydrated biological specimens survive the vacuum and radiolysis is slowed.',
     physics: 'A copper rod or braid runs from the specimen tip to a liquid-nitrogen dewar on the holder. Below about −135 °C, ice that was frozen too fast to crystallize stays <b>vitreous</b> (amorphous). Cooling slows the diffusion of radicals and fragments formed by ionization, raising the dose a sensitive specimen tolerates by roughly 3–5×. It does nothing for knock-on damage, which is a direct collision. Because the holder is long and has a thermal gradient, it <b>drifts</b> as it settles, typically from several Å/s down to well under 1 Å/s.',
-    specs: [['Tip temperature', '−170 to −190 °C'], ['Drift (settled)', '< 0.5–1 nm/min'], ['Tilt range', '±60–70°'], ['Hold time', '4–8 h per dewar fill']],
+    specs: [['Liquid-N₂ holder', 'grid ~90–100 K, heatable to room temperature'], ['Liquid-He holder', 'tip 4.2 K, grid ~8–15 K ± 1–2 K'], ['Drift (settled)', '< 0.5–1 nm/min (N₂); more with He'], ['Hold time', '4–8 h per N₂ fill; He needs continuous flow']],
     metrology: 'Temperature is read by a sensor near the tip and checked against devitrification of ice (it turns crystalline above about −135 °C, and diffraction rings appear). Drift is measured from image cross-correlation over a series, and contamination from the growth of an ice layer, seen in EELS thickness or the O K edge, over time. Autoloader systems keep many grids cold inside the column and avoid most holder drift.',
     limits: 'Drift (especially just after insertion or tilting), ice contamination building up on the cold specimen, vibration from boiling nitrogen, and a limited tilt range.',
-    live: (S, sim) => [['Cooling', S.cryo ? 'on' : 'off'], ['Drift now', `${sim.driftSpeed().toFixed(2)} Å/s`], ['Critical dose (this specimen)', sim.spec.beamSensitive ? `${sim.critDose().toFixed(1)} e⁻/Å²` : 'not beam-sensitive']],
+    live: (S, sim) => [['Holder', HOLDERS[S.holder].name], ['Specimen temperature', `${sim.temp().toFixed(sim.temp() < 20 ? 1 : 0)} K`], ['Drift now', `${sim.driftSpeed().toFixed(2)} Å/s`], ['Critical dose (this specimen)', sim.spec.beamSensitive ? `${sim.critDose().toFixed(1)} e⁻/Å²` : 'not beam-sensitive']],
+  },
+  'Heating holder': {
+    kicker: 'Specimen environment',
+    role: 'Heats the specimen in the microscope, up to about <b>1200 °C</b>, to watch phase transformations, sintering, growth and annealing as they happen.',
+    physics: 'Modern holders use a MEMS chip: a thin silicon nitride membrane with an embedded metal heater and electron-transparent windows. The heated volume is tiny, so the temperature changes in milliseconds and the specimen drifts far less than in a furnace-type holder. Atoms vibrate more (u_rms ∝ √T when hot), which weakens high-order diffraction through the Debye–Waller factor, adds thermal-diffuse scattering, and blurs atomic columns slightly. Lattices expand (or, for graphene and some frameworks, contract). Diffusion speeds up: radiolytic damage grows, hydrocarbon contamination desorbs, and vacancies can heal.',
+    specs: [['Range', 'room temperature to ~1200–1300 °C'], ['Heating rate', 'up to ~10⁶ °C/s (MEMS)'], ['Temperature accuracy', '~1–5 % (calibrated)'], ['Drift after a step', 'settles in seconds to a minute']],
+    metrology: 'The heater resistance is calibrated against temperature, and checked in the microscope by the melting of known metals (Sn, In, Al), by thermal expansion measured from diffraction or lattice images, or by the plasmon energy shift in EELS. The membrane bulges slightly when hot, so the focus must be followed.',
+    limits: 'Temperature accuracy and uniformity across the window, membrane bulging and drift after each step, and reactions between the specimen and the membrane at high temperature.',
+    live: (S, sim) => [['Holder', HOLDERS[S.holder].name], ['Specimen temperature', `${Math.round(sim.temp())} K (${Math.round(sim.temp() - 273.15)} °C)`], ['Vibration u_rms', `${(0.08 * Math.sqrt(sim.thermal().u2r)).toFixed(3)} Å`], ['Thermal strain', `${(sim.thermal().eps * 100).toFixed(3)} %`]],
   },
   'Back focal plane': {
     kicker: 'Fourier plane',

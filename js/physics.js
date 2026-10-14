@@ -283,7 +283,7 @@ function makeGold() {
   A.finalize();
   const grains = parts.map((p) => ({ a1: rot([ax, 0], p.rot), a2: rot([0, ay], p.rot), label: (m, n) => `${bar(m)}${bar(-m)}${bar(n)}` }));
   return {
-    id: 'au', name: 'Gold nanoparticles on carbon', short: 'Au on C',
+    id: 'au', name: 'Gold nanoparticles on carbon', short: 'Au on C', alpha: 1.42e-5,
     grainRot: parts.map((p) => p.rot),
     grainAt(x, y) { for (let i = 0; i < parts.length; i++) { const p = parts[i]; if ((x - p.x) ** 2 + (y - p.y) ** 2 < p.r * p.r) return i; } return -1; },
     atoms: A, parts, grains, period: ax, poly: true, center: [0, 0], fov: 8, zone: '[110]',
@@ -319,7 +319,7 @@ function makeSilicon() {
   fillLattice(A, { a1: [ax, 0], a2: [0, ay], basis, angle: 0, origin: [0.3, 0.2], R: 250, g: 0, L: -1, inside: (x, y) => x < bnd(y) });
   A.finalize();
   return {
-    id: 'si', name: 'Silicon / SiO₂ interface', short: 'Si / SiO₂',
+    id: 'si', name: 'Silicon / SiO₂ interface', short: 'Si / SiO₂', alpha: 2.6e-6,
     grainRot: [0],
     grainAt(x, y) { return x < bnd(y) ? 0 : -1; },
     atoms: A, grains: [{ a1: [ax, 0], a2: [0, ay], label: (m, n) => `${bar(m)}${bar(-m)}${bar(n)}` }],
@@ -360,7 +360,7 @@ function makeSTO() {
   A.finalize();
   const lab = (m, n) => `${bar(m)}${bar(n)}0`;
   return {
-    id: 'sto', name: 'SrTiO₃ grain boundary', short: 'SrTiO₃ Σ5',
+    id: 'sto', name: 'SrTiO₃ grain boundary', short: 'SrTiO₃ Σ5', alpha: 1.1e-5,
     grainRot: [th, -th],
     grainAt(x) { return x < 0 ? 0 : 1; },
     atoms: A, grains: [{ a1: rot([a, 0], th), a2: rot([0, a], th), label: lab }, { a1: rot([a, 0], -th), a2: rot([0, a], -th), label: lab }],
@@ -424,7 +424,7 @@ function makeGraphene() {
   };
   const layers = (x, y) => (inHole(x, y) ? 0 : 1) + (x > bilayerX ? 1 : 0);
   return {
-    id: 'gr', name: 'Graphene (monolayer + twisted bilayer)', short: 'Graphene',
+    id: 'gr', name: 'Graphene (monolayer + twisted bilayer)', short: 'Graphene', alpha: -7e-6,
     twoD: true, fixedT: LAYER, amorphThick: 4,
     grainRot: [0, tw],
     grainAt(x, y) { return inHole(x, y) ? -1 : 0; },
@@ -432,7 +432,8 @@ function makeGraphene() {
     // phase per C atom calibrated to ~0.07 rad at 80 kV (≈4× a bulk column's per-atom weight): each atom counts as N = 4
     period: LAYER / 4, center: [0, 0], fov: 6, zone: '[0001]',
     elements: [EI.C, EI.Si],
-    amorph(x, y) { return contam(x, y) ? 'C' : null; },
+    // hydrocarbon contamination desorbs from hot graphene (above ~450 K)
+    amorph(x, y, ctx) { return (ctx?.T ?? 293) < 450 && contam(x, y) ? 'C' : null; },
     thicknessAt(x, y) { return LAYER * layers(x, y); },
     tauAt(x, y, t, kV) { return (LAYER * layers(x, y) + (contam(x, y) ? 4 : 0)) / (10 * imfp(kV, 6)); },
     rings: [{ d: 2.13, hkl: '10' }, { d: 1.23, hkl: '11' }, { d: 1.065, hkl: '20' }, { d: 0.805, hkl: '21' }],
@@ -502,7 +503,7 @@ function makeUiO66() {
   const SUP = 60; // amorphous carbon support film, Å
   return {
     id: 'mof', name: 'UiO-66 metal–organic framework', short: 'UiO-66',
-    beamSensitive: true, Dc300: 12, noCBED: true, amorphThick: SUP,
+    beamSensitive: true, Dc300: 12, noCBED: true, amorphThick: SUP, alpha: -9.7e-6, thermalLimit: 720,
     grainRot: [0], grainAt() { return -1; },
     atoms: A, grains: [{ a1: [ax, 0], a2: [0, ay], label: (m, n) => `${bar(m)}${bar(-m)}${bar(n)}` }],
     period: ax, center: [8, 0], fov: 10, zone: '[110]',
@@ -543,7 +544,7 @@ function makeBio() {
   const CF = 120; // carbon film, Å
   const spec = {
     id: 'bio', name: 'Apoferritin and a liposome in vitreous ice', short: 'Proteins in ice',
-    bio: true, beamSensitive: true, Dc300: 5, cryoProtect: 4, noCBED: true, smoothAmorph: true,
+    bio: true, beamSensitive: true, Dc300: 5, cryoProtect: 4, noCBED: true, smoothAmorph: true, alpha: 0, thermalLimit: 315,
     amorphCells: [2.2, 3.1],
     grainRot: [0], grainAt() { return -1; },
     atoms: (() => { const A = new AtomList(); A.finalize(); return A; })(),
@@ -571,8 +572,13 @@ function makeBio() {
           if (p.type === 'ferritin') { const c = chord(30, d2); out.push(['ferrihydrite', c]); solid += c; }
         }
       }
-      // vitreous ice exists only while the grid is cold: at room temperature it sublimes in the vacuum
-      if (ctx.cryo) out.push(['ice', Math.max(0, ctx.thick - solid)]);
+      // ice: vitreous while cold; above ~140 K it crystallizes (patchy diffraction contrast), and above
+      // ~165 K it sublimes in the vacuum (ctx.iceT shrinks), so at room temperature none is left
+      if (ctx.iceT > 0) {
+        let t = Math.max(0, ctx.iceT - solid);
+        if (ctx.iceCryst) t *= 0.7 + 0.6 * (hash2(Math.floor((x + 0.37 * y) / 140), Math.floor((y - 0.29 * x) / 140), 29) / 4294967296);
+        out.push(['ice', t]);
+      }
       return out;
     },
     thicknessAt(x, y, t) { return t; },
@@ -613,7 +619,7 @@ for (const M of Object.values(MAT)) M.pick = (r) => { for (const [e, f] of M.mix
 // Splat atoms onto an n×n grid (pixel size dx, centered at cx,cy). Tilting a crystal
 // smears each column along the tilt direction by L·tanθ, which is what kills lattice contrast off-axis.
 // part: 'cryst' or 'amorph' projects only that component (used to stack slices in depth)
-export function projectMaps(spec, { cx, cy, n, dx, thick, tiltX = 0, tiltY = 0, elements = false, noTilt = false, part = null, cryo = false }) {
+export function projectMaps(spec, { cx, cy, n, dx, thick, tiltX = 0, tiltY = 0, elements = false, noTilt = false, part = null, T = 293, u2r = 1, eps = 0, iceT = thick, iceCryst = false }) {
   const N2 = n * n;
   const phase = new Float32Array(N2), zHi = new Float32Array(N2), zLo = new Float32Array(N2);
   const elem = elements ? EL.map(() => new Float32Array(N2)) : null;
@@ -621,7 +627,11 @@ export function projectMaps(spec, { cx, cy, n, dx, thick, tiltX = 0, tiltY = 0, 
   const tilt = noTilt ? 0 : Math.hypot(tiltX, tiltY);
   const ux = tilt ? tiltX / tilt : 1, uy = tilt ? tiltY / tilt : 0;
   const tanT = Math.tan(tilt);
-  const sA = Math.max(0.3 / dx, 0.6), sA2 = sA * sA;
+  // atom width: the projected potential (~0.29 Å) blurred by thermal vibration (u_rms ≈ 0.08 Å at 293 K,
+  // zero-point ~0.05 Å near 0 K, ~0.15 Å at 1000 K); in diffraction this is the Debye–Waller factor
+  const sA = Math.max(Math.sqrt(0.09 + 0.0064 * (u2r - 1)) / dx, 0.6), sA2 = sA * sA;
+  const tds = 0.7 + 0.3 * u2r; // thermal-diffuse share of high-angle scattering grows with ⟨u²⟩
+  const sc = 1 + eps; // thermal expansion about the specimen origin
   const sB = Math.max(0.5 / dx, 0.7), sB2 = sB * sB;
 
   function splat(px, py, s2, l2, e, wP, wH, wL, wE) {
@@ -644,25 +654,25 @@ export function projectMaps(spec, { cx, cy, n, dx, thick, tiltX = 0, tiltY = 0, 
   }
 
   const A = spec.atoms, pad = 4;
-  if (part !== 'amorph') A.query(x0 - pad, y0 - pad, x0 + n * dx + pad, y0 + n * dx + pad, (i) => {
+  if (part !== 'amorph') A.query((x0 - pad) / sc, (y0 - pad) / sc, (x0 + n * dx + pad) / sc, (y0 + n * dx + pad) / sc, (i) => {
     if (A.dead && A.dead[i]) return;
     const L = A.L[i] < 0 ? thick : A.L[i];
     let N = L / spec.period;
     const e = A.e[i];
     const l = (L * tanT) / dx, l2 = (l * l) / 12;
-    let ax = A.x[i], ay = A.y[i];
+    let ax = A.x[i] * sc, ay = A.y[i] * sc;
     if (spec.dmg && A.jitter) { // radiolysis: atoms wander off their sites; linkers lose mass
       const sd = 7 * spec.dmg;
       ax += sd * A.jitter[2 * i]; ay += sd * A.jitter[2 * i + 1];
       if (e !== EI.Zr) N *= 1 - 0.35 * spec.dmg;
     }
-    splat((ax - x0) / dx - 0.5, (ay - y0) / dx - 0.5, sA2, l2, e, VP[e] * N, ZH[e] * Math.pow(N, 0.85), ZL[e] * N, N);
+    splat((ax - x0) / dx - 0.5, (ay - y0) / dx - 0.5, sA2, l2, e, VP[e] * N, ZH[e] * Math.pow(N, 0.85) * tds, ZL[e] * N, N);
   });
 
   // amorphous material: seeded per cell so it is stable as the stage moves. spec.amorph(x, y, ctx) returns a
   // material name (thickness from amorphThick or the slider) or a list of [material, thickness Å] pairs.
   if (part === 'cryst') return { phase, zHi, zLo, elem, n, dx, x0, y0 };
-  const ctx = { thick, cryo, dmg: spec.dmg || 0 };
+  const ctx = { thick, iceT, iceCryst, T, dmg: spec.dmg || 0 };
   for (const cell of spec.amorphCells ?? [2.2]) {
     const i0 = Math.floor(x0 / cell) - 1, i1 = Math.floor((x0 + n * dx) / cell) + 1;
     const j0 = Math.floor(y0 / cell) - 1, j1 = Math.floor((y0 + n * dx) / cell) + 1;
