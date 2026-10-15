@@ -33,8 +33,13 @@ export function collectData(sim, S) {
     for (const [sym, map] of Object.entries(sim.acc?.maps ?? {})) arrays[`map_${sym}`] = A(map, [sim.si.n, sim.si.n], 'counts');
     cal.map_pixel_A = sim.si?.dx;
   } else if (m === 'eels' && sim.eels) {
-    arrays.spectrum = A(sim.accE?.total ? sim.accE.spec : sim.eels.spec, [sim.eels.nb], 'counts');
-    Object.assign(cal, { energy_start_eV: sim.eels.E0, energy_eV_per_bin: sim.eels.dE, map_pixel_A: sim.si?.dx });
+    const rec = (acc, fr, sp) => (acc && fr ? acc.map((v) => v / fr) : sp);
+    arrays.spectrum = A(rec(sim.accE?.spec, sim.accE?.frames, sim.eels.ro.ro), [sim.eels.nb], 'electrons per channel per readout');
+    Object.assign(cal, { energy_start_eV: sim.eels.E0, energy_eV_per_channel: sim.eels.dE, exposure_s: S.eelsExp, probe_current_pA: S.eelsCurrent, saturated_channels: sim.eels.ro.sat, readouts: sim.accE?.frames ?? 0, map_pixel_A: sim.si?.dx });
+    if (sim.eels.low) {
+      arrays.spectrum_low_loss = A(rec(sim.accE?.low, sim.accE?.framesLow, sim.eels.low.ro.ro), [sim.eels.nb], 'electrons per channel per readout');
+      Object.assign(cal, { dual_eels: true, low_loss_start_eV: sim.eels.low.E0, low_loss_exposure_s: S.eelsExpLow, low_loss_saturated_channels: sim.eels.low.ro.sat, thickness_t_over_lambda: sim.eels.low.tau });
+    }
     if (sim.eels.map) arrays.map = A(sim.eels.map, [sim.si.n, sim.si.n], 'window signal');
   } else if (m === 'oah' && sim.oah.disp) {
     const d = sim.oah.disp;

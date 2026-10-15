@@ -14,6 +14,21 @@ export const AP_MRAD = { none: Infinity, 40: 12, 20: 6, 10: 3, df: 2.5, zpp: Inf
 export const EELS_CHANNELS = 2048;
 // Detector point-spread function, in channels (σ): even a perfect spectrum is smeared over ~2 channels.
 export const EELS_PSF = 0.85;
+// Integrating (CCD/CMOS) spectrometer camera: a 16-bit converter at ~4 counts per electron fills at
+// ~16,400 electrons per channel per readout; read noise ~3 electrons rms per channel.
+export const EELS_FULL_WELL = 65535 / 4, EELS_READ_NOISE = 3;
+// dual EELS: the low-loss spectrum starts just below the zero loss
+export const EELS_LOW_OFFSET = -5;
+// thickness from a low-loss spectrum: t/λ = ln(I_total / I_zero loss), zero loss integrated to the first minimum
+export function lowTau(spec, E0, dE) {
+  const i0 = Math.round(-E0 / dE);
+  if (i0 < 2 || i0 >= spec.length - 2) return null;
+  let r = i0;
+  while (r < spec.length - 2 && spec[r + 1] < spec[r]) r++;
+  let z = 0, t = 0;
+  for (let b = 0; b < spec.length; b++) { t += spec[b]; if (b <= r) z += spec[b]; }
+  return z > 0 ? Math.log(t / z) : null;
+}
 export const ZPP_CUTON = 1 / 250; // 1/Å (hole ≈ 1 µm at f ≈ 3 mm, 200 kV)
 
 export function stemDetType(inner, outer, alpha) {
@@ -126,7 +141,7 @@ export class Sim {
     const all = ['tem', 'stem', 'diff', 'fd', 'vimg', 'si', 'eels', 'probe'];
     const map = {
       objAp: ['tem'], alpha: ['stem', 'fd', 'vimg', 'si', 'eels', 'probe'], det: ['stem'],
-      sa: ['diff'], camL: ['diff'], beamStop: [], camera: [], vdet: ['vimg'], eelsWin: ['eels'], eelsRange: ['eels'], eelsDisp: ['eels'], eelsOffset: ['eels'], bgsub: ['eels'],
+      sa: ['diff'], camL: ['diff'], beamStop: [], camera: [], vdet: ['vimg'], eelsWin: ['eels'], eelsRange: ['eels'], eelsDisp: ['eels'], eelsOffset: ['eels'], eelsExp: ['eels'], eelsExpLow: ['eels'], eelsCurrent: ['eels'], dualEels: ['eels'], bgsub: ['eels'],
       dose: ['si'], edsSel: [], mode: [],
       // progressive beam damage: refresh images and patterns in place, but don't restart 4D scans or spectrum accumulation
       damage: ['tem', 'stem', 'diff', 'probe'],
@@ -134,7 +149,7 @@ export class Sim {
       // temperature: the projected specimen changes (vibrations, expansion), so everything is recomputed
     };
     for (const k of map[key] ?? all) this.stale[k] = 1;
-    const view = ['mode', 'edsSel', 'camera', 'beamStop', 'vdet', 'bgsub', 'eelsWin', 'eelsRange', 'eelsDisp', 'eelsOffset', 'holoView', 'ilhView'];
+    const view = ['mode', 'edsSel', 'camera', 'beamStop', 'vdet', 'bgsub', 'eelsWin', 'eelsRange', 'eelsDisp', 'eelsOffset', 'eelsExp', 'eelsExpLow', 'eelsCurrent', 'dualEels', 'holoView', 'ilhView'];
     if (!view.includes(key)) { this.ronch.stale = true; this.cbed.stale = true; this.oah.stale = true; }
     // a focal series takes a while to record, so only restart it when the physics changes
     if (!view.includes(key) && !['damage', 'drift', 'speed', 'biprism', 'sbR', 'numCorr'].includes(key)) this.ilh.stale = true;
@@ -822,16 +837,12 @@ export class Sim {
     return zlp + pl + bg + core;
   }
 
-  buildEELS(keepAcc = false) {
-    const si = this.si, S = this.S, n = si.n;
-    const [E0, E1] = this.eelsRangeBounds();
-    const nb = EELS_CHANNELS, dE = S.eelsDisp, sh = this.zlpShift();
-    const raw = new Float32Array(nb), bgr = new Float32Array(nb);
-    const edgeRaw = {};
-    const parts = {};
-    // each channel collects every electron that lands in it: integrate the spectrum over the channel width
-    // (4 samples), so a zero-loss peak narrower than a channel is not lost
-    const OS = 4;
+  // One recorded spectrum on the 2048-channel detector, starting at E0 (eV), with the zero loss shifted by sh.
+  // Each channel integrates the spectrum over its width (4 samples), so a peak narrower than a channel is not
+  // lost; then the detector point-spread (σ = EELS_PSF channels) smears it. Values are per eV of spectrum.
+  channelSpectrum(E0, sh) {
+    const si = this.si, nb = EELS_CHANNELS, dE = this.S.eelsDisp, OS = 4;
+    const raw = new Float32Array(nb), bgr = new Float32Array(nb), edgeRaw = {}, parts = {};
     for (let b = 0; b < nb; b++) {
       let v = 0, g = 0;
       const eg = {};
@@ -844,10 +855,28 @@ export class Sim {
       raw[b] = v / OS; bgr[b] = g / OS;
       for (const k in eg) (edgeRaw[k] ||= new Float32Array(nb))[b] = eg[k] / OS;
     }
-    // detector point-spread function (Gaussian, σ = EELS_PSF channels)
     const psf = (a) => { const out = new Float32Array(nb), R = 3, w = []; let sw = 0; for (let i = -R; i <= R; i++) { const x = Math.exp(-0.5 * (i / EELS_PSF) ** 2); w.push(x); sw += x; } for (let b = 0; b < nb; b++) { let v = 0; for (let i = -R; i <= R; i++) v += a[Math.min(nb - 1, Math.max(0, b + i))] * w[i + R]; out[b] = v / sw; } return out; };
     const spec = psf(raw), bgc = psf(bgr), edgeCurves = {};
     for (const k in edgeRaw) edgeCurves[k] = psf(edgeRaw[k]);
+    return { spec, bgc, edgeCurves, E0, E1: E0 + nb * dE, dE, nb };
+  }
+  // electrons per channel in one readout: fraction per channel × beam current × exposure
+  readout(spec, t) {
+    const k = this.S.eelsDisp * this.S.eelsCurrent * 1e-12 / 1.602e-19 * t, ro = new Float32Array(spec.length);
+    let sat = 0, peak = 0;
+    for (let b = 0; b < spec.length; b++) { ro[b] = spec[b] * k; if (ro[b] > EELS_FULL_WELL) sat++; if (ro[b] > peak) peak = ro[b]; }
+    return { ro, sat, peak };
+  }
+
+  buildEELS(keepAcc = false) {
+    const si = this.si, S = this.S, n = si.n;
+    const [E0, E1] = this.eelsRangeBounds();
+    const nb = EELS_CHANNELS, dE = S.eelsDisp, sh = this.zlpShift(), dual = S.dualEels;
+    // single spectrum: drifts with the zero loss. Dual EELS: the core-loss frames are realigned on the
+    // simultaneously recorded zero loss, so they do not smear (shift 0), while the low-loss spectrum shows the drift.
+    const main = this.channelSpectrum(E0, dual ? 0 : sh);
+    const { spec, bgc, edgeCurves } = main;
+    const low = dual ? this.channelSpectrum(EELS_LOW_OFFSET, sh) : null;
     // energy-window integrals for mapping
     const w0 = S.eelsWin - S.eelsWidth / 2, w1 = S.eelsWin + S.eelsWidth / 2, steps = 60, h = (w1 - w0) / steps;
     const edgeW = {};
@@ -875,9 +904,13 @@ export class Sim {
     for (let i = 0; i < n * n; i++) map[i] /= mx || 1;
     let tot = 0;
     for (let b = 0; b < nb; b++) tot += spec[b];
-    this.eels = { spec, bgc, edgeCurves, nb, dE, E0, E1, map, sub, lowLoss, tot, edgeW, shift: sh, zlp: zlpStats(spec, E0, dE) };
+    const ro = this.readout(spec, S.eelsExp), roLow = low ? this.readout(low.spec, S.eelsExpLow) : null;
+    this.eels = {
+      spec, bgc, edgeCurves, nb, dE, E0, E1, map, sub, lowLoss, tot, edgeW, shift: sh, zlp: zlpStats(spec, E0, dE), ro,
+      low: low ? { ...low, ro: roLow, zlp: zlpStats(low.spec, low.E0, dE), tau: lowTau(low.spec, low.E0, dE) } : null,
+    };
     // a drifting zero loss keeps adding to the same recorded spectrum, smearing it, as on a real instrument
-    if (!keepAcc || !this.accE || this.accE.spec.length !== nb) this.accE = { t: 0, spec: new Float32Array(nb), map: new Float32Array(n * n), total: 0 };
+    if (!keepAcc || !this.accE || this.accE.spec.length !== nb) this.accE = { t: 0, spec: new Float32Array(nb), map: new Float32Array(n * n), total: 0, frames: 0, ft: 0, low: new Float32Array(nb), framesLow: 0, ftLow: 0 };
   }
   // high-voltage / prism drift of the zero loss: a slow walk of ~0.3 eV per minute (realistic mode)
   zlpStep(dt) {
@@ -903,8 +936,20 @@ export class Sim {
     if (S.mode === 'eels' && this.eels && this.accE) {
       const a = this.accE, e = this.eels, n = this.si.n;
       a.t += dt;
-      const N = 3e6 * rate * dt;
-      for (let b = 0; b < e.nb; b++) { const c = P.poisson(e.spec[b] * N); a.spec[b] += c; a.total += c; }
+      // readouts: each frame counts electrons per channel up to the full well (clipped), plus read noise
+      const frames = (spec, ro, t, key, nKey, acc) => {
+        a[key] += dt;
+        const m = Math.min(400, Math.floor(a[key] / t));
+        if (!m) return;
+        a[key] -= m * t;
+        a[nKey] += m;
+        for (let b = 0; b < e.nb; b++) {
+          const c = P.poisson(Math.min(ro[b], EELS_FULL_WELL) * m) + EELS_READ_NOISE * Math.sqrt(m) * P.gauss();
+          acc[b] += c; a.total += Math.max(0, c);
+        }
+      };
+      frames(e.spec, e.ro.ro, S.eelsExp, 'ft', 'frames', a.spec);
+      if (e.low) frames(e.low.spec, e.low.ro.ro, S.eelsExpLow, 'ftLow', 'framesLow', a.low);
       const k = 16 * rate * dt;
       for (let i = 0; i < n * n; i++) a.map[i] += P.poisson(e.map[i] * k);
       this.version++;
