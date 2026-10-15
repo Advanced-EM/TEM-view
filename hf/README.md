@@ -29,15 +29,15 @@ new files arrive. Duplicate sessions are kept once, and invalid files are listed
 ## 2. Live collection: the Space (after ethics approval)
 
 1. Create the dataset (step 1), or let the Space create it.
-2. Deploy the Space with one command. It uses your `hf auth login`, creates `rmsreis/tem-view-collector` (public Docker Space; it holds no data), sets `DATASET_REPO` and `ALLOWED_ORIGINS`, uploads `hf/space`, and asks at a hidden prompt for the Space's token, which goes straight into the Space's secrets:
+2. Deploy the Space with one command. It uses your `hf auth login`, creates `Northwestern/tem-view-collector` (public Docker Space; it holds no data), sets `DATASET_REPO` and `ALLOWED_ORIGINS`, uploads `hf/space`, and asks at a hidden prompt for the Space's token, which goes straight into the Space's secrets:
    ```bash
    ~/anaconda3/bin/python3 hf/deploy_space.py
    ```
    For that token, create a fine-grained token with write access to **the dataset only**. Rerun with `--skip-token` to update the code without changing it.
 3. Optional Space variable: `RATE_PER_HOUR` (default 30).
-4. Check `https://rmsreis-tem-view-collector.hf.space/`. It should report `"dry_run": false`.
+4. Check `https://northwestern-tem-view-collector.hf.space/`. It should report `"dry_run": false`.
 5. In [`js/config.js`](../js/config.js), set
-   `url: 'https://rmsreis-tem-view-collector.hf.space/submit', dataset: 'rmsreis/tem-view-alignment'`.
+   `url: 'https://northwestern-tem-view-collector.hf.space/submit', dataset: 'rmsreis/tem-view-alignment'`.
    Then run `node tools/stamp.mjs` and deploy.
 
 From then on, the consent screen of every scenario offers **Record and share**, **Record only** and **Start without recording**:

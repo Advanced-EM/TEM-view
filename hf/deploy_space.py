@@ -16,7 +16,7 @@ import os
 from huggingface_hub import HfApi
 
 p = argparse.ArgumentParser()
-p.add_argument("--space", default="rmsreis/tem-view-collector")
+p.add_argument("--space", default="Northwestern/tem-view-collector")
 p.add_argument("--dataset", default="rmsreis/tem-view-alignment")
 p.add_argument("--origins", default="https://advanced-em.github.io,http://localhost:8765")
 p.add_argument("--skip-token", action="store_true", help="keep the HF_TOKEN secret already set")
