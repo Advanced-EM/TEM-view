@@ -2,3 +2,5 @@
 .claude/
 build/
 __pycache__/
+node_modules/
+.wrangler/
