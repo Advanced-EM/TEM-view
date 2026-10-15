@@ -1,5 +1,5 @@
 import * as P from './physics.js';
-import { Sim, stemDetType } from './sim.js';
+import { Sim, stemDetType, EELS_FULL_WELL } from './sim.js';
 import * as R2 from './render2d.js';
 import { Scene3D, Y } from './scene3d.js';
 import { modeInfo, changeText, dataRows } from './explain.js';
@@ -20,6 +20,7 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 // ------------------------------------------------------------------ state
 const S = defaultState();
 const fam = (m) => (['tem', 'diff', 'oah', 'ilh'].includes(m) ? 'tem' : 'probe');
+const fmtS = (t) => (t < 1e-3 ? `${+(t * 1e6).toPrecision(3)} µs` : t < 1 ? `${+(t * 1e3).toPrecision(3)} ms` : `${+t.toPrecision(3)} s`);
 const fmtT = (K) => `${K < 20 ? K.toFixed(1) : Math.round(K)} K (${Math.round(K - 273.15)} °C)`;
 S.df = S.dfFam[fam(S.mode)];
 
@@ -123,6 +124,15 @@ const CONTROLS = [
   { slider: 'eelsOffset', label: 'Energy offset (drift tube)', min: -50, max: 3000, step: 0.5, fmt: (v) => `${v} eV`, modes: 'eels', ends: ['zero loss', '', 'high loss'] },
   { pFn: () => { const [a, b] = sim.eelsRangeBounds(), z = sim.eels?.zlp; return `2048 channels: ${a.toFixed(1)} to ${b.toFixed(1)} eV. Energy resolution ${sim.eelsRes().toFixed(2)} eV (gun ${S.profile.dE} eV + spectrometer), sampled by ${(sim.eelsRes() / S.eelsDisp).toFixed(1)} channels${sim.eelsRes() / S.eelsDisp < 3 ? ' (too coarse: the zero loss and edge fine structure are blurred by the channels)' : ''}.${z ? ` Zero loss measured: ${z.fwhm.toFixed(2)} eV wide at ${z.center >= 0 ? '+' : ''}${z.center.toFixed(2)} eV.` : ' The zero-loss peak is outside this range.'}`; }, modes: 'eels' },
   { buttons: [['alignZLP', 'Align zero loss']], modes: 'eels' },
+  { slider: 'eelsCurrent', label: 'Probe current', min: 5, max: 2000, log: true, fmt: (v) => `${Math.round(v)} pA`, modes: 'eels' },
+  { slider: 'eelsExp', label: 'Exposure per readout', dyn: () => ({ label: S.dualEels ? 'Core-loss exposure' : 'Exposure per readout' }), min: 1e-4, max: 10, log: true, fmt: fmtS, modes: 'eels', ends: ['short', '', 'long'] },
+  { toggles: [['dualEels', 'Dual EELS: low loss + core loss together']], modes: 'eels' },
+  { slider: 'eelsExpLow', label: 'Low-loss exposure', min: 1e-5, max: 0.1, log: true, fmt: fmtS, modes: 'eels', show: () => S.dualEels },
+  { pFn: () => {
+    const e = sim.eels; if (!e) return '';
+    const fw = Math.round(EELS_FULL_WELL).toLocaleString(), sat = (r, what) => (r.sat ? `${what}: <b>${r.sat} channels saturated</b> (peak ${Math.round(r.peak).toLocaleString()} e⁻ per channel per readout, full well ${fw})` : `${what}: peak ${Math.round(r.peak).toLocaleString()} e⁻ per channel per readout (full well ${fw})`);
+    return [sat(e.ro, S.dualEels ? 'Core loss' : 'Spectrum'), e.low ? sat(e.low.ro, 'Low loss') : '', e.low?.tau != null ? `Thickness from the low loss: t/λ = ${e.low.tau.toFixed(2)}${e.low.ro.sat ? ' (wrong: the zero loss is saturated)' : ''}` : ''].filter(Boolean).join('. ').replace(/<\/?b>/g, '') + '.';
+  }, modes: 'eels' },
   { slider: 'eelsWin', inv: 'eelsWin', label: 'Energy window center', dyn: () => { const [a, b] = sim.eelsRangeBounds(); return { min: Math.max(0, a), max: b, step: b - a > 500 ? 1 : b - a > 50 ? 0.5 : 0.05 }; }, fmt: (v) => `${v < 20 ? v.toFixed(2) : v.toFixed(0)} eV`, modes: 'eels' },
   { slider: 'eelsWidth', inv: 'eelsWin', label: 'Window width', min: 0.5, max: 80, step: 0.5, fmt: (v) => `${v} eV`, modes: 'eels' },
   { toggles: [['bgsub', 'Subtract background']], modes: 'eels' },
@@ -288,6 +298,7 @@ function refreshControls() {
       const p = ((+b.input.value - +b.input.min) / (+b.input.max - +b.input.min)) * 100;
       b.input.style.setProperty('--p', `${clamp(p, 0, 100)}%`);
       b.val.textContent = (d.fmt || b.c.fmt)(v);
+      if (d.label) b.el.querySelector('label').textContent = d.label;
     }
     if (b.box) renderChips(b);
     if (b.c.pFn) b.el.textContent = b.c.pFn();
@@ -356,7 +367,7 @@ function chip(key, v) {
     S.eelsRange = v;
     const core0 = S.spec === 'sto' ? 462 : S.spec === 'si' ? 102 : S.spec === 'gr' ? 287 : S.spec === 'mof' ? 200 : S.spec === 'bio' ? 405 : 100;
     // each preset is a dispersion and an offset, as a microscopist would set them
-    [S.eelsDisp, S.eelsOffset] = { zlp: [0.01, -5], low: [0.05, -5], core: [0.25, Math.max(50, core0 - 200)], high: [1, 1300] }[v];
+    [S.eelsDisp, S.eelsOffset, S.eelsExp] = { zlp: [0.01, -5, 0.001], low: [0.05, -5, 0.001], core: [0.25, Math.max(50, core0 - 200), 0.5], high: [1, 1300, 2] }[v];
     const [a, b] = sim.eelsRangeBounds();
     const def = { zlp: [0, 3], low: [22, 12], core: [S.spec === 'sto' ? 462 : S.spec === 'si' ? 102 : S.spec === 'gr' ? 287 : S.spec === 'mof' ? 200 : S.spec === 'bio' ? 405 : 100, S.spec === 'si' ? 5 : S.spec === 'gr' ? 6 : S.spec === 'mof' ? 30 : S.spec === 'bio' ? 20 : 16], high: [S.spec === 'au' ? 2260 : S.spec === 'si' ? 1860 : 1960, 60] }[v];
     S.eelsWin = clamp(def[0], a, b); S.eelsWidth = def[1];

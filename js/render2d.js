@@ -1,6 +1,6 @@
 // Draws the detector views (main image + secondary panel) for each mode.
 import * as P from './physics.js';
-import { stemDetType, AP_MRAD, ZPP_CUTON, zlpStats } from './sim.js';
+import { stemDetType, AP_MRAD, ZPP_CUTON, zlpStats, EELS_FULL_WELL } from './sim.js';
 import { drawRonch, drawCBED } from './techniques.js';
 import { drawOAH, drawILH } from './holography.js';
 
@@ -712,65 +712,93 @@ function drawEELS(sim, S, m, s) {
   else if (e.lowLoss) label(ctx, w1 < 4 ? 'zero-loss: thin areas bright' : 'plasmons: thickness map', 10 * dpr, 36 * dpr, dpr, { color: C.warm, size: 9 });
   label(ctx, `t/λ ≈ ${si.tauMean.toFixed(2)}`, W - 10 * dpr, 16 * dpr, dpr, { color: C.muted, size: 9, align: 'right' });
 
-  const q = s.ctx, x0 = 44 * s.dpr, y0 = 16 * s.dpr, w = s.W - x0 - 10 * s.dpr, h = s.H - y0 - 30 * s.dpr;
-  const E0 = e.E0, E1 = e.E1, X = (E) => x0 + ((E - E0) / (E1 - E0)) * w;
-  layout.eels = { x0: x0 / s.dpr, w: w / s.dpr, E0, E1 };
-  // both views use a log scale: edges sit 10²–10⁴× below the plasmons
-  const log = true, edu = !real(S);
-  const K = edu ? 1e7 : 1;
-  const data = edu ? e.spec : a.spec;
-  let mx = 0, mn = Infinity;
-  for (let b = 0; b < e.nb; b++) { const v = data[b] * K; mx = Math.max(mx, v); if (v > 0) mn = Math.min(mn, v); }
-  const lo = Math.log10(Math.max(1, mn * 0.7)), hi = Math.log10(mx || 10) + 0.08;
-  const Y = (v) => y0 + h - clamp((Math.log10(Math.max(1, v * K)) - lo) / (hi - lo || 1), 0, 1) * h;
-  // window
-  q.fillStyle = 'rgba(111,214,255,0.12)';
-  q.fillRect(X(w0), y0, X(w1) - X(w0), h);
-  q.strokeStyle = 'rgba(111,214,255,0.8)'; q.lineWidth = 1 * s.dpr;
-  q.beginPath(); q.moveTo(X(w0), y0); q.lineTo(X(w0), y0 + h); q.moveTo(X(w1), y0); q.lineTo(X(w1), y0 + h); q.stroke();
-  // axes
-  font(q, 9, s.dpr); q.fillStyle = C.muted; q.textAlign = 'center'; q.textBaseline = 'top';
+  const q = s.ctx;
+  if (e.low) { // dual EELS: low loss (short exposure) above, core loss (long exposure) below
+    const hTop = (s.H - 8 * s.dpr) * 0.4;
+    plotEELS(q, s.dpr, [0, 0, s.W, hTop], sim, S, e.low, a.low, a.framesLow, S.eelsExpLow, 'low loss', false);
+    plotEELS(q, s.dpr, [0, hTop + 8 * s.dpr, s.W, s.H - hTop - 8 * s.dpr], sim, S, e, a.spec, a.frames, S.eelsExp, 'core loss · drift-corrected on the zero loss', true);
+  } else plotEELS(q, s.dpr, [0, 0, s.W, s.H], sim, S, e, a.spec, a.frames, S.eelsExp, null, true);
+}
+
+const fmtS = (t) => (t < 1e-3 ? `${+(t * 1e6).toPrecision(3)} µs` : t < 1 ? `${+(t * 1e3).toPrecision(3)} ms` : `${+t.toPrecision(3)} s`);
+
+// One recorded spectrum in electrons per channel per readout, on a log scale, with the camera's full well.
+// Educational view: the expected counts (clipped where the camera saturates, saturated channels in red).
+// Realistic view: the accumulated readouts, averaged per readout, with shot and read noise.
+function plotEELS(q, dpr, R, sim, S, sp, acc, frames, texp, title, main) {
+  const [rx, ry, rw, rh] = R, x0 = rx + 44 * dpr, y0 = ry + 16 * dpr, w = rw - 54 * dpr, h = rh - 46 * dpr;
+  const E0 = sp.E0, E1 = sp.E1, dE = sp.dE, nb = sp.nb, X = (E) => x0 + ((E - E0) / (E1 - E0)) * w;
+  if (main) layout.eels = { x0: x0 / dpr, w: w / dpr, E0, E1, y0: y0 / dpr, h: h / dpr };
+  const edu = !real(S), FW = EELS_FULL_WELL;
+  const k = dE * S.eelsCurrent * 1e-12 / 1.602e-19 * texp; // electrons per channel per readout, per unit spectrum
+  const data = new Float32Array(nb);
+  for (let b = 0; b < nb; b++) data[b] = edu ? Math.min(FW, sp.spec[b] * k) : frames ? acc[b] / frames : 0;
+  let mx = 1, mn = Infinity;
+  for (let b = 0; b < nb; b++) { mx = Math.max(mx, data[b]); if (data[b] > 0.5) mn = Math.min(mn, data[b]); }
+  const satN = edu ? sp.ro?.sat ?? 0 : (() => { let c = 0; for (let b = 0; b < nb; b++) if (data[b] >= FW * 0.995) c++; return c; })();
+  const lo = Math.log10(Math.max(0.5, (Number.isFinite(mn) ? mn : 1) * 0.6)), hi = Math.max(Math.log10(mx) + 0.1, satN ? Math.log10(FW) + 0.15 : 0);
+  const Y = (v) => y0 + h - clamp((Math.log10(Math.max(0.5, v)) - lo) / (hi - lo || 1), 0, 1) * h;
+  q.strokeStyle = C.grid; q.lineWidth = 1 * dpr; q.strokeRect(x0, y0, w, h);
+  // energy window (the map's)
+  if (main) {
+    const w0 = S.eelsWin - S.eelsWidth / 2, w1 = S.eelsWin + S.eelsWidth / 2;
+    q.fillStyle = 'rgba(111,214,255,0.12)'; q.fillRect(X(w0), y0, X(w1) - X(w0), h);
+    q.strokeStyle = 'rgba(111,214,255,0.8)'; q.beginPath(); q.moveTo(X(w0), y0); q.lineTo(X(w0), y0 + h); q.moveTo(X(w1), y0); q.lineTo(X(w1), y0 + h); q.stroke();
+  }
+  // energy axis
+  font(q, 9, dpr); q.fillStyle = C.muted; q.textAlign = 'center'; q.textBaseline = 'top';
   const span = E1 - E0, step = span > 1200 ? 500 : span > 600 ? 200 : span > 250 ? 100 : span > 120 ? 20 : span > 50 ? 10 : span > 20 ? 5 : span > 8 ? 2 : 1;
   for (let E = Math.ceil(E0 / step) * step; E <= E1; E += step) {
     q.strokeStyle = C.grid; q.beginPath(); q.moveTo(X(E), y0); q.lineTo(X(E), y0 + h); q.stroke();
-    q.fillText(`${+E.toFixed(2)}`, X(E), y0 + h + 5 * s.dpr);
+    q.fillText(`${+E.toFixed(2)}`, X(E), y0 + h + 4 * dpr);
   }
-  q.fillText('eV', x0 + w - 8 * s.dpr, y0 + h + 15 * s.dpr);
+  q.fillText('eV', x0 + w - 8 * dpr, y0 + h + 14 * dpr);
+  // counts axis (decades)
+  q.textAlign = 'right'; q.textBaseline = 'middle';
+  for (let d = Math.ceil(lo); d <= hi; d++) q.fillText(d >= 3 ? `10${'⁰¹²³⁴⁵⁶⁷⁸⁹'[d]}` : `${10 ** d}`, x0 - 4 * dpr, Y(10 ** d));
   q.textAlign = 'left';
+  // full well
+  if (Math.log10(FW) < hi + 0.01) {
+    q.setLineDash([4 * dpr, 3 * dpr]); q.strokeStyle = 'rgba(255,107,107,0.7)';
+    q.beginPath(); q.moveTo(x0, Y(FW)); q.lineTo(x0 + w, Y(FW)); q.stroke(); q.setLineDash([]);
+    label(q, 'full well', x0 + w, Y(FW) + 9 * dpr, dpr, { color: '#ff8a8a', size: 8, align: 'right' });
+  }
   // edge contributions (educational)
-  if (edu) {
-    for (const k in e.edgeCurves) {
-      const cv = e.edgeCurves[k], col = P.EL[P.EI[k]].color;
+  if (edu && sp.edgeCurves) {
+    for (const key in sp.edgeCurves) {
+      const cv = sp.edgeCurves[key], col = P.EL[P.EI[key]].color;
       q.beginPath();
-      for (let b = 0; b < e.nb; b++) { const E = E0 + (b + 0.5) * e.dE, yv = Y(e.bgc[b] + cv[b]); b ? q.lineTo(X(E), yv) : q.moveTo(X(E), yv); }
-      for (let b = e.nb - 1; b >= 0; b--) { const E = E0 + (b + 0.5) * e.dE; q.lineTo(X(E), Y(e.bgc[b])); }
+      for (let b = 0; b < nb; b++) { const E = E0 + (b + 0.5) * dE, yv = Y(Math.min(FW, (sp.bgc[b] + cv[b]) * k)); b ? q.lineTo(X(E), yv) : q.moveTo(X(E), yv); }
+      for (let b = nb - 1; b >= 0; b--) q.lineTo(X(E0 + (b + 0.5) * dE), Y(Math.min(FW, sp.bgc[b] * k)));
       q.closePath(); q.fillStyle = col + '55'; q.fill();
     }
-    q.setLineDash([3 * s.dpr, 3 * s.dpr]); q.strokeStyle = 'rgba(255,255,255,0.35)'; q.beginPath();
-    for (let b = 0; b < e.nb; b++) { const E = E0 + (b + 0.5) * e.dE, yv = Y(e.bgc[b]); b ? q.lineTo(X(E), yv) : q.moveTo(X(E), yv); }
-    q.stroke(); q.setLineDash([]);
   }
+  // the spectrum, with saturated channels in red
   q.beginPath();
-  for (let b = 0; b < e.nb; b++) { const E = E0 + (b + 0.5) * e.dE, yv = Y(data[b]); b ? q.lineTo(X(E), yv) : q.moveTo(X(E), yv); }
-  q.strokeStyle = C.text; q.lineWidth = 1.3 * s.dpr; q.stroke();
+  for (let b = 0; b < nb; b++) { const E = E0 + (b + 0.5) * dE, yv = Y(data[b]); b ? q.lineTo(X(E), yv) : q.moveTo(X(E), yv); }
+  q.strokeStyle = C.text; q.lineWidth = 1.3 * dpr; q.stroke();
+  if (satN) {
+    q.fillStyle = 'rgba(255,90,90,0.85)';
+    for (let b = 0; b < nb; b++) if ((edu ? sp.spec[b] * k : data[b]) >= FW * 0.995) q.fillRect(X(E0 + b * dE), Y(FW) - 2 * dpr, Math.max(1, (w / nb)), 4 * dpr);
+  }
   // edge labels
+  const si = sim.si;
   for (const ed of P.EDGES) {
     if (!si.comp[ed.key] || ed.E < E0 || ed.E > E1) continue;
-    const b = Math.floor((ed.E + 6 - E0) / e.dE);
-    const yv = Math.max(y0 + 10 * s.dpr, Y(data[Math.min(e.nb - 1, b)] || 0) - 16 * s.dpr);
-    label(q, ed.name, X(ed.E), yv, s.dpr, { color: P.EL[P.EI[ed.key]].color, size: 9, align: 'center' });
+    const b = Math.min(nb - 1, Math.max(0, Math.floor((ed.E + 6 - E0) / dE)));
+    label(q, ed.name, X(ed.E), Math.max(y0 + 10 * dpr, Y(data[b]) - 16 * dpr), dpr, { color: P.EL[P.EI[ed.key]].color, size: 9, align: 'center' });
   }
-  // zero-loss peak: position and full width at half maximum, measured from the recorded channels
-  const z = edu || !a.total ? e.zlp : zlpStats(a.spec, E0, e.dE);
+  // zero loss: position and width, measured from the recorded channels
+  const z = edu ? sp.zlp : frames ? zlpStats(data, E0, dE) : null;
   if (z) {
     const yh = Y(z.peak / 2);
-    q.strokeStyle = C.warm; q.lineWidth = 1.2 * s.dpr;
+    q.strokeStyle = C.warm; q.lineWidth = 1.2 * dpr;
     q.beginPath(); q.moveTo(X(z.center - z.fwhm / 2), yh); q.lineTo(X(z.center + z.fwhm / 2), yh); q.stroke();
-    q.setLineDash([2 * s.dpr, 3 * s.dpr]); q.beginPath(); q.moveTo(X(z.center), y0); q.lineTo(X(z.center), y0 + h); q.stroke(); q.setLineDash([]);
-    const tx = Math.min(x0 + w - 150 * s.dpr, X(z.center) + 8 * s.dpr);
-    label(q, `zero loss · FWHM ${z.fwhm.toFixed(2)} eV${Math.abs(z.center) > 0.05 ? ` · drifted ${z.center > 0 ? '+' : ''}${z.center.toFixed(2)} eV` : ''}`, tx, Math.max(y0 + 26 * s.dpr, yh - 14 * s.dpr), s.dpr, { color: C.warm, size: 9 });
+    q.setLineDash([2 * dpr, 3 * dpr]); q.beginPath(); q.moveTo(X(z.center), y0); q.lineTo(X(z.center), y0 + h); q.stroke(); q.setLineDash([]);
+    label(q, `zero loss · FWHM ${z.fwhm.toFixed(2)} eV${satN && z.peak >= FW * 0.99 ? ' (clipped)' : ''}${Math.abs(z.center) > 0.05 ? ` · drifted ${z.center > 0 ? '+' : ''}${z.center.toFixed(2)} eV` : ''}`, Math.min(x0 + w - 170 * dpr, X(z.center) + 8 * dpr), Math.max(y0 + 26 * dpr, yh - 14 * dpr), dpr, { color: C.warm, size: 9 });
   }
-  label(q, `${S.eelsDisp} eV/channel · 2048 channels · offset ${S.eelsOffset} eV`, x0 + w, y0 + 16 * s.dpr, s.dpr, { color: C.muted, size: 9, align: 'right' });
-  if (edu) label(q, '- - background (plasmon tail + power law)', x0 + w, y0 + h - 12 * s.dpr, s.dpr, { color: C.muted, size: 9, align: 'right' });
-  label(q, edu ? 'log scale · drag to move the window' : 'counts (log)', x0 + w, y0, s.dpr, { color: C.muted, size: 9, align: 'right' });
+  // header
+  label(q, `${title ? `${title} · ` : ''}${fmtS(texp)} per readout · ${S.eelsDisp} eV/ch from ${E0} eV${edu ? '' : ` · ${frames} readouts`}`, x0, y0 - 8 * dpr, dpr, { color: C.muted, size: 9 });
+  if (satN) label(q, `${satN} channels saturated: shorter exposure${S.dualEels ? '' : ', dual EELS'} or move the zero loss off the detector`, x0 + w, y0 + 10 * dpr, dpr, { color: '#ff8a8a', size: 9, align: 'right' });
+  else if (main) label(q, edu ? 'e⁻ per channel per readout (log) · drag to move the window' : 'mean e⁻ per channel per readout (log)', x0 + w, y0 + 10 * dpr, dpr, { color: C.muted, size: 9, align: 'right' });
 }
