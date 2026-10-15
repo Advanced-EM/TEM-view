@@ -3,6 +3,7 @@
 // and defines metrics the participant never sees until the end: how far the true optics are from the target.
 import * as P from './physics.js';
 import { Recorder } from './telemetry.js';
+import { SHARE } from './config.js';
 
 const DEG = Math.PI / 180;
 const esc = (t) => String(t).replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' })[c]);
@@ -189,15 +190,39 @@ export class Scenarios {
       ${rating ? `<p>You rated it <b>${rating}/5</b>${mt.success === rating >= 4 ? ', and the simulator agrees.' : mt.success ? ', but it was actually aligned.' : ', but it was still off.'}</p>` : ''}
       <p>${sc.explain(mt, a)}</p>
       <table class="data">${[['Time', `${Math.floor(secs / 60)} min ${Math.round(secs % 60)} s`], ...(sess ? [['Adjustments', `${changes.length} (${Object.entries(bySrc).map(([k, v]) => `${k} ${v}`).join(', ') || '—'})`]] : []), ['Dose used', `${mt.dose} e⁻/Å²`]].map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('')}</table>
-      <div class="crow">${sess ? '<button class="btn primary" id="scnDl">Download the session file</button><button class="btn" id="scnReplay">Replay</button>' : '<span class="muted">This session was not recorded.</span>'}<button class="btn" id="scnAgain">Try another one</button></div></div>`);
+      <div class="crow">${sess ? '<button class="btn primary" id="scnDl">Download the session file</button><button class="btn" id="scnReplay">Replay</button>' : '<span class="muted">This session was not recorded.</span>'}<button class="btn" id="scnAgain">Try another one</button></div>
+      ${sess && SHARE.url ? `<div class="share"><h4>Share with the research dataset</h4>
+        <p>Send this session (the anonymous file you can download above: settings, timing, your rating and cues, no personal data) to the open research dataset${SHARE.dataset ? ` <b>${esc(SHARE.dataset)}</b> on Hugging Face` : ''}, where it will be used to study alignment and to train models that assist real microscopes. Once sent it may be included in published data. Optional: the exhibit works the same either way.</p>
+        <label class="note"><input type="checkbox" id="scnAgree"> I agree to share this session</label>
+        <div class="crow"><button class="btn primary" id="scnSend" disabled>Send</button><span class="muted" id="scnSent"></span></div></div>` : ''}</div>`);
     m.querySelector('.close').onclick = () => { m.hidden = true; this.clear(); };
     m.querySelector('#scnAgain').onclick = () => { m.hidden = true; this.begin(a.id, a.record, store('tem-exp') ?? 'novice'); };
     if (sess) {
       m.querySelector('#scnDl').onclick = () => this.downloadSession(sess);
       m.querySelector('#scnReplay').onclick = () => { m.hidden = true; this.startReplay(sess); };
+      const agree = m.querySelector('#scnAgree'), send = m.querySelector('#scnSend');
+      if (agree) {
+        agree.onchange = () => { send.disabled = !agree.checked; };
+        send.onclick = () => this.share(sess, send, m.querySelector('#scnSent'));
+      }
     }
     this.api.onEvent?.('end', a.id, mt);
   }
+  // send one session to the collector (only after the visitor ticked the box); the receipt id lets them ask for removal
+  async share(sess, btn, out) {
+    btn.disabled = true; out.textContent = 'Sending…';
+    try {
+      const r = await fetch(SHARE.url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(sess) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.detail || `error ${r.status}`);
+      btn.textContent = 'Sent ✓';
+      out.innerHTML = `Thank you. Session id <code>${esc(j.id ?? sess.session.id)}</code>: quote it to have it removed.`;
+      this.recorder.sent = (this.recorder.sent ?? 0) + 1;
+    } catch (e) {
+      btn.disabled = false; out.textContent = `Not sent (${e.message}). You can download the file instead.`;
+    }
+  }
+
   // back to the normal exhibit: no hidden misalignment
   clear() { this.api.S.mis = null; this.api.invalidateAll(); }
   downloadSession(sess) {

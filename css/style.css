@@ -427,3 +427,8 @@ label.note input { padding: 7px 9px; border-radius: 8px; border: 1px solid var(-
 .scnpick:hover { border-color: rgba(111, 214, 255, 0.5); background: var(--accent-soft); }
 .scnpick b { font: 600 13.5px var(--sans); }
 .scnpick small { color: var(--muted); font-size: 12px; line-height: 1.4; }
+#scnModal .share { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+#scnModal .share p { font-size: 12.5px; color: var(--muted); }
+#scnModal .share code { font: 11px var(--mono); color: var(--text); }
+#scnModal .share label.note { display: flex; flex-direction: row; align-items: center; gap: 8px; margin: 8px 0; color: var(--text); }
+#scnModal .share label.note input { width: auto; margin: 0; }
