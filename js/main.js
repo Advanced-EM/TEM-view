@@ -5,7 +5,7 @@ import { Scene3D, Y } from './scene3d.js';
 import { modeInfo, changeText, dataRows } from './explain.js';
 import { renderComponent } from './components.js';
 import * as N from './narration.js';
-import { defaultState, SESSION_KEYS } from './state.js';
+import { defaultState, SESSION_KEYS, CORR_RANGE } from './state.js';
 import { PRESETS, newProfile, sanitizeProfile } from './profile.js';
 import { HOLDERS } from './holder.js';
 import { Panel } from './panel.js';
@@ -70,8 +70,8 @@ const CONTROLS = [
 
   { sec: 'The lenses' },
   { chips: 'corrector', opts: [[false, 'Uncorrected'], [true, 'Aberration corrector']] },
-  { slider: 'cs', label: 'Spherical aberration Cₛ', dyn: () => S.corrector ? { key: 'csCor', min: -40, max: 40, step: 1, fmt: (v) => `${v} µm` } : { key: 'csUnc', min: 0.5, max: 2.5, step: 0.05, fmt: (v) => `${v.toFixed(2)} mm` } },
-  { slider: 'df', label: 'Defocus', dyn: () => (S.corrector ? { min: -30, max: 30, step: 0.2 } : S.spec === 'bio' ? { min: -4000, max: 500, step: 10 } : { min: -150, max: 150, step: 1 }), fmt: (v) => `${v > 0 ? '+' : ''}${v.toFixed(1)} nm`, ends: ['under', 'focus', 'over'], modes: 'tem stem 4d eds eels ronch oah ilh' },
+  { slider: 'cs', label: 'Spherical aberration Cₛ', dyn: () => S.corrector ? { key: 'csCor', min: -CORR_RANGE.cs, max: CORR_RANGE.cs, step: 0.5, fmt: (v) => `${v} µm` } : { key: 'csUnc', min: 0.5, max: 2.5, step: 0.05, fmt: (v) => `${v.toFixed(2)} mm` } },
+  { slider: 'df', label: 'Defocus', dyn: () => (S.corrector ? { min: -CORR_RANGE.df, max: CORR_RANGE.df, step: 0.1 } : S.spec === 'bio' ? { min: -4000, max: 500, step: 10 } : { min: -150, max: 150, step: 1 }), fmt: (v) => `${v > 0 ? '+' : ''}${v.toFixed(1)} nm`, ends: ['under', 'focus', 'over'], modes: 'tem stem 4d eds eels ronch oah ilh' },
   { buttons: [['optfocus', 'Optimal focus']], modes: 'tem stem 4d eds eels ronch oah ilh' },
   { chips: 'objAp', label: 'Objective aperture', modes: 'tem', opts: [['none', 'Open'], ['40', '40 µm'], ['20', '20 µm'], ['10', '10 µm'], ['df', 'Dark field'], ['zpp', 'Zernike phase plate']] },
   { slider: 'stigX', stig: 0, label: 'Objective stigmator X', min: -60, max: 60, step: 0.5, fmt: (v) => `${v.toFixed(1)} nm`, modes: 'tem stem 4d eds eels oah ilh' },
@@ -96,14 +96,14 @@ const CONTROLS = [
   { p: 'Tune on amorphous carbon: make the flat central "sweet spot" of the Ronchigram as large and round as possible. C1 and C3 are the defocus and Cₛ controls above.', modes: 'ronch' },
   { buttons: [['scramble', 'Scramble aberrations'], ['autotune', 'Auto-tune']], modes: 'ronch' },
   { slider: 'ronchAp', label: 'Ronchigram aperture', min: 20, max: 70, step: 1, fmt: (v) => `${v} mrad`, modes: 'ronch' },
-  { slider: 'A1', ab: true, label: 'A1 · 2-fold astigmatism', min: 0, max: 100, step: 0.5, fmt: (v) => `${v.toFixed(1)} nm`, modes: 'ronch' },
-  { slider: 'A1a', ab: true, label: 'A1 angle', min: 0, max: 180, step: 1, fmt: (v) => `${v}°`, modes: 'ronch' },
-  { slider: 'B2', ab: true, label: 'B2 · axial coma', min: 0, max: 1500, step: 5, fmt: (v) => `${v} nm`, modes: 'ronch' },
-  { slider: 'B2a', ab: true, label: 'B2 angle', min: 0, max: 360, step: 1, fmt: (v) => `${v}°`, modes: 'ronch' },
-  { slider: 'A2', ab: true, label: 'A2 · 3-fold astigmatism', min: 0, max: 1500, step: 5, fmt: (v) => `${v} nm`, modes: 'ronch' },
-  { slider: 'A2a', ab: true, label: 'A2 angle', min: 0, max: 120, step: 1, fmt: (v) => `${v}°`, modes: 'ronch' },
-  { slider: 'A3', ab: true, label: 'A3 · 4-fold astigmatism', min: 0, max: 20, step: 0.1, fmt: (v) => `${v.toFixed(1)} µm`, modes: 'ronch' },
-  { slider: 'A3a', ab: true, label: 'A3 angle', min: 0, max: 90, step: 1, fmt: (v) => `${v}°`, modes: 'ronch' },
+  { slider: 'A1', ab: true, label: 'A1 · 2-fold astigmatism', min: 0, max: CORR_RANGE.A1, step: 0.5, fmt: (v) => `${v.toFixed(1)} nm`, modes: 'ronch' },
+  { slider: 'A1a', ab: true, label: 'A1 angle', min: 0, max: 180, step: 0.1, fmt: (v) => `${+v.toFixed(1)}°`, modes: 'ronch' },
+  { slider: 'B2', ab: true, label: 'B2 · axial coma', min: 0, max: CORR_RANGE.B2, step: 2, fmt: (v) => `${v} nm`, modes: 'ronch' },
+  { slider: 'B2a', ab: true, label: 'B2 angle', min: 0, max: 360, step: 0.1, fmt: (v) => `${+v.toFixed(1)}°`, modes: 'ronch' },
+  { slider: 'A2', ab: true, label: 'A2 · 3-fold astigmatism', min: 0, max: CORR_RANGE.A2, step: 2, fmt: (v) => `${v} nm`, modes: 'ronch' },
+  { slider: 'A2a', ab: true, label: 'A2 angle', min: 0, max: 120, step: 0.1, fmt: (v) => `${+v.toFixed(1)}°`, modes: 'ronch' },
+  { slider: 'A3', ab: true, label: 'A3 · 4-fold astigmatism', min: 0, max: CORR_RANGE.A3, step: 0.1, fmt: (v) => `${v.toFixed(1)} µm`, modes: 'ronch' },
+  { slider: 'A3a', ab: true, label: 'A3 angle', min: 0, max: 90, step: 0.1, fmt: (v) => `${+v.toFixed(1)}°`, modes: 'ronch' },
 
   { sec: 'Convergent-beam diffraction', modes: 'cbed' },
   { chips: 'cbedKind', modes: 'cbed', opts: [['cbed', 'CBED (focused probe)'], ['lacbed', 'LACBED (large angle)']] },
@@ -358,7 +358,7 @@ function chip(key, v) {
   if (key === 'profile') return setProfile(newProfile(v), 'profile');
   if (key === 'corrector') {
     S.corrector = v;
-    const lim = v ? 30 : 150;
+    const lim = v ? CORR_RANGE.df : 150;
     S.df = clamp(S.df, -lim, lim);
     if (!v && fam(S.mode) === 'tem') S.df = +(P.scherzerDefocus(sim.CsA(), sim.lam) / 10).toFixed(1);
     S.dfFam[fam(S.mode)] = S.df;
@@ -843,6 +843,8 @@ function wire() {
   $('#btnLabels').addEventListener('click', () => set('showLabels', !S.showLabels));
   $('#btnFull').addEventListener('click', () => { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.(); });
   $('#btnHelp').addEventListener('click', () => ($('#help').hidden = false));
+  const openTraining = () => scn.menu({ replay: () => action('replayFile'), last: () => action('lastSession') });
+  $('#btnTrain').addEventListener('click', openTraining);
   $('#fileSession').addEventListener('change', async (e) => {
     const f = e.target.files[0];
     e.target.value = '';
@@ -939,7 +941,7 @@ function wire() {
   secCv.addEventListener('pointerup', () => { if (sdrag?.mode === '4d') explainChange('vdet'); sdrag = null; });
 
   window.addEventListener('keydown', (e) => {
-    if (e.target.tagName === 'INPUT') return;
+    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
     const km = Object.keys(KEYS).find((k) => KEYS[k] === e.key);
     if (km && !e.metaKey && !e.ctrlKey) setMode(km);
     else if (e.key === ' ') { e.preventDefault(); action('pause'); }
@@ -949,6 +951,7 @@ function wire() {
     else if (e.key === 'c' || e.key === 'C') { S.clarity = S.clarity === 'edu' ? 'real' : 'edu'; sim.invalidate('clarity'); refreshControls(); explainChange('clarity'); }
     else if (e.key === 'v' || e.key === 'V') vPanel.openDock();
     else if (e.key === 'i' || e.key === 'I') acquireNow();
+    else if ((e.key === 't' || e.key === 'T') && !e.metaKey && !e.ctrlKey) openTraining();
     else if (e.key === 'x' || e.key === 'X') setExpanded(!document.body.classList.contains('detBig'));
     else if (e.key === 'Escape') { setExpanded(false); $('#help').hidden = true; if (scene.tour) scene.stopTour(); }
   });

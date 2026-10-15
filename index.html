@@ -8,34 +8,34 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=202610152221">
+<link rel="stylesheet" href="css/style.css?v=202610152248">
 <script type="importmap">
 {
  "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
-  "./js/acquire.js": "./js/acquire.js?v=202610152221",
-  "./js/calibrate.js": "./js/calibrate.js?v=202610152221",
-  "./js/calibui.js": "./js/calibui.js?v=202610152221",
-  "./js/components.js": "./js/components.js?v=202610152221",
-  "./js/explain.js": "./js/explain.js?v=202610152221",
-  "./js/export.js": "./js/export.js?v=202610152221",
-  "./js/holder.js": "./js/holder.js?v=202610152221",
-  "./js/holography.js": "./js/holography.js?v=202610152221",
-  "./js/main.js": "./js/main.js?v=202610152221",
-  "./js/narration.js": "./js/narration.js?v=202610152221",
-  "./js/npy.js": "./js/npy.js?v=202610152221",
-  "./js/panel.js": "./js/panel.js?v=202610152221",
-  "./js/physics.js": "./js/physics.js?v=202610152221",
-  "./js/profile.js": "./js/profile.js?v=202610152221",
-  "./js/render2d.js": "./js/render2d.js?v=202610152221",
-  "./js/scenarios.js": "./js/scenarios.js?v=202610152221",
-  "./js/scene3d.js": "./js/scene3d.js?v=202610152221",
-  "./js/sim.js": "./js/sim.js?v=202610152221",
-  "./js/state.js": "./js/state.js?v=202610152221",
-  "./js/techniques.js": "./js/techniques.js?v=202610152221",
-  "./js/telemetry.js": "./js/telemetry.js?v=202610152221",
-  "./js/vpanel.js": "./js/vpanel.js?v=202610152221"
+  "./js/acquire.js": "./js/acquire.js?v=202610152248",
+  "./js/calibrate.js": "./js/calibrate.js?v=202610152248",
+  "./js/calibui.js": "./js/calibui.js?v=202610152248",
+  "./js/components.js": "./js/components.js?v=202610152248",
+  "./js/explain.js": "./js/explain.js?v=202610152248",
+  "./js/export.js": "./js/export.js?v=202610152248",
+  "./js/holder.js": "./js/holder.js?v=202610152248",
+  "./js/holography.js": "./js/holography.js?v=202610152248",
+  "./js/main.js": "./js/main.js?v=202610152248",
+  "./js/narration.js": "./js/narration.js?v=202610152248",
+  "./js/npy.js": "./js/npy.js?v=202610152248",
+  "./js/panel.js": "./js/panel.js?v=202610152248",
+  "./js/physics.js": "./js/physics.js?v=202610152248",
+  "./js/profile.js": "./js/profile.js?v=202610152248",
+  "./js/render2d.js": "./js/render2d.js?v=202610152248",
+  "./js/scenarios.js": "./js/scenarios.js?v=202610152248",
+  "./js/scene3d.js": "./js/scene3d.js?v=202610152248",
+  "./js/sim.js": "./js/sim.js?v=202610152248",
+  "./js/state.js": "./js/state.js?v=202610152248",
+  "./js/techniques.js": "./js/techniques.js?v=202610152248",
+  "./js/telemetry.js": "./js/telemetry.js?v=202610152248",
+  "./js/vpanel.js": "./js/vpanel.js?v=202610152248"
  }
 }
 </script>
@@ -88,6 +88,7 @@
 
 <aside class="card controls">
   <div class="chead"><p class="eyebrow">Controls</p><div class="icons">
+  <button id="btnTrain" class="train" title="Training mode (T)" aria-label="Training mode: alignment tasks"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg><span>Training</span></button>
   <button id="btnLabels" title="Labels (L)" aria-label="Toggle labels"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button>
   <button id="btnPanel" title="Control panel" aria-label="Control panel and game controllers"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2.5" y="6.5" width="19" height="11" rx="3"/><circle cx="8" cy="12" r="2"/><circle cx="16" cy="10.5" r="1"/><circle cx="18" cy="13" r="1"/></svg></button>
   <button id="btnNarrate" title="Auto-narrate (N)" aria-label="Narrate automatically" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 13v-1a8 8 0 0 1 16 0v1"/><rect x="3" y="13" width="4" height="7" rx="1.5"/><rect x="17" y="13" width="4" height="7" rx="1.5"/></svg></button>
@@ -113,12 +114,12 @@
     <ul>
       <li><b>Click a label</b> on the column to open its instrument-physics card: how it works, typical specifications, how it is calibrated, and live values.</li>
       <li><b>Drag</b> the 3D column to orbit, scroll to zoom. Keys <kbd>1</kbd>–<kbd>9</kbd> and <kbd>0</kbd> switch modes, <kbd>Space</kbd> pauses, <kbd>L</kbd> labels, <kbd>C</kbd> clarity, <kbd>R</kbd> resets the view, <kbd>N</kbd> turns narration on or off.</li>
-      <li><b>Control panel:</b> press <kbd>V</kbd> for the on-screen console and drive the microscope from the keyboard (Q/W focus, A/S magnification, Z/X intensity, H/L and K/J multifunction knobs, arrows for the stage, Tab to switch the multifunction knobs between stigmator, image shift and tilt), or drag and scroll its knobs; pop it out to a second window. Or plug in a TEM-view panel or a game controller and press a button. Knobs and sticks drive focus, magnification, intensity, the stigmator and the stage; the gamepad icon in the Controls header shows live input and lets you remap everything.</li>
+      <li><b>Control panel:</b> press <kbd>V</kbd> for the on-screen console and drive the microscope from the keyboard (Q/W focus, A/S magnification, Z/X intensity, H/L and K/J multifunction knobs, arrows for the stage, Tab to switch the multifunction knobs between stigmator, image shift and tilt, plus the corrector terms B2, A2, A3 and Cₛ in the Ronchigram), or drag and scroll its knobs; pop it out to a second window. Or plug in a TEM-view panel or a game controller and press a button. Knobs and sticks drive focus, magnification, intensity, the stigmator and the stage; the gamepad icon in the Controls header shows live input and lets you remap everything.</li>
       <li><b>Results panel:</b> the buttons at its top right enlarge it in place (<kbd>X</kbd>, <kbd>Esc</kbd> to close) or open it in a separate window, for example on a second screen.</li>
       <li><b>Drag the detector image</b> to move the specimen stage; scroll it to change magnification. In diffraction, dragging the pattern tilts the crystal. Try to find the zone axis by following the Kikuchi lines.</li>
       <li><b>4D-STEM:</b> hover the virtual image to read individual diffraction patterns; drag on the pattern to reshape the virtual detector.</li>
       <li><b>EDS:</b> click a peak to map that element. <b>EELS:</b> drag on the spectrum to move the energy window; choose the dispersion (eV per channel) and energy offset, or the Zero-loss preset to see the instrument's energy resolution. Lengthen the exposure until the zero loss saturates (red), then switch on <b>Dual EELS</b> to record the low loss and the core loss together.</li>
-      <li><b>Training scenarios</b> (in the controls) hide a misalignment for you to fix, ask how good you think the result is, then reveal the truth. With your consent the session is recorded locally (no personal data, nothing sent anywhere) and can be downloaded or replayed.</li>
+      <li><b>Training</b> (button at the top of the controls, or <kbd>T</kbd>) hide a misalignment for you to fix, ask how good you think the result is, then reveal the truth. With your consent the session is recorded locally (no personal data, nothing sent anywhere) and can be downloaded or replayed.</li>
       <li><b>Acquire</b> (camera button above the detector, or <kbd>I</kbd>) records an exposure into the acquisitions gallery, to download as PNG or data.</li>
       <li><b>Ronchigram:</b> press Scramble, then null the aberrations with the sliders (watch the π/4 circle grow), or press Auto-tune. <b>CBED:</b> thicken the sample to read thickness from the fringes; drag strain to move HOLZ lines.</li>
       <li><b>Digital twin</b> (bottom of the controls): choose or edit an instrument profile, then calibrate it from your own data in any mode: Thon rings (TEM), a crystal lattice (magnification, STEM scan distortion), a ring standard (camera length, ellipticity), a vacuum disk (4D-STEM angles), known EDS peaks, the EELS zero-loss peak, or a vacuum hologram. Save and load sessions, and export the recorded data as NumPy <code>.npz</code>.</li>
@@ -140,6 +141,6 @@
 <input id="fileSession" type="file" accept=".json,application/json" hidden>
 <div id="calib" class="modal calib" hidden><div class="card"><button class="close" aria-label="Close">×</button><div class="calibBody"></div></div></div>
 
-<script type="module" src="js/main.js?v=202610152221"></script>
+<script type="module" src="js/main.js?v=202610152248"></script>
 </body>
 </html>
