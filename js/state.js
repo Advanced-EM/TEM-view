@@ -2,6 +2,10 @@
 // headless (tools/headless.mjs) with exactly the defaults the exhibit uses.
 import { newProfile } from './profile.js';
 
+// knob ranges with the probe corrector on (defocus C1 nm, Cs µm, A1/B2/A2 nm, A3 µm): wide enough to find
+// a badly misaligned corrector, as on a real instrument
+export const CORR_RANGE = { df: 300, cs: 200, A1: 500, B2: 8000, A2: 8000, A3: 80 };
+
 export const defaultState = () => ({
   mode: 'stem', clarity: 'edu', spec: 'sto', thick: 15, tiltX: 0, tiltY: 0, fov: 5, cx: 0, cy: 0,
   kV: 200, dose: 400, df: 0, dfFam: { tem: -4, probe: 0 }, corrector: true, csUnc: 1.2, csCor: 5,

@@ -8,17 +8,23 @@
 // A standard game controller (Xbox / PlayStation layout) is mapped onto the same functions: sticks for the
 // stage and the multifunction knobs, triggers for focus, bumpers for magnification, d-pad for intensity and mode.
 
+import { CORR_RANGE } from './state.js';
+
 export const AXES = [
   ['stageX', 'Stage X (joystick)'], ['stageY', 'Stage Y (joystick)'], ['focus', 'Focus'], ['mag', 'Magnification / camera length'],
   ['intensity', 'Intensity (dose)'], ['mfX', 'Multifunction X'], ['mfY', 'Multifunction Y'], ['context', 'Context knob'],
 ];
 export { MF };
 export const BUTTONS = [
-  ['modePrev', 'Previous mode'], ['modeNext', 'Next mode'], ['mfSelect', 'Multifunction: stigmator / shift / tilt'], ['wobbler', 'Focus wobbler'],
+  ['modePrev', 'Previous mode'], ['modeNext', 'Next mode'], ['mfSelect', 'Multifunction: stigmator / corrector terms / shift / tilt'], ['wobbler', 'Focus wobbler'],
   ['focusFine', 'Focus fine / coarse'], ['optFocus', 'Optimal focus'], ['pause', 'Pause beam'], ['clarity', 'Educational / realistic'],
   ['labels', 'Labels'], ['narrate', 'Narration'], ['expand', 'Enlarge results'], ['calib', 'Calibration dialog'], ['acquire', 'Acquire'],
 ];
-const MF = [['stig', 'Stigmator'], ['shift', 'Image shift'], ['tilt', 'Specimen tilt']];
+// multifunction modes; the corrector terms only appear with the probe corrector on, in the Ronchigram
+const MF = [['stig', 'Stigmator'], ['B2', 'Coma B2', true], ['A2', '3-fold A2', true], ['A3', '4-fold A3', true], ['C3', 'Cₛ (C3)', true],
+  ['shift', 'Image shift'], ['tilt', 'Specimen tilt']];
+// corrector terms on the multifunction knobs: n-fold symmetry (the vector turns with n·angle), step per detent, unit
+const AB_KNOB = { A1: [2, 0.5, 'nm'], B2: [1, 10, 'nm'], A2: [3, 10, 'nm'], A3: [4, 0.1, 'µm'] };
 
 const DEFAULTS = {
   panel: {
@@ -109,13 +115,17 @@ export class Panel {
     if (this.pad && !this.virtual) this.api.noteSource?.(this.kind === 'panel' ? 'panel' : 'controller');
     if (k === 'modePrev') this.api.cycleMode(-1);
     else if (k === 'modeNext') this.api.cycleMode(1);
-    else if (k === 'mfSelect') { const i = MF.findIndex((m) => m[0] === this.mf); this.setMF(MF[(i + 1) % MF.length][0]); }
+    else if (k === 'mfSelect') { const L = this.mfList(), i = L.findIndex((m) => m[0] === this.mf); this.setMF(L[(i + 1) % L.length][0]); }
     else if (k === 'focusFine') { this.fine = !this.fine; this.say(`Focus ${this.fine ? 'fine' : 'coarse'}`); }
     else if (k === 'wobbler') this.toggleWobbler();
     else if (k === 'optFocus') { this.api.action('optfocus'); this.say('Optimal focus'); }
     else this.api.toggle(k);
   }
   setMF(k) { this.mf = k; this.say(`Multifunction knobs: ${MF.find((m) => m[0] === k)[1]}`); }
+  // corrector terms only with the corrector on, in the Ronchigram; fall back to the stigmator elsewhere
+  corrOn() { const S = this.api.S; return S.corrector && S.mode === 'ronch'; }
+  mfList() { return MF.filter((m) => !m[2] || this.corrOn()); }
+  mfNow() { if (!this.mfList().some((m) => m[0] === this.mf)) this.mf = 'stig'; return this.mf; }
   // what each knob is doing right now, for the on-screen panel
   readouts() {
     const { S } = this.api, m = S.mode, f1 = (v) => v.toFixed(1);
@@ -124,12 +134,13 @@ export class Panel {
       : m === 'diff' ? ['Selected area', `${f1(S.sa)} nm`] : m === 'cbed' ? ['Convergence', `${S.cbedKind === 'cbed' ? S.alphaCB : S.alphaLA} mrad`]
       : m === 'ronch' ? ['Ronchigram aperture', `${S.ronchAp} mrad`] : m === 'oah' ? ['Biprism', `${S.biprism} V`] : m === 'ilh' ? ['Focal step', `${f1(S.focalStep)} nm`]
       : S.holder !== 'room' ? ['Temperature', `${S.tempSet < 20 ? S.tempSet.toFixed(1) : Math.round(S.tempSet)} K`] : ['Fine focus', `${S.df.toFixed(2)} nm`];
-    const mfv = this.mf === 'stig' ? `A1 ${S.ab.A1.toFixed(1)} nm, ${S.ab.A1a}°` : this.mf === 'tilt' ? `${S.tiltX.toFixed(2)}°, ${S.tiltY.toFixed(2)}°` : `${(S.cx / 10).toFixed(1)}, ${(S.cy / 10).toFixed(1)} nm`;
+    const mf = this.mfNow(), abk = mf === 'stig' ? 'A1' : AB_KNOB[mf] ? mf : null;
+    const mfv = abk ? `${abk} ${S.ab[abk].toFixed(abk === 'B2' || abk === 'A2' ? 0 : 1)} ${AB_KNOB[abk][2]}, ${S.ab[abk + 'a']}°` : mf === 'C3' ? `${S.csCor} µm` : this.mf === 'tilt' ? `${S.tiltX.toFixed(2)}°, ${S.tiltY.toFixed(2)}°` : `${(S.cx / 10).toFixed(1)}, ${(S.cy / 10).toFixed(1)} nm`;
     return {
       focus: ['Focus', `${S.df > 0 ? '+' : ''}${S.df.toFixed(1)} nm · ${this.fine ? 'fine' : 'coarse'}`],
       mag: diffMag ? ['Camera length', `${S.camL} mm`] : ['Magnification', `${S.fov.toFixed(1)} nm field`],
       intensity: ['Intensity', `${S.dose < 10 ? S.dose.toFixed(1) : Math.round(S.dose)} e⁻/Å²`],
-      mf: [MF.find((x) => x[0] === this.mf)[1], mfv], context: ctx,
+      mf: [MF.find((x) => x[0] === mf)[1], mfv], context: ctx,
     };
   }
 
@@ -140,7 +151,7 @@ export class Panel {
     if (acc.focus) {
       // one detent: 0.2 nm (corrected), 1 nm (uncorrected) or 10 nm (cryo-EM range); coarse ×5
       const step = (S.corrector ? 0.2 : S.spec === 'bio' ? 10 : 1) * (this.fine ? 1 : 5) * sens.focus;
-      const lim = S.corrector ? [-30, 30] : S.spec === 'bio' ? [-4000, 500] : [-150, 150];
+      const lim = S.corrector ? [-CORR_RANGE.df, CORR_RANGE.df] : S.spec === 'bio' ? [-4000, 500] : [-150, 150];
       if (this.wob) this.wob.base = clamp(this.wob.base + acc.focus * step, ...lim);
       else this.api.set('df', +clamp(S.df + acc.focus * step, ...lim).toFixed(2), 'df');
       this.say(`Focus ${S.df > 0 ? '+' : ''}${S.df.toFixed(1)} nm`);
@@ -161,15 +172,21 @@ export class Panel {
 
   // multifunction X/Y: stigmator (A1 as a vector), image shift, or specimen tilt
   multifunction(dx, dy) {
-    const { S, sim } = this.api;
-    if (this.mf === 'stig') {
-      const a = S.ab, ph = (a.A1a * Math.PI) / 90; // A1 rotates with 2φ
-      let x = a.A1 * Math.cos(ph) + dx * 0.5, y = a.A1 * Math.sin(ph) + dy * 0.5;
-      S.ab.A1 = +Math.min(100, Math.hypot(x, y)).toFixed(2);
-      S.ab.A1a = Math.round((((Math.atan2(y, x) * 90) / Math.PI) + 180) % 180);
+    const { S, sim } = this.api, mf = this.mfNow();
+    const k = mf === 'stig' ? 'A1' : AB_KNOB[mf] ? mf : null;
+    if (k) {
+      // an n-fold term as an (X, Y) vector: magnitude and angle, with the vector turning at n × the angle
+      const [n, step, unit] = AB_KNOB[k], a = S.ab, ph = (a[k + 'a'] * n * Math.PI) / 180;
+      const max = mf === 'stig' && !this.corrOn() ? 100 : CORR_RANGE[k];
+      const x = a[k] * Math.cos(ph) + dx * step, y = a[k] * Math.sin(ph) + dy * step;
+      S.ab[k] = +Math.min(max, Math.hypot(x, y)).toFixed(2);
+      S.ab[k + 'a'] = +((((Math.atan2(y, x) * 180) / Math.PI / n) + 360) % (360 / n)).toFixed(1); // 0.1°: at µm magnitudes 1° is a large residual
       sim.invalidate('ab'); this.api.refresh(); this.api.explain('ab');
-      this.say(`Stigmator: A1 ${S.ab.A1.toFixed(1)} nm at ${S.ab.A1a}°`);
-    } else if (this.mf === 'shift') {
+      this.say(`${mf === 'stig' ? 'Stigmator' : MF.find((m) => m[0] === mf)[1]}: ${k} ${S.ab[k].toFixed(k === 'B2' || k === 'A2' ? 0 : 1)} ${unit} at ${S.ab[k + 'a']}°`);
+    } else if (mf === 'C3') {
+      this.api.set('csCor', +clamp(S.csCor + (dx - dy) * 0.5, -CORR_RANGE.cs, CORR_RANGE.cs).toFixed(1), 'cs');
+      this.say(`Cₛ ${S.csCor} µm`);
+    } else if (mf === 'shift') {
       const f = sim.fovA() * 0.01;
       this.api.moveStage(dx * f, dy * f);
       this.say('Image shift');
@@ -218,7 +235,7 @@ export class Panel {
     el.hidden = false;
     const fresh = performance.now() - this.msgT < 2500;
     el.innerHTML = `<b>${esc(shortName(this.pad.id))}</b><span>${this.kind === 'panel' ? 'panel' : 'controller'}</span>
-      <div class="mf">${MF.map(([k, l]) => `<i class="${k === this.mf ? 'on' : ''}">${l}</i>`).join('')}</div>
+      <div class="mf">${this.mfList().map(([k, l]) => `<i class="${k === this.mf ? 'on' : ''}">${l}</i>`).join('')}</div>
       <small>focus ${this.fine ? 'fine' : 'coarse'}${this.wob ? ' · wobbler' : ''}</small>
       <p class="${fresh ? 'fresh' : ''}">${esc(this.msg)}</p>`;
   }

@@ -21,6 +21,7 @@ export function flatAngle(lam, df, Cs, ab, apMrad) {
 export const SCENARIOS = {
   'tem-focus-stig': {
     title: 'TEM: focus and stigmate',
+    short: 'Gold at high magnification with hidden astigmatism and defocus. Make the Thon rings round and reach Scherzer focus.',
     brief: 'The objective lens is out of focus and astigmatic, and the knob readings do not tell you by how much. Using the image and its Fourier transform (Thon rings), bring the lens to <b>Scherzer focus</b> with <b>no astigmatism</b>. Use the Defocus slider and the objective stigmator (X, Y) sliders, the panel or the keyboard. When you think it is aligned, press <b>I\'m done</b>.',
     cues: ['Thon rings are round', 'Thon rings reach far out', 'Image looks sharp', 'Fringes or atoms visible', 'Contrast of the carbon film', 'Followed the transfer-function plot', 'Guessed'],
     setup(api, rng) {
@@ -54,13 +55,14 @@ export const SCENARIOS = {
   },
   'corrector-ronch': {
     title: 'Corrector: tune the Ronchigram',
-    brief: 'The probe corrector has drifted: defocus, spherical aberration and several asymmetric aberrations are present, and the slider readings are not the true values. On the Ronchigram of amorphous carbon, make the flat, featureless center as <b>large and round</b> as you can (target: at least <b>30 mrad</b>). Adjust defocus, Cₛ and the A1, B2, A2, A3 magnitudes and angles. Auto-tune is disabled. Press <b>I\'m done</b> when you are satisfied.',
+    short: 'A drifted probe corrector: hidden C1, A1, B2, A2, C3 and A3. Grow the flat center of the Ronchigram to 30 mrad.',
+    brief: 'The probe corrector has drifted: defocus, spherical aberration and several asymmetric aberrations are present, and the slider readings are not the true values. On the Ronchigram of amorphous carbon, make the flat, featureless center as <b>large and round</b> as you can (target: at least <b>30 mrad</b>). Adjust defocus, Cₛ and the A1, B2, A2, A3 magnitudes and angles with the sliders, or with the control panel (<kbd>V</kbd>): <kbd>Tab</kbd> picks what the multifunction knobs (<kbd>H</kbd>/<kbd>L</kbd>, <kbd>K</kbd>/<kbd>J</kbd>, Shift for big steps) drive: stigmator A1, coma B2, 3-fold A2, 4-fold A3 or Cₛ. Auto-tune is disabled. Press <b>I\'m done</b> when you are satisfied.',
     cues: ['Flat center is large', 'Flat center is round', 'Streaks or rings gone', 'Symmetry of the pattern', 'Used the phase plate panel', 'Used the aberration budget bars', 'Guessed'],
     setup(api, rng) {
       const { S } = api;
       Object.assign(S, { corrector: true, csCor: 0, ronchAp: 45, df: 0, clarity: 'edu' });
       S.ab = { A1: 0, A1a: 0, B2: 0, B2a: 0, A2: 0, A2a: 0, A3: 0, A3a: 0 };
-      const sg = () => (rng() < 0.5 ? -1 : 1), h = { df: sg() * (2 + rng() * 8), C3: sg() * (6 + rng() * 18), A1: [8 + rng() * 30, rng() * 180], B2: [120 + rng() * 500, rng() * 360], A2: [120 + rng() * 500, rng() * 120], A3: [rng() * 5, rng() * 90] };
+      const sg = () => (rng() < 0.5 ? -1 : 1), h = { df: sg() * (2 + rng() * 38), C3: sg() * (6 + rng() * 54), A1: [8 + rng() * 110, rng() * 180], B2: [120 + rng() * 2400, rng() * 360], A2: [120 + rng() * 2400, rng() * 120], A3: [rng() * 15, rng() * 90] };
       S.mis = { df: r1(h.df, 2), C3: r1(h.C3, 2), A1: vec(h.A1[0], h.A1[1], 2).map((v) => r1(v, 2)), B2: vec(h.B2[0], h.B2[1], 1).map((v) => r1(v, 1)), A2: vec(h.A2[0], h.A2[1], 3).map((v) => r1(v, 1)), A3: vec(h.A3[0], h.A3[1], 4).map((v) => r1(v, 3)) };
       api.setMode('ronch');
       S.dfFam.probe = 0; S.df = 0;
@@ -89,6 +91,22 @@ export class Scenarios {
     this.el = (id, cls, html = '') => { let e = document.getElementById(id); if (!e) { e = document.createElement('div'); e.id = id; e.className = cls; document.body.appendChild(e); } e.innerHTML = html; e.hidden = false; return e; };
   }
   blocked(id) { return !!this.active && (SCENARIOS[this.active.id].blocked ?? []).includes(id); }
+
+  // ---------------------------------------------------------------- the Training menu (top-right button)
+  menu({ replay, last }) {
+    const m = this.el('scnModal', 'modal', `<div class="card"><button class="close" aria-label="Close">×</button>
+      <p class="eyebrow">Training mode</p><h2>Align the <em>microscope</em></h2>
+      <p>Each task hides a misalignment, as on a real instrument: the knob readings are not the true values. Fix it from what you see, say how good you think it is, then see the truth.</p>
+      <div class="scnlist">${Object.entries(SCENARIOS).map(([id, s]) => `<button class="scnpick" data-id="${id}"><b>${s.title}</b><small>${s.short}</small></button>`).join('')}</div>
+      <div class="crow"><button class="btn" data-x="replay">Replay a session file…</button><button class="btn" data-x="last" ${this.lastSession ? '' : 'disabled'}>Download last session</button>${this.active ? '<button class="btn" data-x="stop">Stop the current task</button>' : ''}</div></div>`);
+    const close = () => { m.hidden = true; };
+    m.querySelector('.close').onclick = close;
+    m.onclick = (e) => { if (e.target === m) close(); };
+    m.querySelectorAll('.scnpick').forEach((b) => { b.onclick = () => { if (this.active) this.finish('abandoned'); this.start(b.dataset.id); }; });
+    m.querySelector('[data-x="replay"]').onclick = () => { close(); replay(); };
+    m.querySelector('[data-x="last"]').onclick = () => { close(); last(); };
+    m.querySelector('[data-x="stop"]')?.addEventListener('click', () => { close(); this.finish('gave_up'); });
+  }
 
   // ---------------------------------------------------------------- start: consent first
   start(id) {

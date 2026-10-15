@@ -172,7 +172,8 @@ export class VirtualPanel {
       if (axis !== 'mfX' && axis !== 'mfY') el.querySelector('b').textContent = ro[key][0];
       el.querySelector('em').textContent = axis === 'mfY' ? '' : ro[key][1];
     }
-    r.querySelectorAll('[data-mf]').forEach((b) => b.classList.toggle('on', b.dataset.mf === P.mf));
+    const avail = new Set(P.mfList().map((m) => m[0])), mf = P.mfNow();
+    r.querySelectorAll('[data-mf]').forEach((b) => { b.hidden = !avail.has(b.dataset.mf); b.classList.toggle('on', b.dataset.mf === mf); });
     r.querySelector('[data-btn="focusFine"]')?.classList.toggle('on', P.fine);
     r.querySelector('[data-btn="wobbler"]')?.classList.toggle('on', !!P.wob);
     r.querySelector('[data-btn="pause"]')?.classList.toggle('on', P.api.S.paused);
