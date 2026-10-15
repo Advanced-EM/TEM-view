@@ -100,7 +100,10 @@ export class Sim {
 
   get spec() { return SP[this.S.spec]; }
   get lam() { return P.wavelength(this.S.kV); }
-  CsA() { return this.S.corrector ? this.S.csCor * 1e4 : this.S.csUnc * 1e7; } // Å
+  // Cs, defocus and the axial aberrations act as knob setting + hidden misalignment (S.mis), as on a real
+  // instrument where the readouts are lens settings, not the true aberrations (used by training scenarios).
+  CsA() { return this.S.corrector ? (this.S.csCor + (this.S.mis?.C3 ?? 0)) * 1e4 : this.S.csUnc * 1e7; } // Å
+  dfA() { return (this.S.df + (this.S.mis?.df ?? 0)) * 10; } // true defocus, Å
   // from the instrument profile (see profile.js)
   focalSpread() { return focalSpread(this.S.profile, this.S.kV); } // Å
   convTEM() { return this.S.profile.convTEM * 1e-3; } // rad
@@ -133,8 +136,12 @@ export class Sim {
   }
   // residual axial aberrations from the corrector, in Å (A1, B2, A2 in nm; A3 in µm)
   abA() {
-    const a = this.S.ab;
-    return { A1: a.A1 * 10, A1a: a.A1a, B2: a.B2 * 10, B2a: a.B2a, A2: a.A2 * 10, A2a: a.A2a, A3: a.A3 * 1e4, A3a: a.A3a };
+    const a = this.S.ab, m = this.S.mis;
+    if (!m) return { A1: a.A1 * 10, A1a: a.A1a, B2: a.B2 * 10, B2a: a.B2a, A2: a.A2 * 10, A2a: a.A2a, A3: a.A3 * 1e4, A3a: a.A3a };
+    // n-fold aberrations add as vectors at n·angle
+    const add = (mag, ang, n, v, sc) => { const x = mag * Math.cos((n * ang * Math.PI) / 180) + (v?.[0] ?? 0), y = mag * Math.sin((n * ang * Math.PI) / 180) + (v?.[1] ?? 0); return [Math.hypot(x, y) * sc, ((Math.atan2(y, x) * 180) / Math.PI / n + 360) % (360 / n)]; };
+    const [A1, A1a] = add(a.A1, a.A1a, 2, m.A1, 10), [B2, B2a] = add(a.B2, a.B2a, 1, m.B2, 10), [A2, A2a] = add(a.A2, a.A2a, 3, m.A2, 10), [A3, A3a] = add(a.A3, a.A3a, 4, m.A3, 1e4);
+    return { A1, A1a, B2, B2a, A2, A2a, A3, A3a };
   }
 
   invalidate(key) {
@@ -180,7 +187,7 @@ export class Sim {
   // Objective-lens transfer function applied to the exit wave: returns the complex image wave.
   // `df` (Å) overrides the current defocus (focal series); `exit` reuses a precomputed exit wave.
   lensWave(maps, { apK = Infinity, apCenter = [0, 0], envelopes = true, df: dfA, exit, zpp = false } = {}) {
-    const n = maps.n, dx = maps.dx, lam = this.lam, df = dfA ?? this.S.df * 10, Cs = this.CsA(), ab = this.abA();
+    const n = maps.n, dx = maps.dx, lam = this.lam, df = dfA ?? this.dfA(), Cs = this.CsA(), ab = this.abA();
     const ex = exit ?? P.transmission(maps.phase, this.S.kV);
     const re = Float64Array.from(ex.re), im = Float64Array.from(ex.im);
     P.fft2(re, im, n);
@@ -257,7 +264,7 @@ export class Sim {
   // Probe at fine sampling (for display and size readouts)
   computeProbe() {
     const n = 128, dx = 0.1, lam = this.lam, a = this.alpha(), kAp = a / lam;
-    const df = this.S.df * 10, Cs = this.CsA(), ab = this.abA();
+    const df = this.dfA(), Cs = this.CsA(), ab = this.abA();
     const re = new Float64Array(n * n), im = new Float64Array(n * n);
     for (let y = 0; y < n; y++)
       for (let x = 0; x < n; x++) {
@@ -306,7 +313,7 @@ export class Sim {
       img = this.lensImage(maps, { apK: a / lam });
     } else {
       // Probe intensity on this grid, then convolve with the scattering-power map.
-      const kAp = a / lam, df = S.df * 10, Cs = this.CsA(), ab = this.abA();
+      const kAp = a / lam, df = this.dfA(), Cs = this.CsA(), ab = this.abA();
       const pr = new Float64Array(n * n), pi = new Float64Array(n * n);
       for (let y = 0; y < n; y++)
         for (let x = 0; x < n; x++) {
@@ -437,7 +444,7 @@ export class Sim {
     }
     const { re, im } = slices[0];
     const prop = this.fresnel(n4, dx, lam, dz);
-    const kAp = (S.alpha4d * 1e-3) / lam, df = S.df * 10, Cs = this.CsA(), ab = this.abA();
+    const kAp = (S.alpha4d * 1e-3) / lam, df = this.dfA(), Cs = this.CsA(), ab = this.abA();
     const pr = new Float64Array(n4 * n4), pi = new Float64Array(n4 * n4);
     for (let y = 0; y < n4; y++)
       for (let x = 0; x < n4; x++) {

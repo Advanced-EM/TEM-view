@@ -249,7 +249,7 @@ function damageLabel(ctx, sim, S, W, dpr) {
   else if (S.kV > 86) label(ctx, `${S.kV} kV > 86 kV: carbon atoms can be knocked out`, W - 10 * dpr, 16 * dpr, dpr, { color: C.warm, size: 9, align: 'right' });
 }
 function drawCTF(q, sim, S, r, dpr, t) {
-  const [x0, y0, w, h] = r, lam = sim.lam, df = S.df * 10, Cs = sim.CsA();
+  const [x0, y0, w, h] = r, lam = sim.lam, df = sim.dfA(), Cs = sim.CsA();
   const kmax = Math.min(t.kmax, 1.1);
   q.strokeStyle = C.grid; q.lineWidth = 1 * dpr;
   q.beginPath(); q.moveTo(x0, y0 + h / 2); q.lineTo(x0 + w, y0 + h / 2); q.stroke();

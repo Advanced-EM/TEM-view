@@ -90,6 +90,7 @@ export class Panel {
     // buttons
     for (const [k] of BUTTONS) if (pressed(k)) this.button(k);
     this.prevButtons = bt;
+    if (Object.keys(this.acc).length || this.stageV) this.api.noteSource?.(this.kind === 'panel' ? 'panel' : 'controller');
     this.wobble(dt);
     this.flush(dt);
   }
@@ -102,9 +103,10 @@ export class Panel {
   }
 
   // ---------------------------------------------------------------- input from the on-screen panel (keyboard, mouse)
-  turn(axis, detents) { this.acc[axis] = (this.acc[axis] ?? 0) + detents; }
-  setStage(vx, vy) { this.vstage = vx || vy ? [vx, vy] : null; }
+  turn(axis, detents) { this.api.noteSource?.('onscreen-panel'); this.acc[axis] = (this.acc[axis] ?? 0) + detents; }
+  setStage(vx, vy) { if (vx || vy) this.api.noteSource?.('onscreen-panel'); this.vstage = vx || vy ? [vx, vy] : null; }
   button(k) {
+    if (this.pad && !this.virtual) this.api.noteSource?.(this.kind === 'panel' ? 'panel' : 'controller');
     if (k === 'modePrev') this.api.cycleMode(-1);
     else if (k === 'modeNext') this.api.cycleMode(1);
     else if (k === 'mfSelect') { const i = MF.findIndex((m) => m[0] === this.mf); this.setMF(MF[(i + 1) % MF.length][0]); }

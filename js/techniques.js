@@ -44,7 +44,7 @@ export class Ronch {
     const sim = this.sim, S = sim.S, lam = sim.lam, n = 512;
     const ap = S.ronchAp * 1e-3, thMax = Math.max(0.065, ap * 1.25), dx = lam / (2 * thMax);
     const film = this.film(n, dx);
-    const kAp = ap / lam, df = S.df * 10, Cs = sim.CsA(), ab = sim.abA();
+    const kAp = ap / lam, df = sim.dfA(), Cs = sim.CsA(), ab = sim.abA();
     const re = new Float64Array(n * n), im = new Float64Array(n * n);
     for (let y = 0; y < n; y++)
       for (let x = 0; x < n; x++) {
@@ -76,7 +76,7 @@ export class Ronch {
   }
   // Flat-phase ("π/4") angle and the phase each aberration contributes at the aperture edge.
   analyze() {
-    const sim = this.sim, S = sim.S, lam = sim.lam, ab = sim.abA(), df = S.df * 10, Cs = sim.CsA();
+    const sim = this.sim, S = sim.S, lam = sim.lam, ab = sim.abA(), df = sim.dfA(), Cs = sim.CsA();
     const ap = S.ronchAp * 1e-3;
     let flat = ap;
     outer: for (let r = 0.0002; r <= ap; r += 0.00025)

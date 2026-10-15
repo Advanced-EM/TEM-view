@@ -122,7 +122,7 @@ export class OffAxis {
     // cut out the sideband, center it, optionally undo the lens aberrations numerically, transform back
     const rk = S.sbR * qm, rb = rk * L;
     const gr = new Float64Array(n * n), gi = new Float64Array(n * n);
-    const lam = sim.lam, df = S.df * 10, Cs = sim.CsA(), ab = sim.abA();
+    const lam = sim.lam, df = sim.dfA(), Cs = sim.CsA(), ab = sim.abA();
     for (let y = 0; y < n; y++)
       for (let x = 0; x < n; x++) {
         const fx = x < n / 2 ? x : x - n, fy = y < n / 2 ? y : y - n, r = Math.hypot(fx, fy);
@@ -166,7 +166,7 @@ export class FocalSeries {
     const exit = P.transmission(maps.phase, S.kV);
     const Fr = Float64Array.from(exit.re), Fi = Float64Array.from(exit.im);
     P.fft2(Fr, Fi, n);
-    const step = S.focalStep * 10, df0 = S.df * 10;
+    const step = S.focalStep * 10, df0 = sim.dfA();
     this.st = {
       n, c, dx, N, exit, Fr, Fi, dfs: Array.from({ length: N }, (_, j) => df0 + (j - (N - 1) / 2) * step),
       T: [], A: [], thumbs: [], acq: 0, tAcq: 0, den: new Float64Array(n * n),
