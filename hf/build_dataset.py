@@ -110,6 +110,7 @@ def main(argv=None):
     p.add_argument("--out", default="build/tem-view-alignment")
     p.add_argument("--push", metavar="REPO", help="upload to this dataset repo (created private if missing)")
     p.add_argument("--public", action="store_true", help="create the repo public (default: private)")
+    p.add_argument("--init", action="store_true", help="allow an empty dataset (creates the repo and its card)")
     p.add_argument("--drop-notes", action="store_true", help="remove free-text notes")
     a = p.parse_args(argv)
 
@@ -118,8 +119,8 @@ def main(argv=None):
         from huggingface_hub import snapshot_download
         d = snapshot_download(a.from_hub, repo_type="dataset", allow_patterns=["raw/**"])
         files += gather([os.path.join(d, "raw")])
-    if not files:
-        p.error("no session files")
+    if not files and not a.init:
+        p.error("no session files (use --init to create an empty dataset)")
 
     seen, sess_rows, step_rows, rejected = {}, [], [], 0
     for f in files:
