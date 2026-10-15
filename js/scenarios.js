@@ -118,23 +118,24 @@ export class Scenarios {
       <p>You can record this session to help us understand how people align a microscope: which controls you use, in what order, and when you decide the result is good. It will be used to build better guidance and assistance for real microscopes through the digital twin.</p>
       <ul class="cons"><li><b>Recorded:</b> the settings you change and when, which input you used, your own rating at the end, and the true alignment quality computed by the simulator.</li>
         <li><b>Not recorded:</b> your name, email, location, or any images of you. The session gets a random id.</li>
-        <li><b>Stays with you:</b> nothing is sent anywhere. At the end you can download the session file and choose whether to share it.</li></ul>
+        ${SHARE.url ? `<li><b>Shared only if you choose:</b> <i>Record and share</i> sends the anonymous session file to the research dataset${SHARE.dataset ? ` <b>${esc(SHARE.dataset)}</b> on Hugging Face` : ''} automatically when the task ends, to study alignment and train models that assist real microscopes; it may be included in published data. <i>Record only</i> keeps it on this computer.</li>` : '<li><b>Stays with you:</b> nothing is sent anywhere. At the end you can download the session file.</li>'}</ul>
       <div class="cgrid"><label>Your experience with electron microscopes<select id="scnExp">
         ${[['novice', 'Never used one'], ['student', 'Student / occasional user'], ['trained', 'Trained user'], ['expert', 'Expert / facility staff']].map(([k, l]) => `<option value="${k}" ${k === exp ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>
-      <div class="crow"><button class="btn primary" id="scnRec">Record and start</button><button class="btn" id="scnNoRec">Start without recording</button></div></div>`);
+      <div class="crow">${SHARE.url ? '<button class="btn primary" id="scnShare">Record and share</button><button class="btn" id="scnRec">Record only</button>' : '<button class="btn primary" id="scnRec">Record and start</button>'}<button class="btn" id="scnNoRec">Start without recording</button></div></div>`);
     const close = () => { m.hidden = true; };
     m.querySelector('.close').onclick = close;
     m.onclick = (e) => { if (e.target === m) close(); };
-    const go = (rec) => { const e = m.querySelector('#scnExp').value; store('tem-exp', e); close(); this.begin(id, rec, e); };
+    const go = (rec, share = false) => { const e = m.querySelector('#scnExp').value; store('tem-exp', e); close(); this.begin(id, rec, e, share); };
+    m.querySelector('#scnShare')?.addEventListener('click', () => go(true, true));
     m.querySelector('#scnRec').onclick = () => go(true);
     m.querySelector('#scnNoRec').onclick = () => go(false);
   }
 
-  begin(id, record, experience) {
+  begin(id, record, experience, share = false) {
     const sc = SCENARIOS[id], seed = (Math.random() * 2 ** 31) | 0, rng = P.mulberry32(seed);
     const info = sc.setup(this.api, rng);
     this.api.invalidateAll();
-    this.active = { id, seed, ...info, t0: performance.now(), record };
+    this.active = { id, seed, ...info, t0: performance.now(), record, share: record && share && !!SHARE.url };
     const metrics = () => sc.metrics(this.api, this.active);
     if (record) this.recorder.start({ experience, scenario: { id, seed, hidden: info.hidden, target: info.target }, metrics });
     this.api.onEvent?.('start', id);
@@ -142,7 +143,7 @@ export class Scenarios {
   }
   card() {
     const sc = SCENARIOS[this.active.id];
-    const c = this.el('scnCard', 'card scncard', `<div class="scnhead"><b>${sc.title}</b><span id="scnTime">0:00</span>${this.active.record ? '<i class="rec">● recording</i>' : ''}<span class="sp"></span><button data-x="brief" title="Show or hide the task">?</button></div>
+    const c = this.el('scnCard', 'card scncard', `<div class="scnhead"><b>${sc.title}</b><span id="scnTime">0:00</span>${this.active.record ? `<i class="rec">● ${this.active.share ? 'recording · will share' : 'recording'}</i>` : ''}<span class="sp"></span><button data-x="brief" title="Show or hide the task">?</button></div>
       <p class="scnbrief">${sc.brief}</p>
       <div class="crow"><button class="btn primary" data-x="done">I'm done: it's aligned</button><button class="btn" data-x="give">Give up</button></div>`);
     c.querySelector('[data-x="brief"]').onclick = () => c.classList.toggle('mini');
@@ -191,15 +192,17 @@ export class Scenarios {
       <p>${sc.explain(mt, a)}</p>
       <table class="data">${[['Time', `${Math.floor(secs / 60)} min ${Math.round(secs % 60)} s`], ...(sess ? [['Adjustments', `${changes.length} (${Object.entries(bySrc).map(([k, v]) => `${k} ${v}`).join(', ') || '—'})`]] : []), ['Dose used', `${mt.dose} e⁻/Å²`]].map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('')}</table>
       <div class="crow">${sess ? '<button class="btn primary" id="scnDl">Download the session file</button><button class="btn" id="scnReplay">Replay</button>' : '<span class="muted">This session was not recorded.</span>'}<button class="btn" id="scnAgain">Try another one</button></div>
-      ${sess && SHARE.url ? `<div class="share"><h4>Share with the research dataset</h4>
+      ${sess && a.share ? '<div class="share"><h4>Shared with the research dataset</h4><div class="crow"><span class="muted" id="scnSent">Sending…</span></div></div>' : ''}
+      ${sess && SHARE.url && !a.share ? `<div class="share"><h4>Share with the research dataset</h4>
         <p>Send this session (the anonymous file you can download above: settings, timing, your rating and cues, no personal data) to the open research dataset${SHARE.dataset ? ` <b>${esc(SHARE.dataset)}</b> on Hugging Face` : ''}, where it will be used to study alignment and to train models that assist real microscopes. Once sent it may be included in published data. Optional: the exhibit works the same either way.</p>
         <label class="note"><input type="checkbox" id="scnAgree"> I agree to share this session</label>
         <div class="crow"><button class="btn primary" id="scnSend" disabled>Send</button><span class="muted" id="scnSent"></span></div></div>` : ''}</div>`);
     m.querySelector('.close').onclick = () => { m.hidden = true; this.clear(); };
-    m.querySelector('#scnAgain').onclick = () => { m.hidden = true; this.begin(a.id, a.record, store('tem-exp') ?? 'novice'); };
+    m.querySelector('#scnAgain').onclick = () => { m.hidden = true; this.begin(a.id, a.record, store('tem-exp') ?? 'novice', a.share); };
     if (sess) {
       m.querySelector('#scnDl').onclick = () => this.downloadSession(sess);
       m.querySelector('#scnReplay').onclick = () => { m.hidden = true; this.startReplay(sess); };
+      if (a.share) this.share(sess, null, m.querySelector('#scnSent'));
       const agree = m.querySelector('#scnAgree'), send = m.querySelector('#scnSend');
       if (agree) {
         agree.onchange = () => { send.disabled = !agree.checked; };
@@ -210,17 +213,27 @@ export class Scenarios {
   }
   // send one session to the collector (only after the visitor ticked the box); the receipt id lets them ask for removal
   async share(sess, btn, out) {
-    btn.disabled = true; out.textContent = 'Sending…';
+    if (btn) btn.disabled = true;
+    out.textContent = 'Sending…';
     try {
       const r = await fetch(SHARE.url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(sess) });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j.detail || `error ${r.status}`);
-      btn.textContent = 'Sent ✓';
-      out.innerHTML = `Thank you. Session id <code>${esc(j.id ?? sess.session.id)}</code>: quote it to have it removed.`;
+      if (btn) btn.textContent = 'Sent ✓';
+      out.innerHTML = `Sent ✓ Thank you. Session id <code>${esc(j.id ?? sess.session.id)}</code>: quote it to have it removed.`;
       this.recorder.sent = (this.recorder.sent ?? 0) + 1;
     } catch (e) {
-      btn.disabled = false; out.textContent = `Not sent (${e.message}). You can download the file instead.`;
+      if (btn) btn.disabled = false;
+      out.textContent = `Not sent (${e.message}). You can download the file instead.`;
     }
+  }
+
+  // the page is closing during a shared task: send what was recorded, marked abandoned
+  flushOnExit() {
+    const a = this.active;
+    if (!a?.share || !this.recorder.active) return;
+    const sess = this.recorder.stop('abandoned');
+    try { navigator.sendBeacon(SHARE.url, new Blob([JSON.stringify(sess)], { type: 'text/plain' })); } catch { /* best effort */ }
   }
 
   // back to the normal exhibit: no hidden misalignment

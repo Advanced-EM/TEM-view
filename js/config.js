@@ -5,6 +5,6 @@
 // TEM-view session collector Space (hf/space) once it is deployed and the study has ethics approval, e.g.
 //   url: 'https://rmsreis-tem-view-collector.hf.space/submit', dataset: 'rmsreis/tem-view-alignment'
 export const SHARE = {
-  url: '',
-  dataset: '',
+  url: 'https://rmsreis-tem-view-collector.hf.space/submit',
+  dataset: 'rmsreis/tem-view-alignment',
 };

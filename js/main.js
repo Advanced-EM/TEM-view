@@ -665,6 +665,7 @@ const scn = new Scenarios({
   snapshotState: () => structuredClone(Object.fromEntries(SESSION_KEYS.map((k) => [k, S[k]]))),
   restoreState: (st) => { const m = st.mode; Object.assign(S, structuredClone(st)); S.mode = ''; setMode(m); sim.invalidate('all'); refreshControls(); },
 });
+window.addEventListener('pagehide', () => scn.flushOnExit());
 // which input caused each change
 window.addEventListener('pointerdown', (e) => scn.recorder.noteSource(e.pointerType === 'touch' ? 'touch' : e.pointerType === 'pen' ? 'pen' : 'mouse'), true);
 window.addEventListener('wheel', () => scn.recorder.noteSource('mouse'), true);
@@ -845,6 +846,8 @@ function wire() {
   $('#btnHelp').addEventListener('click', () => ($('#help').hidden = false));
   const openTraining = () => scn.menu({ replay: () => action('replayFile'), last: () => action('lastSession') });
   $('#btnTrain').addEventListener('click', openTraining);
+  document.querySelectorAll('[data-fold]').forEach((b) => b.addEventListener('click', () => fold(b.dataset.fold)));
+  for (const k of ['L', 'R']) if (store(`tem-fold${k}`) === '1') document.body.classList.add(`fold${k}`);
   $('#fileSession').addEventListener('change', async (e) => {
     const f = e.target.files[0];
     e.target.value = '';
@@ -952,6 +955,8 @@ function wire() {
     else if (e.key === 'v' || e.key === 'V') vPanel.openDock();
     else if (e.key === 'i' || e.key === 'I') acquireNow();
     else if ((e.key === 't' || e.key === 'T') && !e.metaKey && !e.ctrlKey) openTraining();
+    else if (e.key === '[') fold('L');
+    else if (e.key === ']') fold('R');
     else if (e.key === 'x' || e.key === 'X') setExpanded(!document.body.classList.contains('detBig'));
     else if (e.key === 'Escape') { setExpanded(false); $('#help').hidden = true; if (scene.tour) scene.stopTour(); }
   });
@@ -959,6 +964,14 @@ function wire() {
 }
 
 let lastBottom = 0;
+const store = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch { /* private mode */ } return null; };
+// collapse the explanation (L) or controls (R) panel to a tab at the edge, giving the view more room
+function fold(side, on = !document.body.classList.contains(`fold${side}`)) {
+  document.body.classList.toggle(`fold${side}`, on);
+  store(`tem-fold${side}`, on ? '1' : '0');
+  resize();
+}
+
 function resize() {
   const w = window.innerWidth, h = window.innerHeight;
   const wide = w >= 1100;
@@ -971,7 +984,8 @@ function resize() {
   if (wide) {
     const L = $('.explain').getBoundingClientRect(), Rr = $('.controls').getBoundingClientRect(), D = $('.detector').getBoundingClientRect();
     // while the results panel is enlarged it covers the column; keep the column framed as before
-    off = { left: L.right, right: w - Rr.left, bottom: document.body.classList.contains('detBig') ? lastBottom : h - D.top + 10, top: 70 };
+    const bc = document.body.classList;
+    off = { left: bc.contains('foldL') ? 0 : L.right, right: bc.contains('foldR') ? 0 : w - Rr.left, bottom: document.body.classList.contains('detBig') ? lastBottom : h - D.top + 10, top: 70 };
     lastBottom = off.bottom;
   } else {
     const g = $('#gl').getBoundingClientRect();
