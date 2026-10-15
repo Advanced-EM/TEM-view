@@ -27,8 +27,8 @@ Encoders are sent as counters rather than per-report changes, so a browser that 
 | 1 | Next mode | 9 | Narration |
 | 2 | Multifunction: stigmator → image shift → tilt | 10 | Enlarge results |
 | 3 | Focus wobbler | 11 | Calibration dialog |
-| 4 | Focus fine / coarse (focus encoder push) | 12–15 | spare |
-| 5 | Optimal focus | | |
+| 4 | Focus fine / coarse (focus encoder push) | 12 | Acquire |
+| 5 | Optimal focus | 13–15 | spare |
 | 6 | Pause beam | | |
 | 7 | Educational / realistic | | |
 

@@ -11,6 +11,9 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 export const AP_MRAD = { none: Infinity, 40: 12, 20: 6, 10: 3, df: 2.5, zpp: Infinity };
 // Zernike phase plate: a thin film in the back focal plane with a small central hole. Unscattered electrons
 // pass the hole; scattered ones cross the film and are shifted by π/2. Cut-on frequency set by the hole.
+export const EELS_CHANNELS = 2048;
+// Detector point-spread function, in channels (σ): even a perfect spectrum is smeared over ~2 channels.
+export const EELS_PSF = 0.85;
 export const ZPP_CUTON = 1 / 250; // 1/Å (hole ≈ 1 µm at f ≈ 3 mm, 200 kV)
 
 export function stemDetType(inner, outer, alpha) {
@@ -47,6 +50,23 @@ function cropArr(a, n, c) {
   const o = (n - c) / 2, out = new Float32Array(c * c);
   for (let y = 0; y < c; y++) for (let x = 0; x < c; x++) out[y * c + x] = a[(y + o) * n + x + o];
   return out;
+}
+
+// Zero-loss peak as recorded: position (centroid of the top half) and full width at half maximum, if it is in range.
+export function zlpStats(spec, E0, dE) {
+  const nb = spec.length, i0 = Math.round(-E0 / dE);
+  if (i0 < 2 || i0 > nb - 3) return null;
+  const R = Math.max(3, Math.round(3 / dE));
+  let k = Math.max(0, i0 - R);
+  for (let i = Math.max(0, i0 - R); i <= Math.min(nb - 1, i0 + R); i++) if (spec[i] > spec[k]) k = i;
+  const pk = spec[k], half = pk / 2;
+  let l = k, r = k;
+  while (l > 0 && spec[l] > half) l--;
+  while (r < nb - 1 && spec[r] > half) r++;
+  const xl = l + (half - spec[l]) / (spec[l + 1] - spec[l] || 1), xr = r - 1 + (spec[r - 1] - half) / (spec[r - 1] - spec[r] || 1);
+  let m0 = 0, m1 = 0;
+  for (let i = l; i <= r; i++) { m0 += spec[i]; m1 += spec[i] * i; }
+  return { center: E0 + (m1 / (m0 || 1) + 0.5) * dE, fwhm: (xr - xl) * dE, channels: xr - xl, peak: pk };
 }
 
 export class Sim {
@@ -106,7 +126,7 @@ export class Sim {
     const all = ['tem', 'stem', 'diff', 'fd', 'vimg', 'si', 'eels', 'probe'];
     const map = {
       objAp: ['tem'], alpha: ['stem', 'fd', 'vimg', 'si', 'eels', 'probe'], det: ['stem'],
-      sa: ['diff'], camL: ['diff'], beamStop: [], camera: [], vdet: ['vimg'], eelsWin: ['eels'], eelsRange: ['eels'], bgsub: ['eels'],
+      sa: ['diff'], camL: ['diff'], beamStop: [], camera: [], vdet: ['vimg'], eelsWin: ['eels'], eelsRange: ['eels'], eelsDisp: ['eels'], eelsOffset: ['eels'], bgsub: ['eels'],
       dose: ['si'], edsSel: [], mode: [],
       // progressive beam damage: refresh images and patterns in place, but don't restart 4D scans or spectrum accumulation
       damage: ['tem', 'stem', 'diff', 'probe'],
@@ -114,7 +134,7 @@ export class Sim {
       // temperature: the projected specimen changes (vibrations, expansion), so everything is recomputed
     };
     for (const k of map[key] ?? all) this.stale[k] = 1;
-    const view = ['mode', 'edsSel', 'camera', 'beamStop', 'vdet', 'bgsub', 'eelsWin', 'eelsRange', 'holoView', 'ilhView'];
+    const view = ['mode', 'edsSel', 'camera', 'beamStop', 'vdet', 'bgsub', 'eelsWin', 'eelsRange', 'eelsDisp', 'eelsOffset', 'holoView', 'ilhView'];
     if (!view.includes(key)) { this.ronch.stale = true; this.cbed.stale = true; this.oah.stale = true; }
     // a focal series takes a while to record, so only restart it when the physics changes
     if (!view.includes(key) && !['damage', 'drift', 'speed', 'biprism', 'sbR', 'numCorr'].includes(key)) this.ilh.stale = true;
@@ -761,11 +781,15 @@ export class Sim {
     this.acc = { t: 0, spec: new Float32Array(nb), maps: Object.fromEntries(syms.map((s) => [s, new Float32Array(n * n)])), total: 0 };
   }
 
+  // the spectrometer: 2048 channels at the chosen dispersion (eV/channel), starting at the energy offset
   eelsRangeBounds() {
-    return { low: [-4, 60], core: [60, 720], high: [1500, 2500] }[this.S.eelsRange];
+    const S = this.S;
+    return [S.eelsOffset, S.eelsOffset + EELS_CHANNELS * S.eelsDisp];
   }
+  // where the zero-loss peak actually lands: the high voltage and the prism drift slowly (realistic mode)
+  zlpShift() { return this.S.clarity === 'real' ? (this.zlpDrift || 0) : 0; }
   // gun energy spread from the instrument profile, broadened by the spectrometer (≈0.15 eV)
-  eelsRes() { const r = Math.hypot(this.S.profile.dE, 0.15); return this.S.clarity === 'real' ? r : Math.max(0.9, r); }
+  eelsRes() { return Math.hypot(this.S.profile.dE, 0.15); }
 
   // Model single-scattering + plural plasmon EELS at energy loss E (per eV, ZLP area = 1 at τ=0)
   eelsModel(E, tau, comp, parts = null) {
@@ -798,19 +822,32 @@ export class Sim {
     return zlp + pl + bg + core;
   }
 
-  buildEELS() {
+  buildEELS(keepAcc = false) {
     const si = this.si, S = this.S, n = si.n;
     const [E0, E1] = this.eelsRangeBounds();
-    const nb = 640, dE = (E1 - E0) / nb;
-    const spec = new Float32Array(nb), bgc = new Float32Array(nb);
-    const edgeCurves = {};
+    const nb = EELS_CHANNELS, dE = S.eelsDisp, sh = this.zlpShift();
+    const raw = new Float32Array(nb), bgr = new Float32Array(nb);
+    const edgeRaw = {};
     const parts = {};
+    // each channel collects every electron that lands in it: integrate the spectrum over the channel width
+    // (4 samples), so a zero-loss peak narrower than a channel is not lost
+    const OS = 4;
     for (let b = 0; b < nb; b++) {
-      const E = E0 + (b + 0.5) * dE;
-      spec[b] = this.eelsModel(E, si.tauMean, si.comp, parts);
-      bgc[b] = parts.bg + parts.pl + parts.zlp;
-      for (const k in parts.edges) (edgeCurves[k] ||= new Float32Array(nb))[b] = parts.edges[k];
+      let v = 0, g = 0;
+      const eg = {};
+      for (let o = 0; o < OS; o++) {
+        const E = E0 + (b + (o + 0.5) / OS) * dE - sh;
+        v += this.eelsModel(E, si.tauMean, si.comp, parts);
+        g += parts.bg + parts.pl + parts.zlp;
+        for (const k in parts.edges) eg[k] = (eg[k] || 0) + parts.edges[k];
+      }
+      raw[b] = v / OS; bgr[b] = g / OS;
+      for (const k in eg) (edgeRaw[k] ||= new Float32Array(nb))[b] = eg[k] / OS;
     }
+    // detector point-spread function (Gaussian, σ = EELS_PSF channels)
+    const psf = (a) => { const out = new Float32Array(nb), R = 3, w = []; let sw = 0; for (let i = -R; i <= R; i++) { const x = Math.exp(-0.5 * (i / EELS_PSF) ** 2); w.push(x); sw += x; } for (let b = 0; b < nb; b++) { let v = 0; for (let i = -R; i <= R; i++) v += a[Math.min(nb - 1, Math.max(0, b + i))] * w[i + R]; out[b] = v / sw; } return out; };
+    const spec = psf(raw), bgc = psf(bgr), edgeCurves = {};
+    for (const k in edgeRaw) edgeCurves[k] = psf(edgeRaw[k]);
     // energy-window integrals for mapping
     const w0 = S.eelsWin - S.eelsWidth / 2, w1 = S.eelsWin + S.eelsWidth / 2, steps = 60, h = (w1 - w0) / steps;
     const edgeW = {};
@@ -838,9 +875,17 @@ export class Sim {
     for (let i = 0; i < n * n; i++) map[i] /= mx || 1;
     let tot = 0;
     for (let b = 0; b < nb; b++) tot += spec[b];
-    this.eels = { spec, bgc, edgeCurves, nb, dE, E0, E1, map, sub, lowLoss, tot, edgeW };
-    this.accE = { t: 0, spec: new Float32Array(nb), map: new Float32Array(n * n), total: 0 };
+    this.eels = { spec, bgc, edgeCurves, nb, dE, E0, E1, map, sub, lowLoss, tot, edgeW, shift: sh, zlp: zlpStats(spec, E0, dE) };
+    // a drifting zero loss keeps adding to the same recorded spectrum, smearing it, as on a real instrument
+    if (!keepAcc || !this.accE || this.accE.spec.length !== nb) this.accE = { t: 0, spec: new Float32Array(nb), map: new Float32Array(n * n), total: 0 };
   }
+  // high-voltage / prism drift of the zero loss: a slow walk of ~0.3 eV per minute (realistic mode)
+  zlpStep(dt) {
+    if (this.S.clarity !== 'real' || this.S.paused) return;
+    this.zlpDrift = (this.zlpDrift || 0) + (0.005 + 0.004 * (Math.random() - 0.5)) * dt * this.S.speed;
+    if (this.S.mode === 'eels' && this.eels && Math.abs(this.zlpDrift - this.eels.shift) > Math.max(0.02, this.S.eelsDisp / 2)) { this.buildEELS(true); this.version++; }
+  }
+  alignZLP() { this.zlpDrift = 0; if (this.si) { this.buildEELS(true); this.version++; } }
 
   accumulate(dt) {
     const S = this.S, rate = S.dose / 500;
@@ -1056,6 +1101,7 @@ export class Sim {
     this.sputter(dt);
     this.radiolysis(dt);
     this.thermalStep(dt);
+    this.zlpStep(dt);
     const S = this.S, m = S.mode;
     if (this.stale.probe && !['tem', 'diff', 'oah', 'ilh'].includes(m)) { this.computeProbe(); this.stale.probe = 0; }
     if (m === 'tem' && this.stale.tem) { this.computeTEM(); this.stale.tem = 0; this.version++; }

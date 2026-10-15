@@ -10,6 +10,8 @@ An interactive transmission electron microscope in the browser, built as a small
 - **Direct electron detector:** record images and patterns in counting mode instead of on the phosphor screen, and synthesize virtual BF/ABF/ADF/dark-field, **DPC**, **center-of-mass**, and live **ePIE ptychography** from the 4D dataset. The 4D data are simulated multislice (3 slices with Fresnel propagation), so single-slice ptychography shows thick-specimen artifacts, while **multislice ptychography** (MS-ePIE) fits them and reconstructs each slice in depth.
 - **Aberration correction:** a Ronchigram computed from the aberrated probe on amorphous carbon; tune C1, A1, B2, A2, C3, A3 by hand (with a π/4 flat-phase readout) or run Auto-tune. Residual aberrations propagate to every probe and image.
 - **CBED / LACBED:** two-beam dynamical disks with a live Kossel–Möllenstedt thickness fit, HOLZ lines that shift with lattice strain and voltage, and large-angle patterns whose lines break across the grain boundary.
+- **EELS spectrometer:** a 2048-channel detector with selectable **dispersion** (0.01–1 eV per channel) and **energy offset** (drift tube). Presets for the zero loss, low loss, core loss and high loss. Each channel integrates the spectrum over its width and the detector smears it over ~2 channels, so coarse dispersion visibly broadens the **zero-loss peak** and edge onsets. The zero loss's width and position are measured live; in realistic mode it drifts by a few tenths of an eV per minute (smearing long acquisitions) until you press *Align zero loss*.
+- **Acquire:** the camera button above the detector (or `I`, or the panels) records what the detector shows as a numbered acquisition, with its data and settings; on beam-sensitive specimens it spends a dose. Acquisitions collect in a gallery for this session, each downloadable as PNG or NumPy `.npz`.
 - **Specimen holders and temperature** (all modes): room temperature, a liquid-nitrogen cryo holder (grid ~90–300 K), a liquid-helium cryo holder (tip 4.2 K, grid ~8–15 K with ±1.5 K fluctuations), and a MEMS heating holder (up to ~1470 K, reading accurate to ~1 %). The specimen's real temperature differs from the setpoint and fluctuates, and it drives:
   - *radiolysis*: critical dose ×3–4 at liquid-nitrogen temperature, ~20–50 % more with helium, and falling when hot; knock-on damage is unaffected;
   - *atomic vibrations* (Einstein model, u_rms 0.047 Å zero-point → 0.08 Å at 293 K → 0.15 Å at 1000 K): atom width and Debye–Waller damping in images, diffraction and CBED, and thermal-diffuse scattering into HAADF;
@@ -70,7 +72,7 @@ To publish, push this folder to a GitHub repository and enable **Pages** on the 
 
 ## Controls
 
-Drag the column to orbit and scroll to zoom. Keys `1`–`9` and `0` switch modes, `Space` pauses, `C` toggles clarity, `L` toggles labels, `R` resets the view, `N` toggles narration, `X` enlarges the results panel, `V` opens the on-screen control panel. Drag the detector image to move the stage and scroll it to change magnification (in diffraction, dragging tilts the crystal). In EDS, click a peak to map it; in EELS, drag the spectrum to move the energy window. In 4D-STEM, hover the image to read patterns and drag on the pattern to reshape the detector.
+Drag the column to orbit and scroll to zoom. Keys `1`–`9` and `0` switch modes, `Space` pauses, `C` toggles clarity, `L` toggles labels, `R` resets the view, `N` toggles narration, `X` enlarges the results panel, `V` opens the on-screen control panel, `I` acquires. Drag the detector image to move the stage and scroll it to change magnification (in diffraction, dragging tilts the crystal). In EDS, click a peak to map it; in EELS, drag the spectrum to move the energy window. In 4D-STEM, hover the image to read patterns and drag on the pattern to reshape the detector.
 
 ## Code map
 
@@ -87,6 +89,7 @@ Drag the column to orbit and scroll to zoom. Keys `1`–`9` and `0` switch modes
 | `tools/headless.mjs` | Run the simulator in Node and save `.npz` |
 | `js/panel.js` | Hardware control panel and game controllers (Gamepad API) |
 | `js/vpanel.js` | On-screen control panel (keyboard, mouse, touch; docked or popped out) |
+| `js/acquire.js` | Acquisitions and their gallery |
 | `hardware/panel/` | Panel protocol, reference firmware (RP2040), pin map, parts |
 | `js/components.js` | Instrument-physics cards for the column labels |
 | `js/render2d.js` | Detector views, spectra, overlays |

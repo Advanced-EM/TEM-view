@@ -1,6 +1,6 @@
 // Draws the detector views (main image + secondary panel) for each mode.
 import * as P from './physics.js';
-import { stemDetType, AP_MRAD, ZPP_CUTON } from './sim.js';
+import { stemDetType, AP_MRAD, ZPP_CUTON, zlpStats } from './sim.js';
 import { drawRonch, drawCBED } from './techniques.js';
 import { drawOAH, drawILH } from './holography.js';
 
@@ -698,7 +698,12 @@ function drawEELS(sim, S, m, s) {
     let mx = 0;
     for (let i = 0; i < n * n; i++) mx = Math.max(mx, a.map[i]);
     paint(ctx, a.map, n, n, dst, { lo: 0, hi: mx || 1, lut: LUT.gray });
-  } else paint(ctx, e.map, n, n, dst, { lo: 0, hi: 1, lut: LUT.ice });
+  } else {
+    // stretch over the map's own range, so small variations (e.g. thickness in a uniform crystal) show up
+    let [lo, hi] = range(e.map, 0.01, 0.99);
+    if (hi - lo < 1e-4) lo = hi - 1;
+    paint(ctx, e.map, n, n, dst, { lo, hi, lut: LUT.ice });
+  }
   scaleBar(ctx, dst, sim.fovA(), dpr);
   const w0 = S.eelsWin - S.eelsWidth / 2, w1 = S.eelsWin + S.eelsWidth / 2;
   label(ctx, `${w0.toFixed(0)}–${w1.toFixed(0)} eV${e.sub ? ' · background removed' : ''}`, 10 * dpr, 16 * dpr, dpr, { color: C.accent });
@@ -725,10 +730,10 @@ function drawEELS(sim, S, m, s) {
   q.beginPath(); q.moveTo(X(w0), y0); q.lineTo(X(w0), y0 + h); q.moveTo(X(w1), y0); q.lineTo(X(w1), y0 + h); q.stroke();
   // axes
   font(q, 9, s.dpr); q.fillStyle = C.muted; q.textAlign = 'center'; q.textBaseline = 'top';
-  const step = E1 - E0 > 600 ? 200 : E1 - E0 > 200 ? 100 : 10;
+  const span = E1 - E0, step = span > 1200 ? 500 : span > 600 ? 200 : span > 250 ? 100 : span > 120 ? 20 : span > 50 ? 10 : span > 20 ? 5 : span > 8 ? 2 : 1;
   for (let E = Math.ceil(E0 / step) * step; E <= E1; E += step) {
     q.strokeStyle = C.grid; q.beginPath(); q.moveTo(X(E), y0); q.lineTo(X(E), y0 + h); q.stroke();
-    q.fillText(`${E}`, X(E), y0 + h + 5 * s.dpr);
+    q.fillText(`${+E.toFixed(2)}`, X(E), y0 + h + 5 * s.dpr);
   }
   q.fillText('eV', x0 + w - 8 * s.dpr, y0 + h + 15 * s.dpr);
   q.textAlign = 'left';
@@ -755,6 +760,17 @@ function drawEELS(sim, S, m, s) {
     const yv = Math.max(y0 + 10 * s.dpr, Y(data[Math.min(e.nb - 1, b)] || 0) - 16 * s.dpr);
     label(q, ed.name, X(ed.E), yv, s.dpr, { color: P.EL[P.EI[ed.key]].color, size: 9, align: 'center' });
   }
+  // zero-loss peak: position and full width at half maximum, measured from the recorded channels
+  const z = edu || !a.total ? e.zlp : zlpStats(a.spec, E0, e.dE);
+  if (z) {
+    const yh = Y(z.peak / 2);
+    q.strokeStyle = C.warm; q.lineWidth = 1.2 * s.dpr;
+    q.beginPath(); q.moveTo(X(z.center - z.fwhm / 2), yh); q.lineTo(X(z.center + z.fwhm / 2), yh); q.stroke();
+    q.setLineDash([2 * s.dpr, 3 * s.dpr]); q.beginPath(); q.moveTo(X(z.center), y0); q.lineTo(X(z.center), y0 + h); q.stroke(); q.setLineDash([]);
+    const tx = Math.min(x0 + w - 150 * s.dpr, X(z.center) + 8 * s.dpr);
+    label(q, `zero loss · FWHM ${z.fwhm.toFixed(2)} eV${Math.abs(z.center) > 0.05 ? ` · drifted ${z.center > 0 ? '+' : ''}${z.center.toFixed(2)} eV` : ''}`, tx, Math.max(y0 + 26 * s.dpr, yh - 14 * s.dpr), s.dpr, { color: C.warm, size: 9 });
+  }
+  label(q, `${S.eelsDisp} eV/channel · 2048 channels · offset ${S.eelsOffset} eV`, x0 + w, y0 + 16 * s.dpr, s.dpr, { color: C.muted, size: 9, align: 'right' });
   if (edu) label(q, '- - background (plasmon tail + power law)', x0 + w, y0 + h - 12 * s.dpr, s.dpr, { color: C.muted, size: 9, align: 'right' });
-  label(q, edu ? 'log scale · drag to move the energy window' : 'counts (log)', x0 + w, y0, s.dpr, { color: C.muted, size: 9, align: 'right' });
+  label(q, edu ? 'log scale · drag to move the window' : 'counts (log)', x0 + w, y0, s.dpr, { color: C.muted, size: 9, align: 'right' });
 }
