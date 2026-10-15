@@ -10,6 +10,7 @@ import { PRESETS, newProfile, sanitizeProfile } from './profile.js';
 import { HOLDERS } from './holder.js';
 import { Panel } from './panel.js';
 import { VirtualPanel } from './vpanel.js';
+import { Acquisitions } from './acquire.js';
 import { collectData, toNpz } from './export.js';
 import { openCalibration } from './calibui.js';
 
@@ -117,9 +118,13 @@ const CONTROLS = [
   { toggles: [['beamStop', 'Beam stop']], modes: 'diff' },
   { chips: 'vdet', label: 'Virtual detector', modes: '4d', opts: [['bf', 'BF'], ['abf', 'ABF'], ['adf', 'ADF'], ['disk', 'Disk (DF)'], ['dpc', 'DPC'], ['com', 'Center of mass'], ['ptycho', 'Ptychography'], ['mptycho', 'Multislice ptycho']] },
   { chips: 'edsSel', label: 'Map element', modes: 'eds', dynOpts: () => [['all', 'All']].concat(sim.si ? [...new Set(sim.si.els.map((e) => e.sym))].map((s) => [s, s]) : []) },
-  { chips: 'eelsRange', label: 'Spectrum range', modes: 'eels', opts: [['low', 'Low loss'], ['core', 'Core loss'], ['high', 'High loss']] },
-  { slider: 'eelsWin', inv: 'eelsWin', label: 'Energy window center', dyn: () => { const [a, b] = sim.eelsRangeBounds(); return { min: Math.max(0, a), max: b, step: b - a > 500 ? 1 : 0.5 }; }, fmt: (v) => `${v.toFixed(0)} eV`, modes: 'eels' },
-  { slider: 'eelsWidth', inv: 'eelsWin', label: 'Window width', min: 2, max: 80, step: 1, fmt: (v) => `${v} eV`, modes: 'eels' },
+  { chips: 'eelsRange', label: 'Spectrum range (preset)', modes: 'eels', opts: [['zlp', 'Zero loss'], ['low', 'Low loss'], ['core', 'Core loss'], ['high', 'High loss']] },
+  { chips: 'eelsDisp', label: 'Dispersion (eV per channel)', small: true, modes: 'eels', opts: [0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1].map((v) => [v, `${v}`]) },
+  { slider: 'eelsOffset', label: 'Energy offset (drift tube)', min: -50, max: 3000, step: 0.5, fmt: (v) => `${v} eV`, modes: 'eels', ends: ['zero loss', '', 'high loss'] },
+  { pFn: () => { const [a, b] = sim.eelsRangeBounds(), z = sim.eels?.zlp; return `2048 channels: ${a.toFixed(1)} to ${b.toFixed(1)} eV. Energy resolution ${sim.eelsRes().toFixed(2)} eV (gun ${S.profile.dE} eV + spectrometer), sampled by ${(sim.eelsRes() / S.eelsDisp).toFixed(1)} channels${sim.eelsRes() / S.eelsDisp < 3 ? ' (too coarse: the zero loss and edge fine structure are blurred by the channels)' : ''}.${z ? ` Zero loss measured: ${z.fwhm.toFixed(2)} eV wide at ${z.center >= 0 ? '+' : ''}${z.center.toFixed(2)} eV.` : ' The zero-loss peak is outside this range.'}`; }, modes: 'eels' },
+  { buttons: [['alignZLP', 'Align zero loss']], modes: 'eels' },
+  { slider: 'eelsWin', inv: 'eelsWin', label: 'Energy window center', dyn: () => { const [a, b] = sim.eelsRangeBounds(); return { min: Math.max(0, a), max: b, step: b - a > 500 ? 1 : b - a > 50 ? 0.5 : 0.05 }; }, fmt: (v) => `${v < 20 ? v.toFixed(2) : v.toFixed(0)} eV`, modes: 'eels' },
+  { slider: 'eelsWidth', inv: 'eelsWin', label: 'Window width', min: 0.5, max: 80, step: 0.5, fmt: (v) => `${v} eV`, modes: 'eels' },
   { toggles: [['bgsub', 'Subtract background']], modes: 'eels' },
 
   { sec: 'Time' },
@@ -306,6 +311,8 @@ function set(key, v, inv = key) {
   if (key === 'df') S.dfFam[fam(S.mode)] = v;
   if (key === 'detIn' || key === 'detOut') { if (S.detOut < S.detIn + 5) S.detOut = S.detIn + 5; S.detPreset = null; }
   if (key === 'eelsWin' || key === 'eelsWidth') inv = 'eelsWin';
+  // a new dispersion or offset: keep the energy window on the spectrum
+  if (key === 'eelsDisp' || key === 'eelsOffset') { const [a, b] = sim.eelsRangeBounds(); if (S.eelsWin < a || S.eelsWin > b) S.eelsWin = +((a + b) / 2).toFixed(1); }
   if (key === 'alpha4d') resetVdet();
   // a temperature step makes the holder drift until it settles (MEMS heaters settle fastest)
   if (key === 'tempSet') sim.kickDrift(Math.min(4, Math.abs(v - prevT) * (S.holder === 'heat' ? 0.0015 : 0.02)));
@@ -347,8 +354,11 @@ function chip(key, v) {
   if (key === 'vdet') { S.vdet = v; resetVdet(); sim.invalidate('vdet'); refreshControls(); return explainChange('vdet'); }
   if (key === 'eelsRange') {
     S.eelsRange = v;
+    const core0 = S.spec === 'sto' ? 462 : S.spec === 'si' ? 102 : S.spec === 'gr' ? 287 : S.spec === 'mof' ? 200 : S.spec === 'bio' ? 405 : 100;
+    // each preset is a dispersion and an offset, as a microscopist would set them
+    [S.eelsDisp, S.eelsOffset] = { zlp: [0.01, -5], low: [0.05, -5], core: [0.25, Math.max(50, core0 - 200)], high: [1, 1300] }[v];
     const [a, b] = sim.eelsRangeBounds();
-    const def = { low: [22, 12], core: [S.spec === 'sto' ? 462 : S.spec === 'si' ? 102 : S.spec === 'gr' ? 287 : S.spec === 'mof' ? 200 : S.spec === 'bio' ? 405 : 100, S.spec === 'si' ? 5 : S.spec === 'gr' ? 6 : S.spec === 'mof' ? 30 : S.spec === 'bio' ? 20 : 16], high: [S.spec === 'au' ? 2260 : S.spec === 'si' ? 1860 : 1960, 60] }[v];
+    const def = { zlp: [0, 3], low: [22, 12], core: [S.spec === 'sto' ? 462 : S.spec === 'si' ? 102 : S.spec === 'gr' ? 287 : S.spec === 'mof' ? 200 : S.spec === 'bio' ? 405 : 100, S.spec === 'si' ? 5 : S.spec === 'gr' ? 6 : S.spec === 'mof' ? 30 : S.spec === 'bio' ? 20 : 16], high: [S.spec === 'au' ? 2260 : S.spec === 'si' ? 1860 : 1960, 60] }[v];
     S.eelsWin = clamp(def[0], a, b); S.eelsWidth = def[1];
     sim.invalidate('eelsRange'); refreshControls();
     return explainChange('eelsRange');
@@ -377,6 +387,7 @@ function setSpec(v) {
   S.fov = sp.fov; S.cx = sp.center[0]; S.cy = sp.center[1]; S.tiltX = 0; S.tiltY = 0;
   S.edsSel = 'all';
   S.eelsRange = 'core';
+  S.eelsDisp = 0.25; S.eelsOffset = Math.max(50, (v === 'sto' ? 462 : v === 'si' ? 102 : v === 'gr' ? 287 : v === 'mof' ? 200 : v === 'bio' ? 405 : 100) - 200);
   S.eelsWin = v === 'sto' ? 462 : v === 'si' ? 102 : v === 'gr' ? 287 : v === 'mof' ? 200 : v === 'bio' ? 405 : 100;
   S.eelsWidth = v === 'si' ? 5 : v === 'au' ? 24 : v === 'gr' ? 6 : v === 'mof' ? 30 : v === 'bio' ? 20 : 16;
   // a MOF needs low-dose conditions; other specimens go back to a normal dose
@@ -427,6 +438,7 @@ function action(id, el) {
     set('df', +df.toFixed(1), 'df');
   }
   if (id === 'pause') { S.paused = !S.paused; refreshControls(); }
+  if (id === 'alignZLP') { sim.alignZLP(); explainChange('alignZLP'); }
   if (id === 'refocus') { sim.invalidate('series'); explainChange('series'); }
   if (id === 'newGrid') { sim.newGrid(); sim.invalidate('spec'); refreshControls(); explainChange('newGrid'); }
   if (id === 'calib') openCalibration({ S, sim, onApply: applyCalibration });
@@ -586,10 +598,27 @@ const hwPanel = new Panel({
     else if (k === 'narrate') setAutoNarrate(!autoNarrate);
     else if (k === 'expand') setExpanded(!document.body.classList.contains('detBig'));
     else if (k === 'calib') action('calib');
+    else if (k === 'acquire') acquireNow();
   },
 });
 
 const vPanel = new VirtualPanel(hwPanel);
+
+// ------------------------------------------------------------------ acquisitions (acquire.js)
+const acq = new Acquisitions({
+  S, sim, mainCv, secCv, download: (b, n) => download(b, n),
+  onChange: (a) => {
+    const c = $('#acqCount');
+    c.hidden = !acq.list.length; c.textContent = acq.list.length;
+    if (!a) return;
+    const d = $('.detector');
+    d.classList.remove('shot'); void d.offsetWidth; d.classList.add('shot');
+    hwPanel.say(`Acquired #${a.id}`);
+    $('#change').hidden = false;
+    $('#change').innerHTML = `<small>Acquired #${a.id}</small><p>${a.mode.toUpperCase()} on ${sim.spec.short}: ${a.summary}. Open the acquisitions (the stacked-frames button next to Acquire) to download the picture or the data.${sim.spec.beamSensitive ? ` This exposure added ${S.dose < 10 ? S.dose.toFixed(1) : Math.round(S.dose)} e⁻/Å² to the specimen's dose.` : ''}</p>`;
+  },
+});
+function acquireNow() { redraw = true; R2.draw(sim, S, mainCv, secCv); acq.acquire(); }
 
 // ------------------------------------------------------------------ results panel: enlarge or pop out
 function setExpanded(on) {
@@ -772,6 +801,9 @@ function wire() {
     catch (err) { $('#change').hidden = false; $('#change').innerHTML = `<small>Could not load ${f.name.replace(/[<>&]/g, '')}</small><p>${String(err.message).replace(/[<>&]/g, '')}</p>`; }
   });
   $('#infoMore').addEventListener('click', () => { infoOpen = !infoOpen; renderInfo(); });
+  $('#btnAcquire').addEventListener('click', acquireNow);
+  $('#btnGallery').addEventListener('click', () => { $('#gallery').hidden = false; acq.render($('#gallery .gBody')); });
+  $('#gallery').addEventListener('click', (e) => { if (e.target.id === 'gallery' || e.target.closest('.close')) $('#gallery').hidden = true; });
   $('#btnPanel').addEventListener('click', () => { $('#panelCfg').hidden = false; hwPanel.renderConfig($('#panelCfg .pBody')); });
   $('#panelCfg').addEventListener('click', (e) => { if (e.target.id === 'panelCfg' || e.target.closest('.close')) $('#panelCfg').hidden = true; });
   $('#btnExpand').addEventListener('click', () => setExpanded(!document.body.classList.contains('detBig')));
@@ -865,6 +897,7 @@ function wire() {
     else if (e.key === 'r' || e.key === 'R') scene.resetView();
     else if (e.key === 'c' || e.key === 'C') { S.clarity = S.clarity === 'edu' ? 'real' : 'edu'; sim.invalidate('clarity'); refreshControls(); explainChange('clarity'); }
     else if (e.key === 'v' || e.key === 'V') vPanel.openDock();
+    else if (e.key === 'i' || e.key === 'I') acquireNow();
     else if (e.key === 'x' || e.key === 'X') setExpanded(!document.body.classList.contains('detBig'));
     else if (e.key === 'Escape') { setExpanded(false); $('#help').hidden = true; if (scene.tour) scene.stopTour(); }
   });

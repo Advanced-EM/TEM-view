@@ -367,3 +367,22 @@ body.vwin { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5
   .vpanel:not(.inwin) { bottom: 0; border-radius: 14px 14px 0 0; max-height: 70vh; overflow-y: auto; }
   .knob .dial { width: 46px; height: 46px; } .knob.big .dial { width: 56px; height: 56px; }
 }
+
+/* acquire */
+.dicons button.acq { width: auto; padding: 0 9px 0 7px; gap: 5px; display: inline-flex; align-items: center; border-color: rgba(111, 214, 255, 0.5); color: var(--accent); font: 600 10.5px var(--sans); letter-spacing: 0.04em; text-transform: none; }
+.dicons button.acq:hover { background: var(--accent-soft); color: #fff; }
+#btnGallery { position: relative; }
+#acqCount { position: absolute; top: -6px; right: -6px; min-width: 15px; height: 15px; padding: 0 3px; border-radius: 99px; background: var(--accent); color: #05070a; font: 700 9px/15px var(--mono); font-style: normal; text-align: center; }
+.detector.shot { animation: shot 0.45s ease-out; }
+@keyframes shot { 0% { box-shadow: 0 0 0 2px #fff, 0 0 30px rgba(111, 214, 255, 0.8); } 100% { box-shadow: none; } }
+#gallery .card { width: min(980px, 100%); }
+#gallery h2 { margin: 0 0 8px; font: 400 27px/1.1 var(--serif); }
+.agrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; margin: 10px 0; }
+.agrid figure { margin: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: rgba(255, 255, 255, 0.02); }
+.aimg { display: grid; grid-template-columns: 1fr 1.3fr; background: #000; }
+.aimg img { width: 100%; height: 130px; object-fit: contain; display: block; }
+.agrid figcaption { padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; font-size: 12px; }
+.agrid figcaption b { font: 500 11px var(--mono); }
+.agrid figcaption span, .agrid figcaption small { color: var(--muted); font-size: 11px; }
+.abtn { display: flex; gap: 6px; margin-top: 6px; }
+.abtn .btn { flex: 1; padding: 4px 6px; font-size: 11px; }

@@ -8,7 +8,7 @@ export const defaultState = () => ({
   objAp: 'none', alpha: 22, alpha4d: 12, detIn: 70, detOut: 200, detPreset: 'haadf',
   camL: 1000, sa: 10, beamStop: true, camera: 'screen',
   vdet: 'adf', vdIn: 14, vdOut: 60, vdX: 0, vdY: 0, vdR: 4, fdSel: -1,
-  edsSel: 'all', eelsRange: 'core', eelsWin: 462, eelsWidth: 16, bgsub: true,
+  edsSel: 'all', eelsRange: 'core', eelsWin: 462, eelsWidth: 16, bgsub: true, eelsDisp: 0.25, eelsOffset: 50,
   speed: 1, paused: false, showLabels: true, showElectrons: true, showGlass: true, autoRotate: false,
   ab: { A1: 0, A1a: 0, B2: 0, B2a: 0, A2: 0, A2a: 0, A3: 0, A3a: 0 }, ronchAp: 45,
   cbedKind: 'cbed', alphaCB: 3, alphaLA: 40, strain: 0, holz: true,
@@ -20,6 +20,6 @@ export const defaultState = () => ({
 export const SESSION_KEYS = [
   'mode', 'clarity', 'spec', 'thick', 'tiltX', 'tiltY', 'fov', 'cx', 'cy', 'kV', 'dose', 'df', 'dfFam', 'corrector', 'csUnc', 'csCor',
   'objAp', 'alpha', 'alpha4d', 'detIn', 'detOut', 'detPreset', 'camL', 'sa', 'beamStop', 'camera', 'vdet', 'vdIn', 'vdOut', 'vdX', 'vdY', 'vdR',
-  'edsSel', 'eelsRange', 'eelsWin', 'eelsWidth', 'bgsub', 'ab', 'ronchAp', 'cbedKind', 'alphaCB', 'alphaLA', 'strain', 'holz',
+  'edsSel', 'eelsRange', 'eelsWin', 'eelsWidth', 'bgsub', 'eelsDisp', 'eelsOffset', 'ab', 'ronchAp', 'cbedKind', 'alphaCB', 'alphaLA', 'strain', 'holz',
   'biprism', 'sbR', 'numCorr', 'holoView', 'nFocal', 'focalStep', 'ilhView', 'holder', 'tempSet', 'profile',
 ];

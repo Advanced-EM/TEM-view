@@ -8,7 +8,7 @@ export const KEYS = {
   q: ['focus', -1], w: ['focus', 1], a: ['mag', -1], s: ['mag', 1], z: ['intensity', -1], x: ['intensity', 1],
   o: ['context', -1], p: ['context', 1], h: ['mfX', -1], l: ['mfX', 1], j: ['mfY', 1], k: ['mfY', -1],
 };
-const BTN_KEYS = { Tab: 'mfSelect', f: 'focusFine', b: 'wobbler', g: 'optFocus', ',': 'modePrev', '.': 'modeNext' };
+const BTN_KEYS = { Tab: 'mfSelect', f: 'focusFine', b: 'wobbler', g: 'optFocus', ',': 'modePrev', '.': 'modeNext', i: 'acquire' };
 const ARROWS = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
 
 const KNOBS = [
@@ -72,7 +72,7 @@ export class VirtualPanel {
         <div class="vside">
           <div class="knobs">${KNOBS.slice(0, 3).map(knob).join('')}</div>
           <div class="vbtns">
-            ${btn('modePrev', '◀ Mode', ',')}${btn('modeNext', 'Mode ▶', '.')}${btn('focusFine', 'Fine', 'F')}${btn('wobbler', 'Wobbler', 'B')}${btn('optFocus', 'Opt. focus', 'G')}${btn('pause', 'Pause', 'Space')}
+            ${btn('modePrev', '◀ Mode', ',')}${btn('modeNext', 'Mode ▶', '.')}${btn('focusFine', 'Fine', 'F')}${btn('wobbler', 'Wobbler', 'B')}${btn('optFocus', 'Opt. focus', 'G')}${btn('pause', 'Pause', 'Space')}${btn('acquire', 'Acquire', 'I')}
           </div>
         </div>
         <div class="vside">

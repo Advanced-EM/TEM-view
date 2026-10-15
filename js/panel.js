@@ -16,19 +16,19 @@ export { MF };
 export const BUTTONS = [
   ['modePrev', 'Previous mode'], ['modeNext', 'Next mode'], ['mfSelect', 'Multifunction: stigmator / shift / tilt'], ['wobbler', 'Focus wobbler'],
   ['focusFine', 'Focus fine / coarse'], ['optFocus', 'Optimal focus'], ['pause', 'Pause beam'], ['clarity', 'Educational / realistic'],
-  ['labels', 'Labels'], ['narrate', 'Narration'], ['expand', 'Enlarge results'], ['calib', 'Calibration dialog'],
+  ['labels', 'Labels'], ['narrate', 'Narration'], ['expand', 'Enlarge results'], ['calib', 'Calibration dialog'], ['acquire', 'Acquire'],
 ];
 const MF = [['stig', 'Stigmator'], ['shift', 'Image shift'], ['tilt', 'Specimen tilt']];
 
 const DEFAULTS = {
   panel: {
     axes: { stageX: 0, stageY: 1, focus: 2, mag: 3, intensity: 4, mfX: 5, mfY: 6, context: 7 },
-    buttons: { modePrev: 0, modeNext: 1, mfSelect: 2, wobbler: 3, focusFine: 4, optFocus: 5, pause: 6, clarity: 7, labels: 8, narrate: 9, expand: 10, calib: 11 },
+    buttons: { modePrev: 0, modeNext: 1, mfSelect: 2, wobbler: 3, focusFine: 4, optFocus: 5, pause: 6, clarity: 7, labels: 8, narrate: 9, expand: 10, calib: 11, acquire: 12 },
     invert: {}, sens: { focus: 1, mag: 1, intensity: 1, mf: 1, stage: 1, context: 1 }, counts: 4, // encoder counts per detent
   },
   standard: { // W3C "standard" gamepad layout
     axes: { stageX: 0, stageY: 1, mfX: 2, mfY: 3 },
-    buttons: { mfSelect: 0, wobbler: 1, optFocus: 2, clarity: 3, magDown: 4, magUp: 5, focusDown: 6, focusUp: 7, focusFine: 8, pause: 9, intensityUp: 12, intensityDown: 13, modePrev: 14, modeNext: 15 },
+    buttons: { mfSelect: 0, wobbler: 1, optFocus: 2, clarity: 3, magDown: 4, magUp: 5, focusDown: 6, focusUp: 7, focusFine: 8, pause: 9, acquire: 10, intensityUp: 12, intensityDown: 13, modePrev: 14, modeNext: 15 },
     invert: {}, sens: { focus: 1, mag: 1, intensity: 1, mf: 1, stage: 1, context: 1 },
   },
 };
