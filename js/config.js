@@ -6,6 +6,6 @@
 // Hugging Face plan), e.g.
 //   url: 'https://tem-view-collector.<subdomain>.workers.dev/submit', dataset: 'rmsreis/tem-view-alignment'
 export const SHARE = {
-  url: '',
+  url: 'https://tem-view-collector.tem-view.workers.dev/submit',
   dataset: 'rmsreis/tem-view-alignment',
 };
