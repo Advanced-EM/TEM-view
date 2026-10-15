@@ -11,6 +11,7 @@ import { HOLDERS } from './holder.js';
 import { Panel } from './panel.js';
 import { VirtualPanel } from './vpanel.js';
 import { Acquisitions } from './acquire.js';
+import { Scenarios } from './scenarios.js';
 import { collectData, toNpz } from './export.js';
 import { openCalibration } from './calibui.js';
 
@@ -20,6 +21,7 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 // ------------------------------------------------------------------ state
 const S = defaultState();
 const fam = (m) => (['tem', 'diff', 'oah', 'ilh'].includes(m) ? 'tem' : 'probe');
+const stigXY = () => [S.ab.A1 * Math.cos((S.ab.A1a * Math.PI) / 90), S.ab.A1 * Math.sin((S.ab.A1a * Math.PI) / 90)];
 const fmtS = (t) => (t < 1e-3 ? `${+(t * 1e6).toPrecision(3)} µs` : t < 1 ? `${+(t * 1e3).toPrecision(3)} ms` : `${+t.toPrecision(3)} s`);
 const fmtT = (K) => `${K < 20 ? K.toFixed(1) : Math.round(K)} K (${Math.round(K - 273.15)} °C)`;
 S.df = S.dfFam[fam(S.mode)];
@@ -72,6 +74,8 @@ const CONTROLS = [
   { slider: 'df', label: 'Defocus', dyn: () => (S.corrector ? { min: -30, max: 30, step: 0.2 } : S.spec === 'bio' ? { min: -4000, max: 500, step: 10 } : { min: -150, max: 150, step: 1 }), fmt: (v) => `${v > 0 ? '+' : ''}${v.toFixed(1)} nm`, ends: ['under', 'focus', 'over'], modes: 'tem stem 4d eds eels ronch oah ilh' },
   { buttons: [['optfocus', 'Optimal focus']], modes: 'tem stem 4d eds eels ronch oah ilh' },
   { chips: 'objAp', label: 'Objective aperture', modes: 'tem', opts: [['none', 'Open'], ['40', '40 µm'], ['20', '20 µm'], ['10', '10 µm'], ['df', 'Dark field'], ['zpp', 'Zernike phase plate']] },
+  { slider: 'stigX', stig: 0, label: 'Objective stigmator X', min: -60, max: 60, step: 0.5, fmt: (v) => `${v.toFixed(1)} nm`, modes: 'tem stem 4d eds eels oah ilh' },
+  { slider: 'stigY', stig: 1, label: 'Objective stigmator Y', min: -60, max: 60, step: 0.5, fmt: (v) => `${v.toFixed(1)} nm`, modes: 'tem stem 4d eds eels oah ilh' },
   { slider: 'alpha', label: 'Convergence semi-angle', dyn: () => ({ key: S.mode === '4d' ? 'alpha4d' : 'alpha' }), min: 3, max: 40, step: 0.5, fmt: (v) => `${v} mrad`, modes: 'stem 4d eds eels', ends: ['parallel-ish', '', 'wide cone'] },
 
   { sec: 'Off-axis holography', modes: 'oah' },
@@ -145,6 +149,10 @@ const CONTROLS = [
   { sec: 'Experiments' },
   { exp: 'single', title: 'One electron at a time', desc: 'Dim the beam until electrons arrive singly. Watch the pattern emerge from random dots.', icon: 'dots' },
   { exp: 'tour', title: 'Fly down the column', desc: 'Follow an electron from the gun to the detector, one component at a time.', icon: 'path' },
+  { sec: 'Training scenarios' },
+  { p: 'Alignment tasks with a hidden answer, as on a real microscope: the knob readings are not the true aberrations. With your consent the session is recorded (no personal data, nothing sent anywhere) to study how people align and judge an instrument.' },
+  { buttons: [['scn:tem-focus-stig', 'TEM: focus and stigmate'], ['scn:corrector-ronch', 'Corrector: tune the Ronchigram']] },
+  { buttons: [['replayFile', 'Replay a session file…'], ['lastSession', 'Download last session']] },
   { sec: 'Digital twin' },
   { p: 'The instrument profile holds what belongs to one particular microscope (energy spread, Cc, Cs, illumination). Calibrate it from your own data, save the whole session, and export what the detectors record.' },
   { chips: 'profile', label: 'Instrument profile', get: () => S.profile.preset, dynOpts: () => Object.entries(PRESETS).map(([k, v]) => [k, v.name.split(',')[0]]) },
@@ -192,6 +200,11 @@ function build() {
         const d = sliderDef(c);
         const v = d.log ? logMap(d.min, d.max).from(+input.value) : +input.value;
         if (c.ab) { S.ab[c.slider] = +v; sim.invalidate('ab'); refreshControls(); explainChange('ab'); return; }
+        if (c.stig !== undefined) { // the stigmator pair sets the two-fold astigmatism A1 as an (X, Y) vector
+          const xy = stigXY(); xy[c.stig] = +v;
+          S.ab.A1 = +Math.hypot(xy[0], xy[1]).toFixed(2); S.ab.A1a = Math.round(((Math.atan2(xy[1], xy[0]) * 90) / Math.PI + 180) % 180);
+          sim.invalidate('ab'); refreshControls(); explainChange('ab'); return;
+        }
         set(d.key, d.log ? v : +v.toFixed(4), c.inv ?? (c.slider === 'cs' ? 'cs' : c.slider === 'alpha' ? 'alpha' : d.key));
       });
       bound.push({ c, el, input, val: el.querySelector('.val') });
@@ -293,7 +306,7 @@ function refreshControls() {
       const d = sliderDef(b.c);
       const lm = d.log ? logMap(d.min, d.max) : null;
       b.input.min = d.log ? 0 : d.min; b.input.max = d.log ? 1000 : d.max; b.input.step = d.log ? 1 : d.step;
-      const v = b.c.ab ? S.ab[d.key] : S[d.key];
+      const v = b.c.ab ? S.ab[d.key] : b.c.stig !== undefined ? stigXY()[b.c.stig] : S[d.key];
       b.input.value = lm ? lm.to(v) : v;
       const p = ((+b.input.value - +b.input.min) / (+b.input.max - +b.input.min)) * 100;
       b.input.style.setProperty('--p', `${clamp(p, 0, 100)}%`);
@@ -424,6 +437,7 @@ function setSpec(v) {
 
 function setMode(m) {
   if (m === S.mode) return;
+  if (scn?.recorder.active) scn.recorder.event('mode', { from: S.mode, to: m });
   S.mode = m;
   infoOpen = false;
   S.df = S.dfFam[fam(m)];
@@ -441,6 +455,11 @@ function setMode(m) {
 }
 
 function action(id, el) {
+  if (id.startsWith('scn:')) return scn.start(id.slice(4));
+  if (id === 'replayFile') return $('#fileReplay').click();
+  if (id === 'lastSession') { if (scn.lastSession) scn.downloadSession(scn.lastSession); else { $('#change').hidden = false; $('#change').innerHTML = '<small>No recorded session yet</small><p>Run a training scenario with recording on, then download it here.</p>'; } return; }
+  if (scn.blocked(id)) { scn.recorder.event('blocked', { id }); $('#change').hidden = false; $('#change').innerHTML = '<small>Not in this task</small><p>Automatic tuning is disabled in this scenario: the point is to see how people do it by hand.</p>'; return; }
+  if (scn.recorder.active) scn.recorder.event('button', { id });
   if (id === 'zone') { S.tiltX = 0; S.tiltY = 0; sim.invalidate('tilt'); refreshControls(); explainChange('tilt'); }
   if (id === 'optfocus') {
     const Cs = sim.CsA(), lam = sim.lam;
@@ -600,6 +619,7 @@ const hwPanel = new Panel({
   // quiet change for the wobbler: no explanation, no control rebuild
   setRaw: (k, v, inv) => { S[k] = v; if (k === 'df') S.dfFam[fam(S.mode)] = v; sim.invalidate(inv); },
   moveStage: (dx, dy) => { S.cx += dx; S.cy += dy; sim.invalidate('stage'); },
+  noteSource: (s) => scn.recorder.noteSource(s),
   openVirtual: (where) => (where === 'window' ? vPanel.openWindow() : vPanel.openDock()),
   cycleMode: (d) => { const i = MODES.findIndex((m) => m[0] === S.mode); setMode(MODES[(i + d + MODES.length) % MODES.length][0]); },
   toggle: (k) => {
@@ -629,7 +649,26 @@ const acq = new Acquisitions({
     $('#change').innerHTML = `<small>Acquired #${a.id}</small><p>${a.mode.toUpperCase()} on ${sim.spec.short}: ${a.summary}. Open the acquisitions (the stacked-frames button next to Acquire) to download the picture or the data.${sim.spec.beamSensitive ? ` This exposure added ${S.dose < 10 ? S.dose.toFixed(1) : Math.round(S.dose)} e⁻/Å² to the specimen's dose.` : ''}</p>`;
   },
 });
-function acquireNow() { redraw = true; R2.draw(sim, S, mainCv, secCv); acq.acquire(); }
+function acquireNow() { redraw = true; R2.draw(sim, S, mainCv, secCv); acq.acquire(); if (scn.recorder.active) scn.recorder.event('acquire'); }
+
+// ------------------------------------------------------------------ training scenarios and telemetry (scenarios.js, telemetry.js)
+const scn = new Scenarios({
+  S, sim, version: document.querySelector('script[src*="main.js"]')?.getAttribute('src')?.split('v=')[1] ?? 'dev',
+  setSpec: (v) => setSpec(v), setMode: (m) => setMode(m), download: (b, n) => download(b, n),
+  invalidateAll: () => { sim.invalidate('all'); refreshControls(); renderInfo(); },
+  // replay: set the recorded settings
+  applyFlat: (st) => {
+    if (st.mode && st.mode !== S.mode) setMode(st.mode);
+    for (const [k, v] of Object.entries(st)) { if (k === 'mode') continue; if (k.startsWith('ab.')) S.ab[k.slice(3)] = v; else if (k in S && k !== 'paused') S[k] = v; }
+    sim.invalidate('all'); refreshControls();
+  },
+  snapshotState: () => structuredClone(Object.fromEntries(SESSION_KEYS.map((k) => [k, S[k]]))),
+  restoreState: (st) => { const m = st.mode; Object.assign(S, structuredClone(st)); S.mode = ''; setMode(m); sim.invalidate('all'); refreshControls(); },
+});
+// which input caused each change
+window.addEventListener('pointerdown', (e) => scn.recorder.noteSource(e.pointerType === 'touch' ? 'touch' : e.pointerType === 'pen' ? 'pen' : 'mouse'), true);
+window.addEventListener('wheel', () => scn.recorder.noteSource('mouse'), true);
+window.addEventListener('keydown', () => scn.recorder.noteSource('keyboard'), true);
 
 // ------------------------------------------------------------------ results panel: enlarge or pop out
 function setExpanded(on) {
@@ -813,6 +852,7 @@ function wire() {
   });
   $('#infoMore').addEventListener('click', () => { infoOpen = !infoOpen; renderInfo(); });
   $('#btnAcquire').addEventListener('click', acquireNow);
+  $('#fileReplay').addEventListener('change', async (e) => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; try { scn.loadReplay(await f.text()); } catch (err) { $('#change').hidden = false; $('#change').innerHTML = `<small>Could not replay ${f.name.replace(/[<>&]/g, '')}</small><p>${String(err.message).replace(/[<>&]/g, '')}</p>`; } });
   $('#btnGallery').addEventListener('click', () => { $('#gallery').hidden = false; acq.render($('#gallery .gBody')); });
   $('#gallery').addEventListener('click', (e) => { if (e.target.id === 'gallery' || e.target.closest('.close')) $('#gallery').hidden = true; });
   $('#btnPanel').addEventListener('click', () => { $('#panelCfg').hidden = false; hwPanel.renderConfig($('#panelCfg .pBody')); });
@@ -948,6 +988,7 @@ function frame(now) {
   last = now;
   try {
     hwPanel.poll(dt);
+    scn.tick();
     sim.update(dt);
     const live = S.clarity === 'real' && ['tem', 'stem', 'diff', 'ronch', 'cbed'].includes(S.mode) && !S.paused;
     if (sim.version !== lastVer || (live && now - lastDraw > 70) || redraw) {
@@ -1065,4 +1106,4 @@ updateDetectorHeader();
 explainChange('spec');
 resize();
 requestAnimationFrame(() => { resize(); requestAnimationFrame(frame); });
-window.__tem = { S, sim, scene, panel: hwPanel, vpanel: vPanel };
+window.__tem = { S, sim, scene, panel: hwPanel, vpanel: vPanel, scn };

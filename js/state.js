@@ -14,6 +14,8 @@ export const defaultState = () => ({
   cbedKind: 'cbed', alphaCB: 3, alphaLA: 40, strain: 0, holz: true,
   biprism: 100, sbR: 0.33, numCorr: true, holoView: 'holo', nFocal: 10, focalStep: 5, ilhView: 'phase',
   holder: 'room', tempSet: 293, profile: newProfile('generic200'),
+  // hidden misalignment added to the knob settings (training scenarios); never shown in the controls
+  mis: null,
 });
 
 // Keys a saved session may set (UI-only toggles are left alone).
@@ -21,5 +23,5 @@ export const SESSION_KEYS = [
   'mode', 'clarity', 'spec', 'thick', 'tiltX', 'tiltY', 'fov', 'cx', 'cy', 'kV', 'dose', 'df', 'dfFam', 'corrector', 'csUnc', 'csCor',
   'objAp', 'alpha', 'alpha4d', 'detIn', 'detOut', 'detPreset', 'camL', 'sa', 'beamStop', 'camera', 'vdet', 'vdIn', 'vdOut', 'vdX', 'vdY', 'vdR',
   'edsSel', 'eelsRange', 'eelsWin', 'eelsWidth', 'bgsub', 'eelsDisp', 'eelsOffset', 'eelsExp', 'eelsExpLow', 'eelsCurrent', 'dualEels', 'ab', 'ronchAp', 'cbedKind', 'alphaCB', 'alphaLA', 'strain', 'holz',
-  'biprism', 'sbR', 'numCorr', 'holoView', 'nFocal', 'focalStep', 'ilhView', 'holder', 'tempSet', 'profile',
+  'biprism', 'sbR', 'numCorr', 'holoView', 'nFocal', 'focalStep', 'ilhView', 'holder', 'tempSet', 'profile', 'mis',
 ];
