@@ -432,3 +432,18 @@ label.note input { padding: 7px 9px; border-radius: 8px; border: 1px solid var(-
 #scnModal .share code { font: 11px var(--mono); color: var(--text); }
 #scnModal .share label.note { display: flex; flex-direction: row; align-items: center; gap: 8px; margin: 8px 0; color: var(--text); }
 #scnModal .share label.note input { width: auto; margin: 0; }
+
+/* collapsible side panels (wide layout): [ and ] or the ‹ › buttons */
+.fold { width: 26px; height: 26px; display: grid; place-items: center; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--muted); font: 600 15px/1 var(--sans); }
+.fold:hover { color: var(--text); border-color: var(--line-2); }
+.explain > .fold { position: absolute; top: 10px; right: 10px; }
+.foldtab { display: none; position: fixed; top: 50%; z-index: 4; padding: 10px 7px; border: 1px solid var(--line); background: var(--panel); color: var(--muted); font: 600 11px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; writing-mode: vertical-rl; backdrop-filter: blur(14px); }
+.foldtab:hover { color: var(--text); border-color: rgba(111, 214, 255, 0.5); }
+.foldtab.left { left: 0; border-left: 0; border-radius: 0 10px 10px 0; transform: translateY(-50%) rotate(180deg); border-radius: 10px 0 0 10px; border-left: 1px solid var(--line); border-right: 0; }
+.foldtab.right { right: 0; border-right: 0; border-radius: 10px 0 0 10px; transform: translateY(-50%); }
+body:not(.stacked).foldL { --left: 24px; }
+body:not(.stacked).foldR { --right: 24px; }
+body:not(.stacked).foldL .explain, body:not(.stacked).foldR .controls { display: none; }
+body:not(.stacked).foldL #tabL, body:not(.stacked).foldR #tabR { display: block; }
+body.stacked .fold { display: none; }
+body:not(.stacked).foldL .detector, body:not(.stacked).foldR .detector { max-width: 1100px; }

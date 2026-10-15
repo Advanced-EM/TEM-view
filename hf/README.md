@@ -29,21 +29,20 @@ new files arrive. Duplicate sessions are kept once, and invalid files are listed
 ## 2. Live collection: the Space (after ethics approval)
 
 1. Create the dataset (step 1), or let the Space create it.
-2. Create a Space with **SDK: Docker** (e.g. `rmsreis/tem-view-collector`) and upload this folder:
+2. Deploy the Space with one command. It uses your `hf auth login`, creates `rmsreis/tem-view-collector` (public Docker Space; it holds no data), sets `DATASET_REPO` and `ALLOWED_ORIGINS`, uploads `hf/space`, and asks at a hidden prompt for the Space's token, which goes straight into the Space's secrets:
    ```bash
-   hf upload rmsreis/tem-view-collector hf/space . --repo-type space
+   ~/anaconda3/bin/python3 hf/deploy_space.py
    ```
-3. In the Space settings:
-   - add the secret `HF_TOKEN`, a fine-grained token with write access to **that dataset only**
-   - add the variable `DATASET_REPO=rmsreis/tem-view-alignment`
-   - optionally set `ALLOWED_ORIGINS` (default `https://advanced-em.github.io`) and `RATE_PER_HOUR` (default 30)
+   For that token, create a fine-grained token with write access to **the dataset only**. Rerun with `--skip-token` to update the code without changing it.
+3. Optional Space variable: `RATE_PER_HOUR` (default 30).
 4. Check `https://rmsreis-tem-view-collector.hf.space/`. It should report `"dry_run": false`.
 5. In [`js/config.js`](../js/config.js), set
    `url: 'https://rmsreis-tem-view-collector.hf.space/submit', dataset: 'rmsreis/tem-view-alignment'`.
    Then run `node tools/stamp.mjs` and deploy.
 
-From then on, the result screen of a recorded scenario offers **Share with the research dataset**:
-- The visitor ticks a consent box and presses Send.
+From then on, the consent screen of every scenario offers **Record and share**, **Record only** and **Start without recording**:
+- With *Record and share*, the session is sent automatically when the task ends (done, gave up, or the page closes).
+- With *Record only*, the result screen still offers to send it after a consent tick.
 - The Space writes `raw/<scenario>/<id>.json` and commits new files to the dataset every 5 minutes.
 - The visitor gets the session id, which they can quote to have the session removed.
 
