@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Deploy (or update) the TEM-view session collector Space.
+"""Deploy (or update) the TEM-view session collector Space. Docker Spaces need a paid plan (HF PRO or an org
+plan); the free alternative is the Cloudflare Worker in hf/worker.
 
     ~/anaconda3/bin/python3 hf/deploy_space.py                       # rmsreis/tem-view-collector -> rmsreis/tem-view-alignment
     ~/anaconda3/bin/python3 hf/deploy_space.py --space ORG/NAME --dataset ORG/NAME
@@ -16,7 +17,7 @@ import os
 from huggingface_hub import HfApi
 
 p = argparse.ArgumentParser()
-p.add_argument("--space", default="Northwestern/tem-view-collector")
+p.add_argument("--space", default="rmsreis/tem-view-collector")
 p.add_argument("--dataset", default="rmsreis/tem-view-alignment")
 p.add_argument("--origins", default="https://advanced-em.github.io,http://localhost:8765")
 p.add_argument("--skip-token", action="store_true", help="keep the HF_TOKEN secret already set")
