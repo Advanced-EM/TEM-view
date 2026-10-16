@@ -156,3 +156,16 @@ export async function speak(id) {
 }
 
 export const toggle = (id) => (current === id ? stop() : speak(id));
+
+// speak free text (an agent's answer) with the browser voice of the chosen gender
+export function sayText(text) {
+  stop();
+  if (!('speechSynthesis' in window) || !text) return;
+  const u = new SpeechSynthesisUtterance(text);
+  const v = browserVoice(settings.voice);
+  if (v) u.voice = v;
+  current = 'agent'; emit();
+  u.onend = () => { if (utter === u) { utter = null; current = null; emit(); } };
+  utter = u;
+  speechSynthesis.speak(u);
+}

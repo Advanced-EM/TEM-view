@@ -5,9 +5,9 @@ export const FORMAT = 'tem-view-telemetry/1';
 export const MAX_BYTES = 5_000_000;
 const MAX_EVENTS = 60_000;
 const EXPERIENCE = new Set(['novice', 'student', 'trained', 'expert']);
-const SOURCES = new Set(['mouse', 'touch', 'keyboard', 'panel', 'controller', 'onscreen-panel', 'scenario', 'unknown']);
+const SOURCES = new Set(['mouse', 'touch', 'keyboard', 'panel', 'controller', 'onscreen-panel', 'voice', 'agent', 'scenario', 'unknown']);
 const OUTCOMES = new Set(['done', 'gave_up', 'abandoned']);
-const KINDS = new Set(['change', 'snap', 'mode', 'button', 'blocked', 'acquire', 'judge', 'end']);
+const KINDS = new Set(['change', 'snap', 'mode', 'button', 'blocked', 'acquire', 'judge', 'end', 'voice']);
 const ID_RE = /^[A-Za-z0-9-]{8,64}$/;
 const KEY_RE = /^[A-Za-z0-9_.]{1,32}$/;
 const SCENARIO_RE = /^[a-z0-9-]{1,40}$/;
@@ -84,7 +84,8 @@ export function clean(s) {
       if (o.rating !== null && (o.rating < 1 || o.rating > 5)) fail('rating out of range');
       o.cues = (Array.isArray(e.cues) ? e.cues : []).slice(0, 12).map((c) => String(c).slice(0, 60));
       o.note = String(e.note ?? '').slice(0, 140);
-    } else if (k === 'end') o.outcome = OUTCOMES.has(e.outcome) ? e.outcome : 'abandoned';
+    } else if (k === 'voice') { o.intent = String(e.intent ?? '').slice(0, 120); o.ok = !!e.ok; }
+    else if (k === 'end') o.outcome = OUTCOMES.has(e.outcome) ? e.outcome : 'abandoned';
     if (e.m !== null && e.m !== undefined) o.m = flat(e.m, `event ${i}.m`, 40);
     out.events.push(o);
   });
