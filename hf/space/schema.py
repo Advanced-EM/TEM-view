@@ -16,9 +16,9 @@ FORMAT = "tem-view-telemetry/1"
 MAX_BYTES = 5_000_000
 MAX_EVENTS = 60_000
 EXPERIENCE = {"novice", "student", "trained", "expert"}
-SOURCES = {"mouse", "touch", "keyboard", "panel", "controller", "onscreen-panel", "scenario", "unknown"}
+SOURCES = {"mouse", "touch", "keyboard", "panel", "controller", "onscreen-panel", "voice", "agent", "scenario", "unknown"}
 OUTCOMES = {"done", "gave_up", "abandoned"}
-KINDS = {"change", "snap", "mode", "button", "blocked", "acquire", "judge", "end"}
+KINDS = {"change", "snap", "mode", "button", "blocked", "acquire", "judge", "end", "voice"}
 ID_RE = re.compile(r"^[A-Za-z0-9-]{8,64}$")
 KEY_RE = re.compile(r"^[A-Za-z0-9_.]{1,32}$")
 SCENARIO_RE = re.compile(r"^[a-z0-9-]{1,40}$")
@@ -133,6 +133,9 @@ def clean(s, drop_notes=False):
                 raise Invalid("rating out of range")
             o["cues"] = [str(c)[:60] for c in (e.get("cues") or [])][:12]
             o["note"] = "" if drop_notes else str(e.get("note") or "")[:140]
+        elif k == "voice":
+            o["intent"] = str(e.get("intent", ""))[:120]
+            o["ok"] = bool(e.get("ok"))
         elif k == "end":
             o["outcome"] = e.get("outcome") if e.get("outcome") in OUTCOMES else "abandoned"
         if e.get("m") is not None:
@@ -175,7 +178,7 @@ def rows(s):
             "state": json.dumps(ev[i]["state"]), "metrics": json.dumps(ev[i].get("m")),
             "score": (ev[i].get("m") or {}).get("score"),
             "actions": [{"t": e["t"], "key": e["key"], "from": _js(e["from"]), "to": _js(e["to"]), "src": e["src"]} for e in between if e["k"] == "change"],
-            "events": [e["k"] if e["k"] not in ("button", "blocked") else f'{e["k"]}:{e["id"]}' for e in between if e["k"] not in ("change", "snap")],
+            "events": [f'{e["k"]}:{e["id"]}' if e["k"] in ("button", "blocked") else f'voice:{e["intent"]}' if e["k"] == "voice" else e["k"] for e in between if e["k"] not in ("change", "snap")],
             "next_score": (ev[j].get("m") or {}).get("score") if j < len(ev) else final.get("score"),
             "final_score": final.get("score"), "success": final.get("success"),
         })

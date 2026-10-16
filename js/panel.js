@@ -18,7 +18,7 @@ export { MF };
 export const BUTTONS = [
   ['modePrev', 'Previous mode'], ['modeNext', 'Next mode'], ['mfSelect', 'Multifunction: stigmator / corrector terms / shift / tilt'], ['wobbler', 'Focus wobbler'],
   ['focusFine', 'Focus fine / coarse'], ['optFocus', 'Optimal focus'], ['pause', 'Pause beam'], ['clarity', 'Educational / realistic'],
-  ['labels', 'Labels'], ['narrate', 'Narration'], ['expand', 'Enlarge results'], ['calib', 'Calibration dialog'], ['acquire', 'Acquire'],
+  ['labels', 'Labels'], ['narrate', 'Narration'], ['expand', 'Enlarge results'], ['calib', 'Calibration dialog'], ['acquire', 'Acquire'], ['talk', 'Talk (hold to speak)'],
 ];
 // multifunction modes; the corrector terms only appear with the probe corrector on, in the Ronchigram
 const MF = [['stig', 'Stigmator'], ['B2', 'Coma B2', true], ['A2', '3-fold A2', true], ['A3', '4-fold A3', true], ['C3', 'Cₛ (C3)', true],
@@ -29,12 +29,12 @@ const AB_KNOB = { A1: [2, 0.5, 'nm'], B2: [1, 10, 'nm'], A2: [3, 10, 'nm'], A3: 
 const DEFAULTS = {
   panel: {
     axes: { stageX: 0, stageY: 1, focus: 2, mag: 3, intensity: 4, mfX: 5, mfY: 6, context: 7 },
-    buttons: { modePrev: 0, modeNext: 1, mfSelect: 2, wobbler: 3, focusFine: 4, optFocus: 5, pause: 6, clarity: 7, labels: 8, narrate: 9, expand: 10, calib: 11, acquire: 12 },
+    buttons: { modePrev: 0, modeNext: 1, mfSelect: 2, wobbler: 3, focusFine: 4, optFocus: 5, pause: 6, clarity: 7, labels: 8, narrate: 9, expand: 10, calib: 11, acquire: 12, talk: 13 },
     invert: {}, sens: { focus: 1, mag: 1, intensity: 1, mf: 1, stage: 1, context: 1 }, counts: 4, // encoder counts per detent
   },
   standard: { // W3C "standard" gamepad layout
     axes: { stageX: 0, stageY: 1, mfX: 2, mfY: 3 },
-    buttons: { mfSelect: 0, wobbler: 1, optFocus: 2, clarity: 3, magDown: 4, magUp: 5, focusDown: 6, focusUp: 7, focusFine: 8, pause: 9, acquire: 10, intensityUp: 12, intensityDown: 13, modePrev: 14, modeNext: 15 },
+    buttons: { mfSelect: 0, wobbler: 1, optFocus: 2, clarity: 3, magDown: 4, magUp: 5, focusDown: 6, focusUp: 7, focusFine: 8, pause: 9, acquire: 10, talk: 11, intensityUp: 12, intensityDown: 13, modePrev: 14, modeNext: 15 },
     invert: {}, sens: { focus: 1, mag: 1, intensity: 1, mf: 1, stage: 1, context: 1 },
   },
 };
@@ -94,7 +94,10 @@ export class Panel {
     const sx = dz(A('stageX')), sy = dz(A('stageY'));
     this.stageV = sx || sy ? [sx, sy] : this.vstage;
     // buttons
-    for (const [k] of BUTTONS) if (pressed(k)) this.button(k);
+    for (const [k] of BUTTONS) if (k !== 'talk' && pressed(k)) this.button(k);
+    // talk is held: speech recognition runs from press to release
+    const ti = M.buttons.talk;
+    if (ti != null) { const now = bt[ti] > 0.5, was = this.prevButtons[ti] > 0.5; if (now !== was) this.api.talk?.(now); }
     this.prevButtons = bt;
     if (Object.keys(this.acc).length || this.stageV) this.api.noteSource?.(this.kind === 'panel' ? 'panel' : 'controller');
     this.wobble(dt);
@@ -113,6 +116,7 @@ export class Panel {
   setStage(vx, vy) { if (vx || vy) this.api.noteSource?.('onscreen-panel'); this.vstage = vx || vy ? [vx, vy] : null; }
   button(k) {
     if (this.pad && !this.virtual) this.api.noteSource?.(this.kind === 'panel' ? 'panel' : 'controller');
+    if (k === 'talk') return;
     if (k === 'modePrev') this.api.cycleMode(-1);
     else if (k === 'modeNext') this.api.cycleMode(1);
     else if (k === 'mfSelect') { const L = this.mfList(), i = L.findIndex((m) => m[0] === this.mf); this.setMF(L[(i + 1) % L.length][0]); }

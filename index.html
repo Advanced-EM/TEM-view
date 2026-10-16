@@ -8,35 +8,37 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=202610160216">
+<link rel="stylesheet" href="css/style.css?v=202610162038">
 <script type="importmap">
 {
  "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
-  "./js/acquire.js": "./js/acquire.js?v=202610160216",
-  "./js/calibrate.js": "./js/calibrate.js?v=202610160216",
-  "./js/calibui.js": "./js/calibui.js?v=202610160216",
-  "./js/components.js": "./js/components.js?v=202610160216",
-  "./js/config.js": "./js/config.js?v=202610160216",
-  "./js/explain.js": "./js/explain.js?v=202610160216",
-  "./js/export.js": "./js/export.js?v=202610160216",
-  "./js/holder.js": "./js/holder.js?v=202610160216",
-  "./js/holography.js": "./js/holography.js?v=202610160216",
-  "./js/main.js": "./js/main.js?v=202610160216",
-  "./js/narration.js": "./js/narration.js?v=202610160216",
-  "./js/npy.js": "./js/npy.js?v=202610160216",
-  "./js/panel.js": "./js/panel.js?v=202610160216",
-  "./js/physics.js": "./js/physics.js?v=202610160216",
-  "./js/profile.js": "./js/profile.js?v=202610160216",
-  "./js/render2d.js": "./js/render2d.js?v=202610160216",
-  "./js/scenarios.js": "./js/scenarios.js?v=202610160216",
-  "./js/scene3d.js": "./js/scene3d.js?v=202610160216",
-  "./js/sim.js": "./js/sim.js?v=202610160216",
-  "./js/state.js": "./js/state.js?v=202610160216",
-  "./js/techniques.js": "./js/techniques.js?v=202610160216",
-  "./js/telemetry.js": "./js/telemetry.js?v=202610160216",
-  "./js/vpanel.js": "./js/vpanel.js?v=202610160216"
+  "./js/acquire.js": "./js/acquire.js?v=202610162038",
+  "./js/agent.js": "./js/agent.js?v=202610162038",
+  "./js/calibrate.js": "./js/calibrate.js?v=202610162038",
+  "./js/calibui.js": "./js/calibui.js?v=202610162038",
+  "./js/components.js": "./js/components.js?v=202610162038",
+  "./js/config.js": "./js/config.js?v=202610162038",
+  "./js/explain.js": "./js/explain.js?v=202610162038",
+  "./js/export.js": "./js/export.js?v=202610162038",
+  "./js/holder.js": "./js/holder.js?v=202610162038",
+  "./js/holography.js": "./js/holography.js?v=202610162038",
+  "./js/main.js": "./js/main.js?v=202610162038",
+  "./js/narration.js": "./js/narration.js?v=202610162038",
+  "./js/npy.js": "./js/npy.js?v=202610162038",
+  "./js/panel.js": "./js/panel.js?v=202610162038",
+  "./js/physics.js": "./js/physics.js?v=202610162038",
+  "./js/profile.js": "./js/profile.js?v=202610162038",
+  "./js/render2d.js": "./js/render2d.js?v=202610162038",
+  "./js/scenarios.js": "./js/scenarios.js?v=202610162038",
+  "./js/scene3d.js": "./js/scene3d.js?v=202610162038",
+  "./js/sim.js": "./js/sim.js?v=202610162038",
+  "./js/state.js": "./js/state.js?v=202610162038",
+  "./js/techniques.js": "./js/techniques.js?v=202610162038",
+  "./js/telemetry.js": "./js/telemetry.js?v=202610162038",
+  "./js/voice.js": "./js/voice.js?v=202610162038",
+  "./js/vpanel.js": "./js/vpanel.js?v=202610162038"
  }
 }
 </script>
@@ -92,6 +94,7 @@
 <button id="tabR" class="foldtab right" data-fold="R" title="Show the controls (])" aria-label="Show the controls panel">‹ Controls</button>
 <aside class="card controls">
   <div class="chead"><p class="eyebrow">Controls</p><div class="icons">
+  <button id="btnMic" title="Hold to talk (M)" aria-label="Hold to give a voice command"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="9" y="3.5" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v2.5M9 20.5h6"/></svg></button>
   <button id="btnTrain" class="train" title="Training mode (T)" aria-label="Training mode: alignment tasks"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg><span>Training</span></button>
   <button id="btnLabels" title="Labels (L)" aria-label="Toggle labels"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button>
   <button id="btnPanel" title="Control panel" aria-label="Control panel and game controllers"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2.5" y="6.5" width="19" height="11" rx="3"/><circle cx="8" cy="12" r="2"/><circle cx="16" cy="10.5" r="1"/><circle cx="18" cy="13" r="1"/></svg></button>
@@ -125,6 +128,7 @@
       <li><b>Drag the detector image</b> to move the specimen stage; scroll it to change magnification. In diffraction, dragging the pattern tilts the crystal. Try to find the zone axis by following the Kikuchi lines.</li>
       <li><b>4D-STEM:</b> hover the virtual image to read individual diffraction patterns; drag on the pattern to reshape the virtual detector.</li>
       <li><b>EDS:</b> click a peak to map that element. <b>EELS:</b> drag on the spectrum to move the energy window; choose the dispersion (eV per channel) and energy offset, or the Zero-loss preset to see the instrument's energy resolution. Lengthen the exposure until the zero loss saturates (red), then switch on <b>Dual EELS</b> to record the low loss and the core loss together.</li>
+      <li><b>Voice:</b> hold <kbd>M</kbd> or the microphone button and speak a command, such as "switch to STEM", "defocus minus fifty" or "acquire". Your browser's speech recognition turns it into text (in Chrome and Edge, on Google's or Microsoft's servers). With an AI agent connected (Controls → Voice and agent), questions get spoken answers.</li>
       <li><b>More room:</b> <kbd>[</kbd> and <kbd>]</kbd> (or the ‹ › buttons) hide the explanation and the controls; the tab at the screen edge brings them back.</li>
       <li><b>Training</b> (button at the top of the controls, or <kbd>T</kbd>) hide a misalignment for you to fix, ask how good you think the result is, then reveal the truth. With your consent the session is recorded locally (no personal data, nothing sent anywhere) and can be downloaded or replayed.</li>
       <li><b>Acquire</b> (camera button above the detector, or <kbd>I</kbd>) records an exposure into the acquisitions gallery, to download as PNG or data.</li>
@@ -148,6 +152,6 @@
 <input id="fileSession" type="file" accept=".json,application/json" hidden>
 <div id="calib" class="modal calib" hidden><div class="card"><button class="close" aria-label="Close">×</button><div class="calibBody"></div></div></div>
 
-<script type="module" src="js/main.js?v=202610160216"></script>
+<script type="module" src="js/main.js?v=202610162038"></script>
 </body>
 </html>
