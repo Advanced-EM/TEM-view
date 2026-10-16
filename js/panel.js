@@ -248,7 +248,8 @@ export class Panel {
     if (!gp) {
       el.innerHTML = `<p class="eyebrow">Control panel</p><h2>Connect a <em>panel</em>, or use the keyboard</h2>${vbtns}
         <p>Plug in a TEM-view panel or any game controller over USB or Bluetooth, then <b>press one of its buttons</b>: browsers only reveal a controller after it has been used.</p>
-        <p class="muted">The panel is a USB joystick ("TEM-view Panel", 8 axes, 16 buttons). Its reference firmware and wiring are in the repository under <code>hardware/panel</code>.</p>`;
+        <p class="muted">The panel is a USB joystick ("TEM-view Panel", 8 axes, 16 buttons). Its reference firmware and wiring are in the repository under <code>hardware/panel</code>.</p>
+        <p><a href="console/" target="_blank" rel="noopener">The TEM-view Console</a>: the physical panel, in development for Kickstarter.</p>`;
       wireV();
       return;
     }
