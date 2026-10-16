@@ -4,6 +4,8 @@ A physical control panel for the exhibit, laid out like the hand panels of a tra
 
 **Status:** reference design. The browser side is implemented and tested with emulated input and game controllers. The firmware's decoding logic is unit-tested on a computer. **No panel has been built yet**, and the firmware has not been compiled for the board.
 
+**Prototype enclosure:** a parametric, 3D-printable case for this layout, with print files, parts list, wiring and assembly steps, is in [`enclosure/`](enclosure/README.md). There is also a [3D viewer](enclosure/viewer.html).
+
 ## How it talks to the exhibit
 
 The panel is a USB HID joystick whose product name contains **`TEM-view Panel`**, which is how the exhibit recognizes it. Each report has 8 signed 16-bit axes and 16 buttons.
