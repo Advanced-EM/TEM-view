@@ -9,6 +9,8 @@ export const KEYS = {
   o: ['context', -1], p: ['context', 1], h: ['mfX', -1], l: ['mfX', 1], j: ['mfY', 1], k: ['mfY', -1],
 };
 const BTN_KEYS = { Tab: 'mfSelect', f: 'focusFine', b: 'wobbler', g: 'optFocus', ',': 'modePrev', '.': 'modeNext', i: 'acquire' };
+// the physical Console's page (absolute, so it also works from the popped-out window)
+const CONSOLE_URL = new URL('console/', location.href).href;
 const ARROWS = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
 
 const KNOBS = [
@@ -66,6 +68,7 @@ export class VirtualPanel {
   build(doc, root) {
     root.innerHTML = `
       <div class="vhead"><b>Control panel</b><span>keyboard · mouse · drag or scroll a knob</span><span class="sp"></span>
+        <a class="vget" href="${CONSOLE_URL}" target="_blank" rel="noopener" title="The physical TEM-view Console">Get the hardware ↗</a>
         ${this.where === 'dock' ? '<button data-act="popout" title="Open in a separate window">⧉</button>' : '<button data-act="dock" title="Dock in the exhibit">▣</button>'}
         <button data-act="close" title="Close (V)">×</button></div>
       <div class="vbody">

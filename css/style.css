@@ -447,3 +447,7 @@ body:not(.stacked).foldL .explain, body:not(.stacked).foldR .controls { display:
 body:not(.stacked).foldL #tabL, body:not(.stacked).foldR #tabR { display: block; }
 body.stacked .fold { display: none; }
 body:not(.stacked).foldL .detector, body:not(.stacked).foldR .detector { max-width: 1100px; }
+
+/* link to the physical Console in the on-screen panel header */
+.vhead a.vget { font: 500 11px var(--mono); color: var(--accent); text-decoration: none; padding: 3px 8px; border: 1px solid rgba(111, 214, 255, 0.35); border-radius: 999px; white-space: nowrap; }
+.vhead a.vget:hover { background: var(--accent-soft); }
