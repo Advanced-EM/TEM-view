@@ -359,7 +359,7 @@ const pcbTex = canvasTex(1024, 560, (c, w, h) => {
   c.globalAlpha = 1; c.fillStyle = '#c9a85a';
   for (const [x, z] of [...L.keys, ...Object.values(L.knobs)]) { const [a, b] = P(x, z); for (const d of [-14, 14]) { c.beginPath(); c.arc(a + d, b, 6, 0, 7); c.fill(); } }
   c.fillStyle = '#0b0c0d'; c.fillRect(hub[0] - 34, hub[1] - 34, 68, 68);
-  c.fillStyle = '#9aa3ad'; c.font = '500 22px "IBM Plex Mono", monospace'; c.fillText('TEM-view Console · rev A · RP2040', 40, h - 30);
+  c.fillStyle = '#9aa3ad'; c.font = '500 22px "IBM Plex Mono", monospace'; c.fillText('TEM-view Console · rev A · RP2350', 40, h - 30);
 });
 const pcb = new THREE.Mesh(new RoundedBoxGeometry(200, 1.6, 110, 2, 0.6), [M.base, M.base, new THREE.MeshStandardMaterial({ map: pcbTex, roughness: 0.6 }), M.base, M.base, M.base]);
 pcb.position.y = 10.6; G.pcb.add(pcb);
@@ -602,7 +602,7 @@ const spinBtn = document.getElementById('spin');
 spinBtn.addEventListener('click', () => { controls.autoRotate = !controls.autoRotate; spinBtn.setAttribute('aria-pressed', String(controls.autoRotate)); });
 
 // exploded-view layer labels
-const LAYERS = [['ctl', 'Controls, microphones, display', 34], ['top', 'Smoked polycarbonate top', 21], ['pcb', 'Main board · RP2040', 12], ['base', 'Black anodized aluminum base', 6]];
+const LAYERS = [['ctl', 'Controls, microphones, display', 34], ['top', 'Smoked polycarbonate top', 21], ['pcb', 'Main board · RP2350', 12], ['base', 'Black anodized aluminum base', 6]];
 const layerEls = LAYERS.map(([g, text]) => { const d = document.createElement('div'); d.className = 'layer'; d.textContent = text; d.style.opacity = 0; stage.appendChild(d); return d; });
 const OFF = { base: 0, pcb: 26, top: 56, ctl: 92 };
 
