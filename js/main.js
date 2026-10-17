@@ -254,7 +254,7 @@ function build() {
     } else if (c.p || c.pFn) {
       el = document.createElement('p');
       el.className = 'ctl note';
-      el.textContent = c.p ?? '';
+      el.innerHTML = c.p ?? '';
       bound.push({ c, el });
     } else if (c.twin) {
       el = document.createElement('table');
@@ -964,7 +964,7 @@ function wire() {
   inp.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowUp' && hist.length) { e.preventDefault(); hi = Math.max(0, hi - 1); inp.value = hist[hi]; }
     else if (e.key === 'ArrowDown' && hist.length) { e.preventDefault(); hi = Math.min(hist.length, hi + 1); inp.value = hist[hi] ?? ''; }
-    else if (e.key === 'Escape') inp.blur();
+    else if (e.key === 'Escape') { inp.blur(); voice.escape(); }
   });
   const mic = $('#btnMic');
   mic.addEventListener('pointerdown', (e) => { e.preventDefault(); mic.setPointerCapture(e.pointerId); voice.start(); });
@@ -1083,7 +1083,7 @@ function wire() {
     else if (e.key === '[') fold('L');
     else if (e.key === ']') fold('R');
     else if (e.key === 'x' || e.key === 'X') setExpanded(!document.body.classList.contains('detBig'));
-    else if (e.key === 'Escape') { setExpanded(false); $('#help').hidden = true; if (scene.tour) scene.stopTour(); }
+    else if (e.key === 'Escape') { setExpanded(false); $('#help').hidden = true; if (scene.tour) scene.stopTour(); voice.escape(); if (agent.connected || agent.status === 'connecting') { agent.disconnect(); voice.flash('<b>Agent disconnected</b><p>Press Connect agent (Controls → Voice and agent) to reconnect.</p>', 3500); } }
   });
   window.addEventListener('keyup', (e) => { if ((e.key === 'm' || e.key === 'M') && !['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) voice.stop(); });
   window.addEventListener('resize', resize);

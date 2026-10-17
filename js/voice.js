@@ -366,6 +366,13 @@ export class Voice {
     this.tm = setTimeout(() => { if (this.pending) { this.pending = null; this.hide(); } }, 30000);
   }
 
+  // Esc: cancel a question, stop listening, close the caption
+  escape() {
+    this.pending = null; clearTimeout(this.tm);
+    if (this.rec) { this.releasing = false; try { this.rec.abort(); } catch { /* not running */ } this.rec = null; this.listening = false; this.api.onEvent?.('listening', false); }
+    this.hide();
+  }
+
   typeBox() { return '<form class="vtype"><input id="vText" type="text" placeholder="Type a command, e.g. defocus minus 50" autocomplete="off"><button class="btn">Send</button></form>'; }
   wireType() { const f = this.el?.querySelector('form.vtype'); if (f) f.onsubmit = (e) => { e.preventDefault(); const v = f.querySelector('input').value; this.handle(v); }; }
 
