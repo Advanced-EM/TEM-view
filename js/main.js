@@ -12,7 +12,8 @@ import { Panel } from './panel.js';
 import { VirtualPanel } from './vpanel.js';
 import { Acquisitions } from './acquire.js';
 import { Scenarios } from './scenarios.js';
-import { Voice, parseCommand, describe } from './voice.js';
+import { Voice, parseCommand, describe, EXAMPLES } from './voice.js';
+import { analyze } from './analyze.js';
 import { AgentBridge } from './agent.js';
 import { AGENT } from './config.js';
 import { toNpz as npzBytes } from './export.js';
@@ -158,7 +159,7 @@ const CONTROLS = [
   { buttons: [['scn:tem-focus-stig', 'TEM: focus and stigmate'], ['scn:corrector-ronch', 'Corrector: tune the Ronchigram']] },
   { buttons: [['replayFile', 'Replay a session file…'], ['lastSession', 'Download last session']] },
   { sec: 'Voice and agent' },
-  { p: 'Hold <kbd>M</kbd> (or the microphone button) and speak a command: "switch to STEM", "defocus minus fifty", "load graphene", "acquire". Connect an AI agent (temview-mcp, for example with emskills) to answer questions and run the microscope with you.' },
+  { p: 'Type a command in the bar above the results (<kbd>/</kbd>) or hold <kbd>M</kbd> and say it: "switch to STEM", "defocus minus fifty", "load graphene", "acquire", "fit the CTF", "index the rings". Close misses are confirmed before they run. Connect an AI agent (temview-mcp, for example with emskills) to answer questions and run the microscope with you.' },
   { buttons: [['voiceHelp', 'What can I say?'], ['agent', 'Connect agent']] },
   { sec: 'Digital twin' },
   { p: 'The instrument profile holds what belongs to one particular microscope (energy spread, Cc, Cs, illumination). Calibrate it from your own data, save the whole session, and export what the detectors record.' },
@@ -674,11 +675,17 @@ function runOp(op) {
       else if (op.k === 'fov') { set('fov', +clamp(op.v, 1.5, 120).toFixed(2), 'fov'); op.v = S.fov; }
       else if (op.k === 'dose') { set('dose', +clamp(op.v, 0.5, 20000).toFixed(2), 'dose'); op.v = S.dose; }
       else if (op.k === 'clarity' && ['edu', 'real'].includes(op.v)) { S.clarity = op.v; sim.invalidate('clarity'); refreshControls(); explainChange('clarity'); }
+      else if (op.k === 'camL') { set('camL', Math.round(clamp(op.v, 80, 6000)), 'camL'); op.v = S.camL; }
+      else if (op.k === 'alpha') { const k = S.mode === '4d' ? 'alpha4d' : 'alpha'; set(k, +clamp(op.v, 3, 40).toFixed(1), 'alpha'); op.v = S[k]; }
+      else if (op.k === 'tiltX' || op.k === 'tiltY') { set(op.k, +clamp(op.v, -3, 3).toFixed(2), 'tilt'); op.v = S[op.k]; }
+      else if (op.k === 'showLabels') set('showLabels', !!op.v);
       break;
     case 'chip':
       if (op.k === 'kV' && [80, 200, 300].includes(op.v)) chip('kV', op.v);
       else if (op.k === 'corrector') chip('corrector', !!op.v);
       else if (op.k === 'holder' && HOLDERS[op.v]) chip('holder', op.v);
+      else if (op.k === 'detPreset' && ['bf', 'abf', 'adf', 'haadf'].includes(op.v)) chip('detPreset', op.v);
+      else if (op.k === 'eelsRange' && ['zlp', 'low', 'core', 'high'].includes(op.v)) { if (S.mode !== 'eels') setMode('eels'); chip('eelsRange', op.v); }
       break;
     case 'nudge': { const st = S.corrector ? 2 : S.spec === 'bio' ? 100 : 10; set('df', +clamp(S.df + op.d * st, ...dfLimits()).toFixed(1), 'df'); break; }
     case 'zoom': set('fov', +clamp(S.fov * op.f, 1.5, 120).toFixed(2), 'fov'); break;
@@ -691,7 +698,19 @@ function runOp(op) {
       set('tempSet', +clamp(op.v, HOLDERS[h].min, HOLDERS[h].max).toFixed(1), 'tempSet'); op.v = S.tempSet;
       break;
     }
-    case 'action': if (['optfocus', 'autotune', 'pause'].includes(op.v)) action(op.v); break;
+    case 'action': if (['optfocus', 'autotune', 'pause', 'zone'].includes(op.v)) action(op.v); break;
+    case 'astig': {
+      S.ab.A1 = +clamp(op.v, 0, S.corrector ? CORR_RANGE.A1 : 100).toFixed(2); op.v = S.ab.A1;
+      if (op.a != null) S.ab.A1a = +(((op.a % 180) + 180) % 180).toFixed(1);
+      sim.invalidate('ab'); refreshControls(); explainChange('ab');
+      break;
+    }
+    case 'cycle': hwPanel.api.cycleMode(op.d > 0 ? 1 : -1); break;
+    case 'export': exportData(); break;
+    case 'analyze':
+      // the detectors may not have computed this mode yet (a mode just changed): advance the simulation first
+      try { for (let i = 0; i < 3; i++) sim.update(0.05); op.result = analyze(sim, S, op.v ?? undefined); op.v = op.result.analysis; } catch (e) { op.error = e.message; }
+      break;
     case 'beam': if (S.paused === !!op.v) action('pause'); break;
     case 'acquire': acquireNow(); break;
     case 'wobbler': hwPanel.toggleWobbler(); break;
@@ -720,8 +739,13 @@ const agent = new AgentBridge({
   url: AGENT.url,
   state: stateSummary,
   busy: () => (scn?.active ? 'A training task is running in the exhibit; the agent cannot change settings until it ends.' : scn?.replay ? 'A session replay is playing.' : null),
-  run: (ops) => ops.map((op) => { runOp(op); return describe(op); }),
-  command: (text) => { const r = parseCommand(text, { paused: S.paused }); if (!r.ops) return { understood: false, text }; return { understood: true, done: r.ops.map((op) => { runOp(op); return describe(op); }) }; },
+  run: (ops) => ops.filter((op) => op.op !== 'export').map((op) => { runOp(op); return op.op === 'analyze' ? (op.result ?? { error: op.error }) : describe(op); }),
+  analyze: (name) => { for (let i = 0; i < 3; i++) sim.update(0.05); return analyze(sim, S, name ?? undefined); },
+  command: (text) => {
+    const r = parseCommand(text, { paused: S.paused, mode: S.mode });
+    if (!r.ops) return { understood: false, text };
+    return { understood: true, done: r.ops.filter((op) => op.op !== 'export').map((op) => { runOp(op); return op.op === 'analyze' ? (op.result ?? { error: op.error }) : describe(op); }) };
+  },
   acquire: (withData) => {
     acquireNow();
     const a = acq.list[0];
@@ -934,6 +958,14 @@ function wire() {
   $('#btnHelp').addEventListener('click', () => ($('#help').hidden = false));
   const openTraining = () => scn.menu({ replay: () => action('replayFile'), last: () => action('lastSession') });
   $('#btnTrain').addEventListener('click', openTraining);
+  const bar = $('#cmdBar'), inp = $('#cmdInput'), hist = []; let hi = 0;
+  $('#cmdList').innerHTML = EXAMPLES.map((e) => `<option value="${e}"></option>`).join('');
+  bar.addEventListener('submit', (e) => { e.preventDefault(); const v = inp.value.trim(); if (!v) return; hist.push(v); hi = hist.length; inp.value = ''; if (scn?.recorder.active) scn.recorder.noteSource('keyboard'); voice.handle(v, true); });
+  inp.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowUp' && hist.length) { e.preventDefault(); hi = Math.max(0, hi - 1); inp.value = hist[hi]; }
+    else if (e.key === 'ArrowDown' && hist.length) { e.preventDefault(); hi = Math.min(hist.length, hi + 1); inp.value = hist[hi] ?? ''; }
+    else if (e.key === 'Escape') inp.blur();
+  });
   const mic = $('#btnMic');
   mic.addEventListener('pointerdown', (e) => { e.preventDefault(); mic.setPointerCapture(e.pointerId); voice.start(); });
   for (const ev of ['pointerup', 'pointercancel']) mic.addEventListener(ev, () => voice.stop());
@@ -1047,6 +1079,7 @@ function wire() {
     else if (e.key === 'i' || e.key === 'I') acquireNow();
     else if ((e.key === 't' || e.key === 'T') && !e.metaKey && !e.ctrlKey) openTraining();
     else if ((e.key === 'm' || e.key === 'M') && !e.repeat && !e.metaKey && !e.ctrlKey) voice.start();
+    else if (e.key === '/' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); $('#cmdInput').focus(); }
     else if (e.key === '[') fold('L');
     else if (e.key === ']') fold('R');
     else if (e.key === 'x' || e.key === 'X') setExpanded(!document.body.classList.contains('detBig'));

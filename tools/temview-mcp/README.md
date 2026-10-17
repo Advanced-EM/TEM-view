@@ -34,12 +34,13 @@ That example uses Claude Code; other MCP clients use the same command over stdio
 
 | Tool | What it does |
 | --- | --- |
-| `simulate` | Headless acquisition. Arguments: mode, specimen, kV, defocus, field of view, dose, thickness, corrector, holder, temperature, realistic. Writes `.npz` |
+| `simulate` | Headless acquisition. Arguments: mode, specimen, kV, defocus, field of view, dose, thickness, corrector, holder, temperature, realistic, and optionally `analysis`. Writes `.npz` |
 | `exhibit_status` | Whether an exhibit is connected, and what it shows (mode, specimen, optics, temperature, Scherzer defocus, training task) |
 | `exhibit_set` | Change settings: mode, specimen, kV, defocus, field, dose, corrector, holder, temperature, view |
 | `exhibit_action` | `optimal_focus`, `autotune`, `blank_beam`, `unblank_beam`, `wobbler`, `narrate` |
 | `exhibit_command` | Run a plain-language command with the exhibit's voice grammar ("load graphene and acquire") |
 | `exhibit_acquire` | Acquire. Returns the detector images; with `save` also writes `.npz` and `.png` |
+| `exhibit_analyze` | Measure the live data and compare with the truth: `fit_ctf` (emskills ctf-fitter), `fit_lattice` (lattice-dspacing), `identify_edges` (eels-edge-id), `fit_eds`, `fit_zlp`, `fit_hologram` |
 | `exhibit_say` | Show a caption and say it aloud in the exhibit |
 | `exhibit_wait_for_voice` | Wait for the visitor's next spoken question (anything the voice grammar does not handle) |
 

@@ -19,6 +19,7 @@ import { Sim } from '../../js/sim.js';
 import { defaultState } from '../../js/state.js';
 import * as P from '../../js/physics.js';
 import { collectData, toNpz } from '../../js/export.js';
+import { analyze, ANALYSES } from '../../js/analyze.js';
 
 const PORT = +(process.env.TEMVIEW_PORT ?? 8790);
 const ORIGINS = (process.env.TEMVIEW_ORIGINS ?? 'https://advanced-em.github.io').split(',').map((s) => s.trim()).filter(Boolean);
@@ -114,7 +115,9 @@ function simulate(a) {
   const file = a.out ? resolve(a.out) : join(OUT, `sim-${S.mode}-${S.spec}-${Date.now()}.npz`);
   writeFileSync(file, toNpz(data));
   const arrays = Object.fromEntries(Object.entries(data.arrays).map(([k, v]) => [k, v.shape]));
-  return { file, mode: S.mode, specimen: sim.spec.name, kV: S.kV, defocus_nm: S.df, temperature_K: +sim.temp().toFixed(1), arrays,
+  let analysis;
+  if (a.analysis) { try { analysis = analyze(sim, S, a.analysis === 'auto' ? undefined : a.analysis); } catch (e) { analysis = { error: e.message }; } }
+  return { file, mode: S.mode, specimen: sim.spec.name, kV: S.kV, defocus_nm: S.df, temperature_K: +sim.temp().toFixed(1), arrays, analysis,
     calibration: data.meta?.calibration ?? data.meta?.calibrations ?? undefined, wavelength_pm: +(sim.lam * 100).toFixed(4) };
 }
 
@@ -126,7 +129,8 @@ const server = new McpServer({ name: 'temview', version: '0.1.0' }, {
 server.registerTool('simulate', {
   title: 'Simulate a TEM-view acquisition (headless)',
   description: 'Run the TEM-view simulator without a browser and save what the detectors record as a NumPy .npz (images, diffraction, 4D datacube, spectra, holograms) with metadata.json (calibrations, optics, state). Returns the file path and array shapes; feed the file to analysis skills (e.g. emskills ctf-fitter, lattice-dspacing, eels-edge-id).',
-  inputSchema: { ...settings, thickness_nm: z.number().positive().max(500).optional(), steps: z.number().int().min(1).max(2000).optional(), out: z.string().optional().describe('output .npz path') },
+  inputSchema: { ...settings, thickness_nm: z.number().positive().max(500).optional(), steps: z.number().int().min(1).max(2000).optional(), out: z.string().optional().describe('output .npz path'),
+    analysis: z.enum(['auto', ...Object.keys(ANALYSES)]).optional().describe('also analyze the result: fit_ctf (emskills ctf-fitter), fit_lattice (lattice-dspacing), identify_edges (eels-edge-id), fit_eds, fit_zlp, fit_hologram; auto picks by mode') },
   annotations: { readOnlyHint: false, openWorldHint: false },
 }, safe(async (a) => text(simulate(a))));
 
@@ -174,6 +178,12 @@ server.registerTool('exhibit_acquire', {
   }
   return { content };
 }));
+
+server.registerTool('exhibit_analyze', {
+  title: 'Analyze what the exhibit shows',
+  description: 'Measure the live data and compare with the true settings: fit_ctf (defocus and astigmatism from Thon rings; emskills ctf-fitter), fit_lattice (indexed d-spacings from diffraction; emskills lattice-dspacing), identify_edges (EELS core-loss edges; emskills eels-edge-id), fit_eds (EDS peaks and resolution), fit_zlp (energy spread), fit_hologram (fringe spacing and contrast). Omit name to pick by mode.',
+  inputSchema: { name: z.enum(Object.keys(ANALYSES)).optional() }, annotations: { readOnlyHint: true },
+}, safe(async ({ name }) => text(await call('analyze', { name }))));
 
 server.registerTool('exhibit_say', {
   title: 'Speak through the exhibit',

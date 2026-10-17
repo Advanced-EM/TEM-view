@@ -74,6 +74,19 @@ export function parseCommand(raw, ctx = {}) {
   // explain what is on screen
   if (has(/\b(what am i (looking at|seeing)|what is (this|that)|explain( this| that| it)?|describe( this| it)?|tell me about (this|it))\b/)) return { ops: [{ op: 'narrate' }] };
 
+  // analyses (emskills tools): "fit the CTF", "measure the d-spacings", "what's the energy spread", "which edges"
+  const measureVerb = /\b(fit|measure|estimate|analy[sz]e|check|index|find|identify|calibrate|calculate|determine)\b|^(what|which)\b/;
+  if (measureVerb.test(t)) {
+    if (/\b(ctf|thon( rings?)?|defocus|astigmatism)\b/.test(t) && !/\d/.test(t)) return { ops: [{ op: 'analyze', v: 'fit_ctf' }] };
+    if (/\b(d\s*-?\s*spacings?|lattice( spacings?| constant)?|rings|spots|reflections|planes|miller)\b/.test(t)) return { ops: [{ op: 'analyze', v: 'fit_lattice' }] };
+    if (/\b(energy spread|energy resolution|(zero|0)\s*-?\s*loss|zlp)\b/.test(t)) return { ops: [{ op: 'analyze', v: 'fit_zlp' }] };
+    if (/\b(edges?)\b/.test(t)) return { ops: [{ op: 'analyze', v: 'identify_edges' }] };
+    if (/\b(eds|x\s*-?\s*ray|peaks|detector resolution)\b/.test(t)) return { ops: [{ op: 'analyze', v: 'fit_eds' }] };
+    if (/\b(hologram|fringes?|fringe (spacing|contrast))\b/.test(t)) return { ops: [{ op: 'analyze', v: 'fit_hologram' }] };
+    if (/\b(elements?|composition)\b/.test(t)) return { ops: [{ op: 'analyze', v: ctx.mode === 'eds' ? 'fit_eds' : 'identify_edges' }] };
+  }
+  if (/^(analy[sz]e|analysis|run (an |the )?analysis|measure (this|it)|fit (this|it))\b/.test(t)) return { ops: [{ op: 'analyze', v: null }] };
+
   // questions go to the agent, even when they mention a setting ("why is graphene imaged at 80 kV?")
   if (has(/^(why|how|when|where|who|which|what|what's|whats|is|are|does|do|did|should|would|will|explain why|tell me (why|how|what))\b/) || /\?\s*$/.test(String(raw))) return { ask: String(raw).trim() };
 
@@ -106,7 +119,7 @@ export function parseCommand(raw, ctx = {}) {
   else if (has(/\b(less|decrease|lower|reduce) (dose|intensity|current)\b|\bdimmer\b|\blow dose\b/)) ops.push({ op: 'scale', k: 'dose', f: 0.5 });
 
   // accelerating voltage
-  if ((m = t.match(/\b(\d{2,3})\s*-?\s*(kv|k v|kilo\s*-?\s*volts?|kilovolts?|kev)\b/))) {
+  if ((m = t.match(/\b(\d{2,3})\s*-?\s*(kv|k v|kilo\s*-?\s*volts?|kilovolts?|kev)\b/)) || (m = t.match(/\b(?:voltage|high tension|accelerating|acceleration)\b\D{0,24}(\d{2,3})\b/))) {
     const kv = [80, 200, 300].reduce((a, b) => (Math.abs(b - +m[1]) < Math.abs(a - +m[1]) ? b : a));
     ops.push({ op: 'chip', k: 'kV', v: kv });
   }
@@ -135,21 +148,113 @@ export function parseCommand(raw, ctx = {}) {
   if (has(/\bwobbler\b/)) ops.push({ op: 'wobbler' });
   if (has(/\b(training|training mode|start a task)\b/)) ops.push({ op: 'training' });
 
+  // diffraction and probe
+  if ((m = t.match(new RegExp(String.raw`\bcamera length(?:\s+(?:to|of))?\s+${NUM}\s*(mm|millimeters?)?`)))) ops.push({ op: 'set', k: 'camL', v: Math.abs(num(m[1])) });
+  if ((m = t.match(new RegExp(String.raw`\bconvergence(?:\s+(?:angle|semi\s*-?\s*angle))?(?:\s+(?:to|of))?\s+${NUM}\s*(mrad|milliradians?)?`)))) ops.push({ op: 'set', k: 'alpha', v: Math.abs(num(m[1])) });
+  if (has(/\b(haadf|high\s*-?\s*angle annular|z\s*-?\s*contrast)\b/)) ops.push({ op: 'chip', k: 'detPreset', v: 'haadf' });
+  else if (has(/\b(abf|annular bright\s*-?\s*field)\b/)) ops.push({ op: 'chip', k: 'detPreset', v: 'abf' });
+  else if (has(/\b(adf|annular dark\s*-?\s*field)\b/)) ops.push({ op: 'chip', k: 'detPreset', v: 'adf' });
+  else if (has(/\bbright\s*-?\s*field detector\b|\bbf detector\b/)) ops.push({ op: 'chip', k: 'detPreset', v: 'bf' });
+  // EELS ranges
+  if (has(/\b((zero|0)\s*-?\s*loss|zlp) (range|window|region|mode)\b|\bshow (me )?the (zero|0)\s*-?\s*loss\b/)) ops.push({ op: 'chip', k: 'eelsRange', v: 'zlp' });
+  else if (has(/\blow\s*-?\s*loss\b/)) ops.push({ op: 'chip', k: 'eelsRange', v: 'low' });
+  else if (has(/\bcore\s*-?\s*loss\b/)) ops.push({ op: 'chip', k: 'eelsRange', v: 'core' });
+  // tilt and astigmatism
+  if (has(/\b(zone axis|untilt|reset (the )?tilt|on axis)\b/)) ops.push({ op: 'action', v: 'zone', said: 'Back on the zone axis' });
+  else if ((m = t.match(new RegExp(String.raw`\btilt\s*(x|y)(?:\s+(?:to|by))?\s+${NUM}`)))) ops.push({ op: 'set', k: m[1] === 'x' ? 'tiltX' : 'tiltY', v: num(m[2]) });
+  if ((m = t.match(new RegExp(String.raw`\b(?:astigmatism|a1|stigmator)(?:\s+(?:to|of))?\s+${NUM}\s*(?:nm|nanometers?)?(?:\s+at\s+${NUM})?`)))) ops.push({ op: 'astig', v: Math.abs(num(m[1])), a: m[2] !== undefined ? num(m[2]) : null });
+  // view and navigation
+  if (has(/\b(show|turn on) (the )?labels\b/)) ops.push({ op: 'set', k: 'showLabels', v: true });
+  else if (has(/\b(hide|turn off) (the )?labels\b/)) ops.push({ op: 'set', k: 'showLabels', v: false });
+  if (has(/\bnext mode\b/)) ops.push({ op: 'cycle', d: 1 });
+  else if (has(/\bprevious mode\b|\blast mode\b/)) ops.push({ op: 'cycle', d: -1 });
+  if (has(/\b(export|download)( the)? (data|numpy|npz)\b/)) ops.push({ op: 'export' });
+
   // acquisition (last, so "switch to STEM and acquire" sets the mode first)
   if (has(/\b(acquire|capture|snap)\b|\b(take|record|grab|save)\s+(an?\s+|the\s+|this\s+)?(image|picture|photo|exposure|frame|spectrum|pattern|shot|acquisition)\b/)) ops.push({ op: 'acquire' });
 
   return ops.length ? { ops } : { ask: String(raw).trim() };
 }
 
-export const HELP = 'Try: "switch to STEM", "load graphene", "defocus minus fifty", "optimal focus", "zoom in", "300 kV", "corrector on", "cool to 90 kelvin", "acquire", or "what am I looking at?"';
+export const HELP = 'Try: "switch to STEM", "load graphene", "defocus minus fifty", "optimal focus", "zoom in", "300 kV", "corrector on", "cool to 90 kelvin", "acquire". Measure: "fit the CTF", "index the rings", "which edges?", "energy spread". Or ask a question.';
+// what each analysis is called before it runs (shown when a command is confirmed)
+const ANALYSIS_NAMES = { fit_ctf: 'Fit the CTF (emskills ctf-fitter)', fit_lattice: 'Index d-spacings (emskills lattice-dspacing)', identify_edges: 'Identify EELS edges (emskills eels-edge-id)', fit_eds: 'Fit EDS peaks', fit_zlp: 'Measure the energy spread', fit_hologram: 'Measure hologram fringes' };
+export const EXAMPLES = ['switch to STEM', 'load graphene', 'defocus minus 50', 'optimal focus', 'zoom in', 'field of view 20 nm', '300 kV', 'corrector on', 'tune the corrector', 'cool to 90 kelvin', 'HAADF', 'convergence 25 mrad', 'camera length 500', 'zone axis', 'astigmatism 20 nm at 45', 'core loss', 'zero loss range', 'acquire', 'fit the CTF', 'measure the d-spacings', 'which edges are there?', 'what is the energy spread?', 'fit the EDS peaks', 'measure the fringes', 'analyze', 'what am I looking at?', 'help'];
+
+// ------------------------------------------------------------------ near misses: correct, suggest, then confirm
+const STOP = new Set(['the', 'a', 'an', 'to', 'of', 'in', 'on', 'at', 'is', 'are', 'me', 'please', 'can', 'you', 'it', 'this', 'and', 'my', 'for', 'with', 'now']);
+const EXTRA = ['tem', 'stem', 'eels', 'eds', 'saed', 'cbed', 'ronchigram', 'holography', 'diffraction', 'graphene', 'gold', 'silicon', 'titanate', 'strontium', 'protein', 'mof',
+  'defocus', 'focus', 'underfocus', 'overfocus', 'zoom', 'magnification', 'dose', 'kelvin', 'celsius', 'corrector', 'beam', 'blank', 'unblank', 'acquire', 'capture', 'camera',
+  'length', 'convergence', 'haadf', 'tilt', 'astigmatism', 'labels', 'export', 'analyze', 'measure', 'fit', 'ctf', 'lattice', 'spacings', 'rings', 'edges', 'energy', 'spread',
+  'fringes', 'hologram', 'peaks', 'load', 'switch', 'show', 'cool', 'heat', 'liquid', 'nitrogen', 'helium', 'realistic', 'educational', 'wobbler', 'training', 'explain',
+  'optimal', 'scherzer', 'field', 'view', 'nm', 'mrad', 'mm', 'kv', 'next', 'previous', 'mode', 'zone', 'axis', 'core', 'loss', 'low', 'range', 'help', 'stop', 'index',
+  'identify', 'which', 'what', 'tune', 'turn', 'off', 'room', 'temperature', 'microns', 'nanometers', 'minus', 'plus', 'more', 'less', 'out', 'hide'];
+let VOCAB = null;
+const vocab = () => VOCAB ?? (VOCAB = new Set([...EXAMPLES.flatMap((e) => normalize(e).split(' ')), ...EXTRA].filter((w) => !/\d/.test(w))));
+function lev(a, b) {
+  const m = a.length, n = b.length, d = Array.from({ length: m + 1 }, (_, i) => [i, ...Array(n).fill(0)]);
+  for (let j = 1; j <= n; j++) d[0][j] = j;
+  for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  return d[m][n];
+}
+const wsim = (a, b) => 1 - lev(a, b) / Math.max(a.length, b.length);
+
+// replace misspelled words by the closest vocabulary word ("swich to stm" → "switch to stem")
+export function correct(raw) {
+  const words = normalize(raw).split(' '), V = vocab();
+  let changed = false;
+  const out = words.map((w) => {
+    if (w.length < 3 || /\d/.test(w) || STOP.has(w) || V.has(w)) return w;
+    let best = w, bs = 0;
+    for (const v of V) { const sc = wsim(w, v); if (sc > bs) { bs = sc; best = v; } }
+    if (bs >= 0.6 && best !== w) { changed = true; return best; }
+    return w;
+  });
+  return { text: out.join(' '), changed };
+}
+
+// the closest known commands, with the visitor's own numbers carried over
+function closestExamples(raw, ctx, k = 3) {
+  const inW = normalize(raw).split(' ').filter((w) => !STOP.has(w));
+  const nums = inW.filter((w) => /^[-+]?\d/.test(w));
+  const scored = EXAMPLES.map((ex) => {
+    const exW = normalize(ex).split(' ').filter((w) => !STOP.has(w) && !/\d/.test(w));
+    if (!exW.length) return [ex, 0];
+    const sc = exW.reduce((a, w) => a + Math.max(0, ...inW.map((x) => wsim(w, x))), 0) / exW.length;
+    let n = 0, text = ex;
+    if (nums.length) text = ex.replace(/[-+]?\d+(\.\d+)?/g, (m) => (n < nums.length ? nums[n++] : m));
+    return [text, sc];
+  }).filter(([, sc]) => sc >= 0.55).sort((a, b) => b[1] - a[1]);
+  const seen = new Set(), out = [];
+  for (const [text] of scored) {
+    if (seen.has(text)) continue; seen.add(text);
+    const r = parseCommand(text, ctx);
+    if (r.ops) out.push({ text, ops: r.ops });
+    if (out.length >= k) break;
+  }
+  return out;
+}
+
+const QUESTION = /^(why|how|when|where|who|which|what|is|are|does|do|did|should|would|will|explain|tell me)\b/;
+// exact command → run; near miss → options to confirm; otherwise a question for the agent
+export function interpret(raw, ctx = {}) {
+  const r = parseCommand(raw, ctx);
+  if (r.ops) return { exact: true, ops: r.ops };
+  const c = correct(raw);
+  if (c.changed) { const r2 = parseCommand(c.text, ctx); if (r2.ops) return { exact: false, options: [{ text: c.text, ops: r2.ops }] }; }
+  const isQuestion = QUESTION.test(normalize(raw)) || /\?\s*$/.test(raw);
+  const options = isQuestion && ctx.agent ? [] : closestExamples(c.text, ctx);
+  return options.length ? { exact: false, options, question: isQuestion } : { ask: String(raw).trim() };
+}
 
 // describe what an op did, for the caption under the microphone
 export function describe(op) {
   switch (op.op) {
     case 'mode': return `Mode: ${MODE_NAMES[op.v]}`;
     case 'spec': return `Specimen: ${SPEC_NAMES[op.v]}`;
-    case 'set': return op.k === 'df' ? `Defocus ${op.v > 0 ? '+' : ''}${op.v} nm` : op.k === 'fov' ? `Field of view ${op.v} nm` : op.k === 'dose' ? `Dose ${op.v} e⁻/Å²` : op.k === 'clarity' ? (op.v === 'real' ? 'Physically realistic view' : 'Educational view') : `${op.k} ${op.v}`;
-    case 'chip': return op.k === 'kV' ? `${op.v} kV` : op.k === 'corrector' ? `Corrector ${op.v ? 'on' : 'off'}` : op.k === 'holder' ? `Holder: ${{ room: 'room temperature', ln2: 'liquid nitrogen', lhe: 'liquid helium', heat: 'heating' }[op.v]}` : `${op.k} ${op.v}`;
+    case 'set': return op.k === 'df' ? `Defocus ${op.v > 0 ? '+' : ''}${op.v} nm` : op.k === 'fov' ? `Field of view ${op.v} nm` : op.k === 'dose' ? `Dose ${op.v} e⁻/Å²` : op.k === 'clarity' ? (op.v === 'real' ? 'Physically realistic view' : 'Educational view')
+      : op.k === 'camL' ? `Camera length ${op.v} mm` : op.k === 'alpha' ? `Convergence ${op.v} mrad` : op.k === 'tiltX' || op.k === 'tiltY' ? `Tilt ${op.k.slice(-1)} ${op.v}°` : op.k === 'showLabels' ? (op.v ? 'Labels on' : 'Labels off') : `${op.k} ${op.v}`;
+    case 'chip': return op.k === 'detPreset' ? `Detector: ${op.v.toUpperCase()}` : op.k === 'eelsRange' ? `EELS range: ${{ zlp: 'zero loss', low: 'low loss', core: 'core loss', high: 'high loss' }[op.v]}` : op.k === 'kV' ? `${op.v} kV` : op.k === 'corrector' ? `Corrector ${op.v ? 'on' : 'off'}` : op.k === 'holder' ? `Holder: ${{ room: 'room temperature', ln2: 'liquid nitrogen', lhe: 'liquid helium', heat: 'heating' }[op.v]}` : `${op.k} ${op.v}`;
     case 'nudge': return op.d < 0 ? 'More underfocus' : 'More overfocus';
     case 'zoom': return op.f < 1 ? 'Zoom in' : 'Zoom out';
     case 'scale': return op.f > 1 ? 'More dose' : 'Less dose';
@@ -160,6 +265,10 @@ export function describe(op) {
     case 'narrate': return 'Explaining this mode';
     case 'training': return 'Training';
     case 'help': return HELP;
+    case 'analyze': return op.result ? `${op.result.summary} [${op.result.emskills.in_registry ? `emskills ${op.result.emskills.skill}` : `not in emskills yet${op.result.emskills.related ? `; related: ${op.result.emskills.related}` : ''}`}]` : op.error ?? ANALYSIS_NAMES[op.v] ?? 'Analyze what is on screen';
+    case 'astig': return `Astigmatism A1 ${op.v} nm${op.a != null ? ` at ${op.a}°` : ''}`;
+    case 'cycle': return op.d > 0 ? 'Next mode' : 'Previous mode';
+    case 'export': return 'Exporting the data';
     case 'stopSpeech': return 'Stopped';
     default: return '';
   }
@@ -214,19 +323,47 @@ export class Voice {
     this.api.onEvent?.('listening', false);
   }
 
-  // run a sentence: commands go to the exhibit, everything else to the agent
-  handle(text) {
-    if (!text) { this.flash('<i>Didn\'t hear anything.</i>'); return; }
-    const r = parseCommand(text, this.api.ctx());
-    if (r.ops) {
-      const lines = r.ops.map((op) => { this.api.run(op); return describe(op); }).filter(Boolean);
-      this.api.onEvent?.('voice', { intent: r.ops.map((o) => o.op + (o.v !== undefined ? `:${o.v}` : o.k ? `:${o.k}` : '')).join(','), ok: true });
-      this.flash(`<span class="mic"></span><i>“${esc(text)}”</i><b>${esc(lines.join(' · '))}</b>`, r.ops[0].op === 'help' ? 9000 : 3500);
-      return;
+  // run a sentence: exact commands run; near misses are confirmed first; everything else goes to the agent
+  handle(text, typed = false) {
+    text = String(text ?? '').trim();
+    if (!text) { if (!typed) this.flash('<i>Didn\'t hear anything.</i>'); return; }
+    const t = normalize(text);
+    if (this.pending && Date.now() < this.pending.until) {
+      const p = this.pending, pick = /^(yes|yeah|yep|yup|correct|right|ok|okay|sure|do it|go( ahead)?|confirm|y|1|first( one)?|the first( one)?)$/.test(t) ? 0
+        : /^(2|second( one)?|the second( one)?)$/.test(t) ? 1 : /^(3|third( one)?|the third( one)?)$/.test(t) ? 2 : -1;
+      if (pick >= 0 && p.options[pick]) { this.pending = null; this.runOps(p.options[pick].ops, p.options[pick].text, typed); return; }
+      if (/^(no|nope|n|cancel|never mind|nevermind|wrong|neither|none)$/.test(t)) { this.pending = null; this.flash('<i>Cancelled.</i>', 2000); return; }
+      this.pending = null; // a new sentence replaces the question
     }
+    const r = interpret(text, { ...this.api.ctx(), agent: !!this.api.agent?.connected });
+    if (r.exact) { this.runOps(r.ops, text, typed); return; }
+    if (r.options) { this.confirm(text, r.options, typed); return; }
     this.api.onEvent?.('voice', { intent: 'ask', ok: !!this.api.agent?.connected });
-    if (this.api.agent?.connected) { this.api.agent.utterance(text); this.flash(`<span class="mic"></span><i>“${esc(text)}”</i><b>Asked the agent…</b>`, 4000); }
-    else this.flash(`<span class="mic"></span><i>“${esc(text)}”</i><p>That isn't a command I know. ${esc(HELP)}</p>`, 9000);
+    if (this.api.agent?.connected) { this.api.agent.utterance(text); this.flash(`<span class="mic${typed ? ' typed' : ''}"></span><i>“${esc(text)}”</i><b>Asked the agent…</b>`, 4000); }
+    else this.flash(`<span class="mic${typed ? ' typed' : ''}"></span><i>“${esc(text)}”</i><p>That isn't a command I know. ${esc(HELP)}</p>`, 9000);
+  }
+
+  runOps(ops, text, typed) {
+    const lines = ops.map((op) => { this.api.run(op); return describe(op); }).filter(Boolean);
+    this.api.onEvent?.('voice', { intent: ops.map((o) => o.op + (o.v !== undefined && o.v !== null ? `:${o.v}` : o.k ? `:${o.k}` : '')).join(','), ok: true });
+    const long = ops.some((o) => o.op === 'help' || o.op === 'analyze');
+    this.flash(`<span class="mic${typed ? ' typed' : ''}"></span><i>“${esc(text)}”</i><b>${esc(lines.join(' · '))}</b>`, long ? 12000 : 3500);
+  }
+
+  // "Did you mean …?" with buttons; answer by clicking, or by saying/typing yes, no, or "the second one"
+  confirm(text, options, typed) {
+    this.pending = { options, until: Date.now() + 30000 };
+    const agentBtn = this.api.agent?.connected ? '<button class="btn" data-c="agent">Ask the agent instead</button>' : '';
+    const el = this.bubble(`<span class="mic${typed ? ' typed' : ''}"></span><i>“${esc(text)}”</i><b>Did you mean${options.length > 1 ? ' one of these' : ''}?</b>
+      <div class="vrow">${options.map((o, i) => `<button class="btn${i ? '' : ' primary'}" data-c="${i}">${esc(o.text)} <small>${esc(o.ops.map(describe).join(' · '))}</small></button>`).join('')}
+      <button class="btn" data-c="no">No</button>${agentBtn}</div><p>Click, or say or type “yes”${options.length > 1 ? ', “the second one”' : ''} or “no”.</p>`, true);
+    el.querySelectorAll('[data-c]').forEach((b) => { b.onclick = () => {
+      const c = b.dataset.c, p = this.pending; this.pending = null;
+      if (c === 'no') this.flash('<i>Cancelled.</i>', 2000);
+      else if (c === 'agent') { this.api.agent.utterance(text); this.flash(`<i>“${esc(text)}”</i><b>Asked the agent…</b>`, 4000); }
+      else if (p?.options[+c]) this.runOps(p.options[+c].ops, p.options[+c].text, typed);
+    }; });
+    this.tm = setTimeout(() => { if (this.pending) { this.pending = null; this.hide(); } }, 30000);
   }
 
   typeBox() { return '<form class="vtype"><input id="vText" type="text" placeholder="Type a command, e.g. defocus minus 50" autocomplete="off"><button class="btn">Send</button></form>'; }
