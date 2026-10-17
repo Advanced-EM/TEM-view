@@ -75,7 +75,7 @@ export class VirtualPanel {
         <div class="vside">
           <div class="knobs">${KNOBS.slice(0, 3).map(knob).join('')}</div>
           <div class="vbtns">
-            ${btn('modePrev', '◀ Mode', ',')}${btn('modeNext', 'Mode ▶', '.')}${btn('focusFine', 'Fine', 'F')}${btn('wobbler', 'Wobbler', 'B')}${btn('optFocus', 'Opt. focus', 'G')}${btn('pause', 'Pause', 'Space')}${btn('acquire', 'Acquire', 'I')}
+            ${btn('modePrev', '◀ Mode', ',')}${btn('modeNext', 'Mode ▶', '.')}${btn('focusFine', 'Fine', 'F')}${btn('wobbler', 'Wobbler', 'B')}${btn('optFocus', 'Opt. focus', 'G')}${btn('pause', 'Pause', 'Space')}${btn('acquire', 'Acquire', 'I')}${btn('talk', 'Talk', 'M')}
           </div>
         </div>
         <div class="vside">
@@ -90,7 +90,12 @@ export class VirtualPanel {
     root.querySelector('[data-act="close"]').onclick = () => this.close();
     root.querySelector('[data-act="popout"]')?.addEventListener('click', () => this.openWindow());
     root.querySelector('[data-act="dock"]')?.addEventListener('click', () => this.openDock());
-    root.querySelectorAll('[data-btn]').forEach((b) => b.addEventListener('click', () => this.panel.button(b.dataset.btn)));
+    root.querySelectorAll('[data-btn]').forEach((b) => {
+      if (b.dataset.btn === 'talk') { // hold to talk
+        b.addEventListener('pointerdown', (e) => { b.setPointerCapture(e.pointerId); this.panel.api.talk?.(true); });
+        for (const ev of ['pointerup', 'pointercancel']) b.addEventListener(ev, () => this.panel.api.talk?.(false));
+      } else b.addEventListener('click', () => this.panel.button(b.dataset.btn));
+    });
     root.querySelectorAll('[data-mf]').forEach((b) => b.addEventListener('click', () => this.panel.setMF(b.dataset.mf)));
     root.querySelectorAll('.knob').forEach((k) => this.wireKnob(k, doc));
     this.wirePad(root.querySelector('.stagepad'), doc);
@@ -149,6 +154,7 @@ export class VirtualPanel {
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
     if (k === 'v' && down) { e.preventDefault(); e.stopPropagation(); this.close(); return; }
+    if (k === 'm' && !down && this.where === 'window') { this.panel.api.talk?.(false); return; }
     if (ARROWS[k]) {
       e.preventDefault(); e.stopPropagation();
       if (down) this.held.add(k); else this.held.delete(k);
@@ -160,6 +166,7 @@ export class VirtualPanel {
     if (!down) return;
     // in its own window the exhibit's Space shortcut can't hear the key, so the panel handles it there
     if (k === ' ' && this.where === 'window') { e.preventDefault(); this.panel.button('pause'); return; }
+    if (k === 'm' && this.where === 'window') { e.preventDefault(); if (!e.repeat) this.panel.api.talk?.(true); return; }
     if (KEYS[k]) { e.preventDefault(); e.stopPropagation(); const [axis, d] = KEYS[k]; this.turn(axis, d * (e.shiftKey ? 5 : 1)); return; }
     if (BTN_KEYS[e.key] ?? BTN_KEYS[k]) { e.preventDefault(); e.stopPropagation(); this.panel.button(BTN_KEYS[e.key] ?? BTN_KEYS[k]); }
   }

@@ -451,3 +451,20 @@ body:not(.stacked).foldL .detector, body:not(.stacked).foldR .detector { max-wid
 /* link to the physical Console in the on-screen panel header */
 .vhead a.vget { font: 500 11px var(--mono); color: var(--accent); text-decoration: none; padding: 3px 8px; border: 1px solid rgba(111, 214, 255, 0.35); border-radius: 999px; white-space: nowrap; }
 .vhead a.vget:hover { background: var(--accent-soft); }
+
+/* voice commands and agent captions */
+.voicebubble { position: fixed; left: 50%; bottom: calc(var(--det-h) + 70px); transform: translateX(-50%); z-index: 30; max-width: min(560px, calc(100vw - 32px)); padding: 12px 16px; display: grid; gap: 4px; font-size: 14px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5); }
+.voicebubble i { color: var(--muted); font-style: normal; }
+.voicebubble b { color: var(--text); }
+.voicebubble p { margin: 2px 0 0; color: var(--muted); }
+.voicebubble .vrow { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.voicebubble form.vtype { display: flex; gap: 8px; margin-top: 8px; }
+.voicebubble form.vtype input { flex: 1; min-width: 0; background: transparent; border: 1px solid var(--line-2); border-radius: 8px; color: var(--text); padding: 6px 10px; font: inherit; }
+.voicebubble .mic { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--accent); margin-right: 6px; }
+.voicebubble .mic.on { animation: micpulse 0.9s ease-in-out infinite; }
+.voicebubble .mic.agent { background: var(--warm); }
+@keyframes micpulse { 50% { box-shadow: 0 0 0 7px rgba(111, 214, 255, 0.18); } }
+#btnMic.on { color: var(--accent); border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.ctl.buttons .btn.on { border-color: var(--accent); color: var(--accent); }
+body.stacked .voicebubble { bottom: 16px; }
+@media (prefers-reduced-motion: reduce) { .voicebubble .mic.on { animation: none; } }

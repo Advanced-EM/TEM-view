@@ -13,8 +13,9 @@
 //       'blocked'  id                       a button disabled in this scenario
 //       'acquire'  m                         an acquisition (an implicit "this is good")
 //       'judge'    rating, cues, note, m    the user's own judgment at a checkpoint
+//       'voice'    intent, ok               a spoken command (what it did, not what was said)
 //       'end'      outcome, m               done, gave up, or abandoned
-//   src = 'mouse' | 'touch' | 'keyboard' | 'panel' | 'controller' | 'onscreen-panel' | 'scenario' | 'unknown'
+//   src = 'mouse' | 'touch' | 'keyboard' | 'panel' | 'controller' | 'onscreen-panel' | 'voice' | 'agent' | 'scenario' | 'unknown'
 
 export const TELEMETRY_FORMAT = 'tem-view-telemetry/1';
 

@@ -12,6 +12,10 @@ import { Panel } from './panel.js';
 import { VirtualPanel } from './vpanel.js';
 import { Acquisitions } from './acquire.js';
 import { Scenarios } from './scenarios.js';
+import { Voice, parseCommand, describe } from './voice.js';
+import { AgentBridge } from './agent.js';
+import { AGENT } from './config.js';
+import { toNpz as npzBytes } from './export.js';
 import { collectData, toNpz } from './export.js';
 import { openCalibration } from './calibui.js';
 
@@ -153,6 +157,9 @@ const CONTROLS = [
   { p: 'Alignment tasks with a hidden answer, as on a real microscope: the knob readings are not the true aberrations. With your consent the session is recorded (no personal data, nothing sent anywhere) to study how people align and judge an instrument.' },
   { buttons: [['scn:tem-focus-stig', 'TEM: focus and stigmate'], ['scn:corrector-ronch', 'Corrector: tune the Ronchigram']] },
   { buttons: [['replayFile', 'Replay a session file…'], ['lastSession', 'Download last session']] },
+  { sec: 'Voice and agent' },
+  { p: 'Hold <kbd>M</kbd> (or the microphone button) and speak a command: "switch to STEM", "defocus minus fifty", "load graphene", "acquire". Connect an AI agent (temview-mcp, for example with emskills) to answer questions and run the microscope with you.' },
+  { buttons: [['voiceHelp', 'What can I say?'], ['agent', 'Connect agent']] },
   { sec: 'Digital twin' },
   { p: 'The instrument profile holds what belongs to one particular microscope (energy spread, Cc, Cs, illumination). Calibrate it from your own data, save the whole session, and export what the detectors record.' },
   { chips: 'profile', label: 'Instrument profile', get: () => S.profile.preset, dynOpts: () => Object.entries(PRESETS).map(([k, v]) => [k, v.name.split(',')[0]]) },
@@ -456,6 +463,8 @@ function setMode(m) {
 
 function action(id, el) {
   if (id.startsWith('scn:')) return scn.start(id.slice(4));
+  if (id === 'voiceHelp') return voice.handle('help');
+  if (id === 'agent') return agent.connected || agent.status === 'connecting' ? agent.disconnect() : agent.connect();
   if (id === 'replayFile') return $('#fileReplay').click();
   if (id === 'lastSession') { if (scn.lastSession) scn.downloadSession(scn.lastSession); else { $('#change').hidden = false; $('#change').innerHTML = '<small>No recorded session yet</small><p>Run a training scenario with recording on, then download it here.</p>'; } return; }
   if (scn.blocked(id)) { scn.recorder.event('blocked', { id }); $('#change').hidden = false; $('#change').innerHTML = '<small>Not in this task</small><p>Automatic tuning is disabled in this scenario: the point is to see how people do it by hand.</p>'; return; }
@@ -621,6 +630,7 @@ const hwPanel = new Panel({
   moveStage: (dx, dy) => { S.cx += dx; S.cy += dy; sim.invalidate('stage'); },
   noteSource: (s) => scn.recorder.noteSource(s),
   openVirtual: (where) => (where === 'window' ? vPanel.openWindow() : vPanel.openDock()),
+  talk: (down) => (down ? voice.start() : voice.stop()),
   cycleMode: (d) => { const i = MODES.findIndex((m) => m[0] === S.mode); setMode(MODES[(i + d + MODES.length) % MODES.length][0]); },
   toggle: (k) => {
     if (k === 'pause') action('pause');
@@ -652,6 +662,84 @@ const acq = new Acquisitions({
 function acquireNow() { redraw = true; R2.draw(sim, S, mainCv, secCv); acq.acquire(); if (scn.recorder.active) scn.recorder.event('acquire'); }
 
 // ------------------------------------------------------------------ training scenarios and telemetry (scenarios.js, telemetry.js)
+// ------------------------------------------------------------------ voice commands and the agent bridge
+// one executor for both: the same operations a visitor can speak, an agent can send
+const dfLimits = () => (S.corrector ? [-CORR_RANGE.df, CORR_RANGE.df] : S.spec === 'bio' ? [-4000, 500] : [-150, 150]);
+function runOp(op) {
+  switch (op.op) {
+    case 'mode': if (KEYS[op.v]) setMode(op.v); break;
+    case 'spec': if (P.SPECIMENS[op.v]) setSpec(op.v); break;
+    case 'set':
+      if (op.k === 'df') { set('df', +clamp(op.v, ...dfLimits()).toFixed(1), 'df'); op.v = S.df; }
+      else if (op.k === 'fov') { set('fov', +clamp(op.v, 1.5, 120).toFixed(2), 'fov'); op.v = S.fov; }
+      else if (op.k === 'dose') { set('dose', +clamp(op.v, 0.5, 20000).toFixed(2), 'dose'); op.v = S.dose; }
+      else if (op.k === 'clarity' && ['edu', 'real'].includes(op.v)) { S.clarity = op.v; sim.invalidate('clarity'); refreshControls(); explainChange('clarity'); }
+      break;
+    case 'chip':
+      if (op.k === 'kV' && [80, 200, 300].includes(op.v)) chip('kV', op.v);
+      else if (op.k === 'corrector') chip('corrector', !!op.v);
+      else if (op.k === 'holder' && HOLDERS[op.v]) chip('holder', op.v);
+      break;
+    case 'nudge': { const st = S.corrector ? 2 : S.spec === 'bio' ? 100 : 10; set('df', +clamp(S.df + op.d * st, ...dfLimits()).toFixed(1), 'df'); break; }
+    case 'zoom': set('fov', +clamp(S.fov * op.f, 1.5, 120).toFixed(2), 'fov'); break;
+    case 'scale': set(op.k, +clamp(S[op.k] * op.f, 0.5, 20000).toFixed(2), op.k); break;
+    case 'temp': {
+      // pick a holder that reaches the temperature, then set it
+      let h = S.holder;
+      if (op.v < HOLDERS[h].min || op.v > HOLDERS[h].max) h = op.v <= 60 ? 'lhe' : op.v < 250 ? 'ln2' : op.v > 320 ? 'heat' : 'room';
+      if (h !== S.holder) chip('holder', h);
+      set('tempSet', +clamp(op.v, HOLDERS[h].min, HOLDERS[h].max).toFixed(1), 'tempSet'); op.v = S.tempSet;
+      break;
+    }
+    case 'action': if (['optfocus', 'autotune', 'pause'].includes(op.v)) action(op.v); break;
+    case 'beam': if (S.paused === !!op.v) action('pause'); break;
+    case 'acquire': acquireNow(); break;
+    case 'wobbler': hwPanel.toggleWobbler(); break;
+    case 'narrate': N.speak('mode-' + S.mode); break;
+    case 'training': $('#btnTrain')?.click(); break;
+    case 'stopSpeech': N.stop(); break;
+    default: break;
+  }
+}
+const stateSummary = () => ({
+  mode: S.mode, specimen: S.spec, specimen_name: sim.spec.name, kV: S.kV, defocus_nm: S.df, fov_nm: S.fov, dose: S.dose,
+  corrector: S.corrector, Cs_um: +(sim.CsA() / 1e4).toFixed(2), aberrations: { ...S.ab }, holder: S.holder, temperature_K: +sim.temp().toFixed(1),
+  clarity: S.clarity, beam: S.paused ? 'blanked' : 'on', wavelength_pm: +(sim.lam * 100).toFixed(4),
+  scherzer_defocus_nm: +(P.scherzerDefocus(sim.CsA(), sim.lam) / 10).toFixed(1), training_task: scn?.active?.id ?? null,
+});
+const voice = new Voice({
+  ctx: () => ({ mode: S.mode, paused: S.paused, corrector: S.corrector }),
+  run: (op) => { if (scn?.recorder.active) scn.recorder.noteSource('voice'); runOp(op); },
+  agent: { get connected() { return agent.connected; }, utterance: (t) => agent.utterance(t) },
+  onEvent: (kind, data) => {
+    if (kind === 'voice' && scn?.recorder.active) scn.recorder.event('voice', data);
+    $('#btnMic')?.classList.toggle('on', kind === 'listening' && data === true);
+  },
+});
+const agent = new AgentBridge({
+  url: AGENT.url,
+  state: stateSummary,
+  busy: () => (scn?.active ? 'A training task is running in the exhibit; the agent cannot change settings until it ends.' : scn?.replay ? 'A session replay is playing.' : null),
+  run: (ops) => ops.map((op) => { runOp(op); return describe(op); }),
+  command: (text) => { const r = parseCommand(text, { paused: S.paused }); if (!r.ops) return { understood: false, text }; return { understood: true, done: r.ops.map((op) => { runOp(op); return describe(op); }) }; },
+  acquire: (withData) => {
+    acquireNow();
+    const a = acq.list[0];
+    if (!a) throw new Error('nothing to acquire in this mode');
+    let npz;
+    if (withData) { const b = npzBytes(a.data); let s = ''; for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode(...b.subarray(i, i + 0x8000)); npz = btoa(s); }
+    return { id: a.id, mode: a.mode, spec: a.spec, summary: a.summary, png: a.png, png2: a.png2, npz };
+  },
+  say: (text) => { voice.flash(`<span class="mic agent"></span><b>Agent</b><p>${text.replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' })[c])}</p>`, Math.max(5000, text.length * 70)); N.sayText(text); },
+  onStatus: (status, msg) => {
+    const b = document.querySelector('[data-act="agent"]');
+    if (b) b.textContent = status === 'on' ? 'Agent connected · Disconnect' : status === 'connecting' ? 'Connecting…' : 'Connect agent';
+    b?.classList.toggle('on', status === 'on');
+    if (msg) voice.flash(`<b>Agent</b><p>${msg}</p>`, 7000);
+    else if (status === 'on') voice.flash('<span class="mic agent"></span><b>Agent connected</b><p>Ask a question with the microphone (hold M); the agent can also run the microscope.</p>', 5000);
+  },
+});
+
 const scn = new Scenarios({
   S, sim, version: document.querySelector('script[src*="main.js"]')?.getAttribute('src')?.split('v=')[1] ?? 'dev',
   setSpec: (v) => setSpec(v), setMode: (m) => setMode(m), download: (b, n) => download(b, n),
@@ -846,6 +934,9 @@ function wire() {
   $('#btnHelp').addEventListener('click', () => ($('#help').hidden = false));
   const openTraining = () => scn.menu({ replay: () => action('replayFile'), last: () => action('lastSession') });
   $('#btnTrain').addEventListener('click', openTraining);
+  const mic = $('#btnMic');
+  mic.addEventListener('pointerdown', (e) => { e.preventDefault(); mic.setPointerCapture(e.pointerId); voice.start(); });
+  for (const ev of ['pointerup', 'pointercancel']) mic.addEventListener(ev, () => voice.stop());
   document.querySelectorAll('[data-fold]').forEach((b) => b.addEventListener('click', () => fold(b.dataset.fold)));
   for (const k of ['L', 'R']) if (store(`tem-fold${k}`) === '1') document.body.classList.add(`fold${k}`);
   $('#fileSession').addEventListener('change', async (e) => {
@@ -955,11 +1046,13 @@ function wire() {
     else if (e.key === 'v' || e.key === 'V') vPanel.openDock();
     else if (e.key === 'i' || e.key === 'I') acquireNow();
     else if ((e.key === 't' || e.key === 'T') && !e.metaKey && !e.ctrlKey) openTraining();
+    else if ((e.key === 'm' || e.key === 'M') && !e.repeat && !e.metaKey && !e.ctrlKey) voice.start();
     else if (e.key === '[') fold('L');
     else if (e.key === ']') fold('R');
     else if (e.key === 'x' || e.key === 'X') setExpanded(!document.body.classList.contains('detBig'));
     else if (e.key === 'Escape') { setExpanded(false); $('#help').hidden = true; if (scene.tour) scene.stopTour(); }
   });
+  window.addEventListener('keyup', (e) => { if ((e.key === 'm' || e.key === 'M') && !['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) voice.stop(); });
   window.addEventListener('resize', resize);
 }
 
@@ -1123,4 +1216,4 @@ updateDetectorHeader();
 explainChange('spec');
 resize();
 requestAnimationFrame(() => { resize(); requestAnimationFrame(frame); });
-window.__tem = { S, sim, scene, panel: hwPanel, vpanel: vPanel, scn };
+window.__tem = { S, sim, scene, panel: hwPanel, vpanel: vPanel, scn, voice, agent, runOp };
