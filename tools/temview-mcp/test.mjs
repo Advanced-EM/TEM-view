@@ -14,7 +14,7 @@ const ok = (c, m) => { console.log(c ? 'ok  ' : 'FAIL', m); if (!c) process.exit
 const body = (r) => r.content.filter((c) => c.type === 'text').map((c) => c.text).join('\n');
 
 const { tools } = await client.listTools();
-ok(tools.length === 8, `8 tools: ${tools.map((t) => t.name).join(', ')}`);
+ok(tools.length === 9, `9 tools: ${tools.map((t) => t.name).join(', ')}`);
 
 let r = await client.callTool({ name: 'simulate', arguments: { mode: 'tem', specimen: 'au', kV: 300, defocus_nm: -60 } });
 const sim = JSON.parse(body(r));

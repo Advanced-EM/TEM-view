@@ -468,3 +468,15 @@ body:not(.stacked).foldL .detector, body:not(.stacked).foldR .detector { max-wid
 .ctl.buttons .btn.on { border-color: var(--accent); color: var(--accent); }
 body.stacked .voicebubble { bottom: 16px; }
 @media (prefers-reduced-motion: reduce) { .voicebubble .mic.on { animation: none; } }
+
+/* typed command bar, just above the results */
+.cmdbar { position: fixed; z-index: 4; left: calc(var(--left) + (100vw - var(--left) - var(--right)) / 2); transform: translateX(-50%); bottom: calc(var(--det-h) + 78px); width: min(520px, calc(100vw - var(--left) - var(--right) - 40px)); display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 999px; }
+.cmdbar span { color: var(--accent); font: 600 16px var(--mono); }
+.cmdbar input { flex: 1; min-width: 0; background: transparent; border: 0; outline: 0; color: var(--text); font: 13.5px var(--sans); }
+.cmdbar input::placeholder { color: var(--dim); }
+.cmdbar:focus-within { border-color: rgba(111, 214, 255, 0.5); box-shadow: 0 0 0 3px var(--accent-soft); }
+.voicebubble { bottom: calc(var(--det-h) + 130px); }
+.voicebubble .vrow .btn small { color: var(--muted); margin-left: 4px; font-size: 11px; }
+.voicebubble .mic.typed { border-radius: 2px; }
+body.stacked .cmdbar { position: static; transform: none; width: auto; margin: 10px 12px; order: 4; }
+body.detBig .cmdbar { display: none; }

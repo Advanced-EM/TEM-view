@@ -38,6 +38,7 @@ export class AgentBridge {
     }
     if (method === 'command') return this.api.command(String(p.text ?? ''));
     if (method === 'acquire') return this.api.acquire(!!p.data);
+    if (method === 'analyze') return this.api.analyze(p.name ?? null);
     throw new Error(`unknown method ${method}`);
   }
 
