@@ -488,3 +488,6 @@ body.detBig .cmdbar { display: none; }
 .chead .icons { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px; }
 .chead .icons button { width: 28px; height: 28px; }
 .chead .icons button.train { width: auto; height: 28px; }
+
+/* AI mode button (brain), on while the command bar is showing */
+#btnAI.on { color: var(--accent); border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }

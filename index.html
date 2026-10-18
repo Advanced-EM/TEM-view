@@ -8,38 +8,38 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=202610172324">
+<link rel="stylesheet" href="css/style.css?v=202610180101">
 <script type="importmap">
 {
  "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
-  "./js/acquire.js": "./js/acquire.js?v=202610172324",
-  "./js/agent.js": "./js/agent.js?v=202610172324",
-  "./js/analyze.js": "./js/analyze.js?v=202610172324",
-  "./js/calibrate.js": "./js/calibrate.js?v=202610172324",
-  "./js/calibui.js": "./js/calibui.js?v=202610172324",
-  "./js/components.js": "./js/components.js?v=202610172324",
-  "./js/config.js": "./js/config.js?v=202610172324",
-  "./js/explain.js": "./js/explain.js?v=202610172324",
-  "./js/export.js": "./js/export.js?v=202610172324",
-  "./js/holder.js": "./js/holder.js?v=202610172324",
-  "./js/holography.js": "./js/holography.js?v=202610172324",
-  "./js/main.js": "./js/main.js?v=202610172324",
-  "./js/narration.js": "./js/narration.js?v=202610172324",
-  "./js/npy.js": "./js/npy.js?v=202610172324",
-  "./js/panel.js": "./js/panel.js?v=202610172324",
-  "./js/physics.js": "./js/physics.js?v=202610172324",
-  "./js/profile.js": "./js/profile.js?v=202610172324",
-  "./js/render2d.js": "./js/render2d.js?v=202610172324",
-  "./js/scenarios.js": "./js/scenarios.js?v=202610172324",
-  "./js/scene3d.js": "./js/scene3d.js?v=202610172324",
-  "./js/sim.js": "./js/sim.js?v=202610172324",
-  "./js/state.js": "./js/state.js?v=202610172324",
-  "./js/techniques.js": "./js/techniques.js?v=202610172324",
-  "./js/telemetry.js": "./js/telemetry.js?v=202610172324",
-  "./js/voice.js": "./js/voice.js?v=202610172324",
-  "./js/vpanel.js": "./js/vpanel.js?v=202610172324"
+  "./js/acquire.js": "./js/acquire.js?v=202610180101",
+  "./js/agent.js": "./js/agent.js?v=202610180101",
+  "./js/analyze.js": "./js/analyze.js?v=202610180101",
+  "./js/calibrate.js": "./js/calibrate.js?v=202610180101",
+  "./js/calibui.js": "./js/calibui.js?v=202610180101",
+  "./js/components.js": "./js/components.js?v=202610180101",
+  "./js/config.js": "./js/config.js?v=202610180101",
+  "./js/explain.js": "./js/explain.js?v=202610180101",
+  "./js/export.js": "./js/export.js?v=202610180101",
+  "./js/holder.js": "./js/holder.js?v=202610180101",
+  "./js/holography.js": "./js/holography.js?v=202610180101",
+  "./js/main.js": "./js/main.js?v=202610180101",
+  "./js/narration.js": "./js/narration.js?v=202610180101",
+  "./js/npy.js": "./js/npy.js?v=202610180101",
+  "./js/panel.js": "./js/panel.js?v=202610180101",
+  "./js/physics.js": "./js/physics.js?v=202610180101",
+  "./js/profile.js": "./js/profile.js?v=202610180101",
+  "./js/render2d.js": "./js/render2d.js?v=202610180101",
+  "./js/scenarios.js": "./js/scenarios.js?v=202610180101",
+  "./js/scene3d.js": "./js/scene3d.js?v=202610180101",
+  "./js/sim.js": "./js/sim.js?v=202610180101",
+  "./js/state.js": "./js/state.js?v=202610180101",
+  "./js/techniques.js": "./js/techniques.js?v=202610180101",
+  "./js/telemetry.js": "./js/telemetry.js?v=202610180101",
+  "./js/voice.js": "./js/voice.js?v=202610180101",
+  "./js/vpanel.js": "./js/vpanel.js?v=202610180101"
  }
 }
 </script>
@@ -74,7 +74,7 @@
   <div id="infoStats" class="stats"></div>
 </section>
 
-<form id="cmdBar" class="card cmdbar" autocomplete="off" role="search" aria-label="Commands"><span aria-hidden="true">›</span><input id="cmdInput" list="cmdList" type="text" placeholder="Type a command or a question   ( / )" aria-label="Command or question" spellcheck="false"><datalist id="cmdList"></datalist><kbd>/</kbd></form>
+<form id="cmdBar" class="card cmdbar" hidden autocomplete="off" role="search" aria-label="Commands"><span aria-hidden="true">›</span><input id="cmdInput" list="cmdList" type="text" placeholder="Type a command or a question   ( / )" aria-label="Command or question" spellcheck="false"><datalist id="cmdList"></datalist><kbd>/</kbd></form>
 <section class="card detector">
   <div class="dhead">
     <span class="dot"></span><span id="detTitle"></span><span id="status" class="status"></span>
@@ -96,6 +96,7 @@
 <button id="tabR" class="foldtab right" data-fold="R" title="Show the controls (])" aria-label="Show the controls panel">‹ Controls</button>
 <aside class="card controls">
   <div class="chead"><p class="eyebrow">Controls</p><div class="icons">
+  <button id="btnAI" title="AI mode: type or say commands, ask the agent (/)" aria-label="AI mode" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.2 5.2A2.6 2.6 0 0 0 6.6 6.6a2.7 2.7 0 0 0-2 3.6 2.8 2.8 0 0 0 .4 4.6 2.7 2.7 0 0 0 3 3.3 2.6 2.6 0 0 0 3.2 1.1V5.2Z"/><path d="M12.8 5.2a2.6 2.6 0 0 1 4.6 1.4 2.7 2.7 0 0 1 2 3.6 2.8 2.8 0 0 1-.4 4.6 2.7 2.7 0 0 1-3 3.3 2.6 2.6 0 0 1-3.2 1.1V5.2Z"/><path d="M8.2 10.5c.9 0 1.6.6 1.6 1.4M15.8 10.5c-.9 0-1.6.6-1.6 1.4M8.6 15c.7-.4 1.6-.3 2 .3M15.4 15c-.7-.4-1.6-.3-2 .3"/></svg></button>
   <button id="btnMic" title="Hold to talk (M)" aria-label="Hold to give a voice command"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="9" y="3.5" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v2.5M9 20.5h6"/></svg></button>
   <button id="btnTrain" class="train" title="Training mode (T)" aria-label="Training mode: alignment tasks"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg><span>Training</span></button>
   <button id="btnLabels" title="Labels (L)" aria-label="Toggle labels"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button>
@@ -154,6 +155,6 @@
 <input id="fileSession" type="file" accept=".json,application/json" hidden>
 <div id="calib" class="modal calib" hidden><div class="card"><button class="close" aria-label="Close">×</button><div class="calibBody"></div></div></div>
 
-<script type="module" src="js/main.js?v=202610172324"></script>
+<script type="module" src="js/main.js?v=202610180101"></script>
 </body>
 </html>

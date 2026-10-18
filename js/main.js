@@ -159,7 +159,7 @@ const CONTROLS = [
   { buttons: [['scn:tem-focus-stig', 'TEM: focus and stigmate'], ['scn:corrector-ronch', 'Corrector: tune the Ronchigram']] },
   { buttons: [['replayFile', 'Replay a session file…'], ['lastSession', 'Download last session']] },
   { sec: 'Voice and agent' },
-  { p: 'Type a command in the bar above the results (<kbd>/</kbd>) or hold <kbd>M</kbd> and say it: "switch to STEM", "defocus minus fifty", "load graphene", "acquire", "fit the CTF", "index the rings". Close misses are confirmed before they run. Connect an AI agent (temview-mcp, for example with emskills) to answer questions and run the microscope with you.' },
+  { p: 'Turn on AI mode with the brain button at the top of the controls (or <kbd>/</kbd>) and type a command, or hold <kbd>M</kbd> and say it: "switch to STEM", "defocus minus fifty", "load graphene", "acquire", "fit the CTF", "index the rings". Close misses are confirmed before they run. Connect an AI agent (temview-mcp, for example with emskills) to answer questions and run the microscope with you.' },
   { buttons: [['voiceHelp', 'What can I say?'], ['agent', 'Connect agent']] },
   { sec: 'Digital twin' },
   { p: 'The instrument profile holds what belongs to one particular microscope (energy spread, Cc, Cs, illumination). Calibrate it from your own data, save the whole session, and export what the detectors record.' },
@@ -464,7 +464,7 @@ function setMode(m) {
 
 function action(id, el) {
   if (id.startsWith('scn:')) return scn.start(id.slice(4));
-  if (id === 'voiceHelp') return voice.handle('help');
+  if (id === 'voiceHelp') { setAI(true); return voice.handle('help'); }
   if (id === 'agent') return agent.connected || agent.status === 'connecting' ? agent.disconnect() : agent.connect();
   if (id === 'replayFile') return $('#fileReplay').click();
   if (id === 'lastSession') { if (scn.lastSession) scn.downloadSession(scn.lastSession); else { $('#change').hidden = false; $('#change').innerHTML = '<small>No recorded session yet</small><p>Run a training scenario with recording on, then download it here.</p>'; } return; }
@@ -664,6 +664,7 @@ function acquireNow() { redraw = true; R2.draw(sim, S, mainCv, secCv); acq.acqui
 
 // ------------------------------------------------------------------ training scenarios and telemetry (scenarios.js, telemetry.js)
 // ------------------------------------------------------------------ voice commands and the agent bridge
+let setAI = () => {}; // AI mode (command bar) on/off, wired up with the controls
 // one executor for both: the same operations a visitor can speak, an agent can send
 const dfLimits = () => (S.corrector ? [-CORR_RANGE.df, CORR_RANGE.df] : S.spec === 'bio' ? [-4000, 500] : [-150, 150]);
 function runOp(op) {
@@ -959,12 +960,18 @@ function wire() {
   const openTraining = () => scn.menu({ replay: () => action('replayFile'), last: () => action('lastSession') });
   $('#btnTrain').addEventListener('click', openTraining);
   const bar = $('#cmdBar'), inp = $('#cmdInput'), hist = []; let hi = 0;
+  setAI = (on) => {
+    bar.hidden = !on;
+    $('#btnAI').classList.toggle('on', on); $('#btnAI').setAttribute('aria-pressed', String(on));
+    if (on) inp.focus(); else { inp.blur(); voice.escape(); }
+  };
+  $('#btnAI').addEventListener('click', () => setAI(bar.hidden));
   $('#cmdList').innerHTML = EXAMPLES.map((e) => `<option value="${e}"></option>`).join('');
   bar.addEventListener('submit', (e) => { e.preventDefault(); const v = inp.value.trim(); if (!v) return; hist.push(v); hi = hist.length; inp.value = ''; if (scn?.recorder.active) scn.recorder.noteSource('keyboard'); voice.handle(v, true); });
   inp.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowUp' && hist.length) { e.preventDefault(); hi = Math.max(0, hi - 1); inp.value = hist[hi]; }
     else if (e.key === 'ArrowDown' && hist.length) { e.preventDefault(); hi = Math.min(hist.length, hi + 1); inp.value = hist[hi] ?? ''; }
-    else if (e.key === 'Escape') { inp.blur(); voice.escape(); }
+    else if (e.key === 'Escape') setAI(false);
   });
   const mic = $('#btnMic');
   mic.addEventListener('pointerdown', (e) => { e.preventDefault(); mic.setPointerCapture(e.pointerId); voice.start(); });
@@ -1079,11 +1086,11 @@ function wire() {
     else if (e.key === 'i' || e.key === 'I') acquireNow();
     else if ((e.key === 't' || e.key === 'T') && !e.metaKey && !e.ctrlKey) openTraining();
     else if ((e.key === 'm' || e.key === 'M') && !e.repeat && !e.metaKey && !e.ctrlKey) voice.start();
-    else if (e.key === '/' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); $('#cmdInput').focus(); }
+    else if (e.key === '/' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); setAI(true); }
     else if (e.key === '[') fold('L');
     else if (e.key === ']') fold('R');
     else if (e.key === 'x' || e.key === 'X') setExpanded(!document.body.classList.contains('detBig'));
-    else if (e.key === 'Escape') { setExpanded(false); $('#help').hidden = true; if (scene.tour) scene.stopTour(); voice.escape(); if (agent.connected || agent.status === 'connecting') { agent.disconnect(); voice.flash('<b>Agent disconnected</b><p>Press Connect agent (Controls → Voice and agent) to reconnect.</p>', 3500); } }
+    else if (e.key === 'Escape') { setExpanded(false); $('#help').hidden = true; if (scene.tour) scene.stopTour(); setAI(false); if (agent.connected || agent.status === 'connecting') { agent.disconnect(); voice.flash('<b>Agent disconnected</b><p>Press Connect agent (Controls → Voice and agent) to reconnect.</p>', 3500); } }
   });
   window.addEventListener('keyup', (e) => { if ((e.key === 'm' || e.key === 'M') && !['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) voice.stop(); });
   window.addEventListener('resize', resize);
