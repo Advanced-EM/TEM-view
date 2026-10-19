@@ -1269,3 +1269,5 @@ explainChange('spec');
 resize();
 requestAnimationFrame(() => { resize(); requestAnimationFrame(frame); });
 window.__tem = { S, sim, scene, panel: hwPanel, vpanel: vPanel, scn, voice, agent, runOp };
+// deep link from the printed guides: ?train=<scenario id> opens that training task's intro
+{ const id = new URLSearchParams(location.search).get('train'); if (id && /^[a-z0-9-]+$/.test(id)) setTimeout(() => { try { scn.start(id); } catch { /* unknown id */ } }, 600); }
