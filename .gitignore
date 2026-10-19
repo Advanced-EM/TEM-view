@@ -4,3 +4,6 @@ build/
 __pycache__/
 node_modules/
 .wrangler/
+
+# mailing-list exports (personal data)
+subscribers*.csv

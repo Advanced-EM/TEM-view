@@ -42,14 +42,16 @@ npx wrangler kv namespace create SUBSCRIBERS
 Paste the `id` it prints into `wrangler.toml` (replacing `PASTE_THE_ID_HERE`), then run `npx wrangler deploy`.
 The status page (`/`) then shows `"mailing_list": true`.
 
-To export the list:
+Each subscriber gives a name, an email, an optional institution, and a role: student, staff, faculty or
+hobbyist. To export the list as a spreadsheet:
 
 ```bash
-npx wrangler kv key list --binding SUBSCRIBERS --remote
+node export-subscribers.mjs > subscribers.csv
 ```
 
-Each key is `email:<address>`, and its value holds the address and the date it subscribed. To remove someone,
-run `npx wrangler kv key delete --binding SUBSCRIBERS --remote "email:<address>"`.
+The CSV holds personal data, so keep it private (`subscribers*.csv` is git-ignored). Each record is stored under
+the key `email:<address>`. To remove someone, run
+`npx wrangler kv key delete --binding SUBSCRIBERS --remote "email:<address>"`.
 
 ## Test
 
