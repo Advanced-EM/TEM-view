@@ -389,7 +389,9 @@ body.vwin { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5
 
 /* training scenarios and replay */
 .scncard { position: fixed; left: 50%; top: 92px; transform: translateX(-50%); z-index: 9; width: min(560px, calc(100vw - 24px)); padding: 10px 14px; border-color: rgba(255, 180, 94, 0.45); background: rgba(9, 12, 16, 0.95); }
-.scnhead { display: flex; align-items: center; gap: 10px; font-size: 12.5px; }
+.scnhead { display: flex; align-items: center; gap: 10px; font-size: 12.5px; cursor: grab; touch-action: none; user-select: none; }
+.scnhead::before { content: '⠿'; color: var(--muted); font-size: 13px; margin-right: -4px; }
+.scncard.dragging { opacity: 0.92; } .scncard.dragging .scnhead { cursor: grabbing; }
 .scnhead b { font: 500 10.5px var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--warm); }
 .scnhead #scnTime { font: 12px var(--mono); color: var(--muted); }
 .scnhead .rec { font: 10px var(--mono); font-style: normal; color: #ff8a8a; }

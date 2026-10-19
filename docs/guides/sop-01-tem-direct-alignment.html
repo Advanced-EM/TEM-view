@@ -2,12 +2,12 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>TEM Direct Alignment · SOP-01 · Seeing with Electrons</title>
+<title>SOP-01 TEM Direct Alignment · Seeing with Electrons</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=block" rel="stylesheet">
-<link rel="stylesheet" href="guide.css?v=4">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Sans:wght@400;600&display=block" rel="stylesheet">
+<link rel="stylesheet" href="guide.css?v=6">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 </head>
 <body>
@@ -16,255 +16,253 @@
 <section class="page cover">
   <div class="art" style="background-image:url(fig/cover.jpg)"></div>
   <div class="top">
-    <div class="brandline"><span>Standard operating procedure · SOP-01</span><span>Transmission electron microscopy</span></div>
+    <div class="brandline"><span>Standard operating procedure SOP-01</span><span>Transmission electron microscopy</span></div>
     <h1>TEM direct<br><em>alignment</em></h1>
-    <p class="sub">From the electron gun to the objective stigmator: the five alignments, in the order that keeps each one from undoing the last.</p>
+    <p class="sub">Gun, illumination, eucentric height, pivot points, voltage center and objective stigmator, in that order.</p>
   </div>
   <div class="bottom">
-    <div class="doc"><b>SOP-01</b> · version 1.0 · October 2026<br>Level: new users and refreshers<br>Practice it on the TEM-view digital twin</div>
+    <div class="doc"><b>SOP-01</b>, version 1.1, October 2026<br>For new users and for refresher training<br>Figures computed with TEM-view</div>
     <div class="logo">Seeing with Electrons<small>TEM-view · Advanced-EM</small></div>
   </div>
 </section>
 
-<!-- 2 · overview -->
+<!-- 2 · scope -->
 <section class="page">
-  <div class="run"><span>SOP-01 · TEM direct alignment</span><span>Overview</span></div>
-  <div class="kicker">Before you start</div>
-  <h2>Why the <em>order</em> matters</h2>
-  <p class="lede">Each alignment assumes the ones before it are done. Correct the condenser stigmator with an off-center C2 aperture, or align pivot points with the specimen at the wrong height, and later corrections drift away. Work from the gun down the column, and go back a step whenever a cue looks wrong.</p>
+  <div class="run"><span>SOP-01 TEM direct alignment</span><span>Scope and preparation</span></div>
+  <h2>Scope and preparation</h2>
+  <p class="lede">This procedure aligns a TEM column for imaging in parallel illumination. Do the steps in order. Each step assumes the previous ones are correct, so if a later step behaves unexpectedly, go back one step and check it.</p>
 
-  <div class="flow">
-    <div><i>01</i><b>Gun</b>Flash &amp; Go (cold FEG only), gun shift, gun tilt</div>
-    <div><i>02</i><b>Illumination</b>Crossover, C2 aperture, condenser stigmator</div>
-    <div><i>03</i><b>Eucentric height</b>α wobbler and stage Z</div>
-    <div><i>04</i><b>Pivot points</b>Beam tilt and shift, voltage center</div>
-    <div><i>05</i><b>Objective</b>Stigmator on the Thon rings</div>
-  </div>
+  <table class="t" style="margin-top:10pt">
+    <tr><th></th><th>Step</th><th>Adjustments</th><th>Checked with</th></tr>
+    <tr><td class="n">1</td><td>Gun</td><td>Flash &amp; Go (cold FEG only), gun shift, gun tilt</td><td>Crossover position at two spot sizes; screen current</td></tr>
+    <tr><td class="n">2</td><td>Illumination</td><td>Beam shift, C2 aperture, condenser stigmator</td><td>Beam spread through crossover</td></tr>
+    <tr><td class="n">3</td><td>Eucentric height</td><td>Stage Z</td><td>α wobbler</td></tr>
+    <tr><td class="n">4</td><td>Pivot points and voltage center</td><td>Pivot points X and Y, beam tilt</td><td>Pivot-point wobblers; HT wobbler</td></tr>
+    <tr><td class="n">5</td><td>Objective stigmator</td><td>Objective stigmator X and Y</td><td>Live FFT of an amorphous area</td></tr>
+  </table>
 
   <div class="cols">
     <div>
-      <h3>Check first</h3>
-      <ul class="tick">
-        <li>Column and gun vacuum are in the green; column valves are open only when you are ready to view.</li>
-        <li>High tension is at the operating voltage and has had time to settle.</li>
-        <li>The specimen is inserted, the holder is seated, and the stage is at α = β = 0°.</li>
-        <li>The objective aperture is out; the selected-area aperture is out.</li>
-        <li>You are in TEM mode at a medium magnification with the beam on the fluorescent screen (or a screen-view camera).</li>
-        <li>You know which electron source your microscope has (see right).</li>
+      <h3>Before you start</h3>
+      <ul class="plain">
+        <li>Gun and column vacuum are within the normal operating range.</li>
+        <li>The high tension has been at the operating voltage long enough to be stable.</li>
+        <li>The specimen holder is inserted and the stage is at α = β = 0°.</li>
+        <li>The objective and selected-area apertures are retracted.</li>
+        <li>The microscope is in TEM mode at medium magnification, with the beam on the viewing screen or screen camera.</li>
+        <li>You know the type of electron source (table at right).</li>
       </ul>
-      <div class="note"><span class="h">Vocabulary</span><b>Brightness</b> (also called intensity or C2) spreads or focuses the beam. <b>Crossover</b> is the setting where the beam is smallest. <b>Multifunction knobs</b> are the X/Y knobs that drive whichever alignment is selected.</div>
+      <h3>Terms used</h3>
+      <p><b>Brightness</b> (also called intensity or C2) spreads or condenses the beam. <b>Crossover</b> is the brightness setting at which the beam is smallest. The <b>multifunction knobs</b> are the X and Y knobs that drive the alignment currently selected.</p>
     </div>
     <div>
-      <h3>Know your electron source</h3>
+      <h3>Electron source and Flash &amp; Go</h3>
       <table class="t">
         <tr><th>Source</th><th>Emission</th><th>Flash &amp; Go</th></tr>
-        <tr><td><b>Cold FEG</b><br><span style="color:var(--muted)">room-temperature W tip</span></td><td>Falls slowly as gas adsorbs on the tip</td><td><b>Yes</b>: when emission has dropped, and at the start of a session</td></tr>
-        <tr><td><b>Schottky FEG</b><br><span style="color:var(--muted)">ZrO/W tip at ~1800 K</span></td><td>Steady for months</td><td><b>No</b>: never flash a Schottky source</td></tr>
-        <tr><td><b>LaB₆ / W thermionic</b></td><td>Set by filament heating and saturation</td><td><b>No</b>: saturate the filament instead</td></tr>
+        <tr><td>Cold FEG</td><td>Decreases slowly as gas adsorbs on the tip</td><td>Yes, when emission has dropped and at the start of a session</td></tr>
+        <tr><td>Schottky FEG</td><td>Stable</td><td>No</td></tr>
+        <tr><td>LaB₆ or W thermionic</td><td>Set by filament heating</td><td>No. Saturate the filament instead.</td></tr>
       </table>
-      <div class="note warn"><span class="h">Flash &amp; Go is for cold FEG only</span>The flash heats a cold-field-emission tip for a moment to drive off adsorbed gas. A Schottky or thermionic gun runs hot all the time and has no flash. If your gun is not a cold FEG, skip that part of step 1.</div>
-      <div class="note"><span class="h">Names vary by vendor</span>This guide uses generic names. Menus, knob labels and wobbler names differ between manufacturers and software versions. Your facility's procedures and the manufacturer's manual come first.</div>
+      <div class="note caution"><b>Caution.</b> Flash &amp; Go applies only to cold field-emission sources. Do not attempt it on a Schottky or thermionic gun.</div>
+      <div class="note"><b>Note.</b> Knob names, menu names and wobbler names differ between manufacturers and software versions. Where this guide and your facility's procedure or the manufacturer's manual disagree, follow the facility and the manufacturer.</div>
     </div>
   </div>
-  <div class="foot"><span class="brand"><i class="dot"></i>Seeing with Electrons · TEM-view</span><span>2</span></div>
+  <div class="foot"><span>Seeing with Electrons · TEM-view</span><span>2</span></div>
 </section>
 
 <!-- 3 · step 1 gun -->
 <section class="page">
-  <div class="run"><span>SOP-01 · TEM direct alignment</span><span>Step 1 of 5</span></div>
-  <div class="kicker"><span class="n">1</span>Gun</div>
-  <h2>Gun: emission, <em>shift</em> and <em>tilt</em></h2>
-  <p class="lede">The gun alignments put the source on the axis of the condenser system. When they are off, the beam walks across the screen every time you change spot size, and you lose current.</p>
+  <div class="run"><span>SOP-01 TEM direct alignment</span><span>Step 1 of 5</span></div>
+  <div class="step">Step 1</div>
+  <h2>Gun alignment</h2>
+  <p class="lede">Gun shift and gun tilt place the source on the axis of the condenser system. If they are off, the beam moves when the spot size is changed, and the available current is lower.</p>
   <div class="side">
     <div>
-      <h3>Procedure</h3>
       <ol class="proc">
-        <li><b>Cold FEG only:</b> if the emission current has dropped (or at the start of the day), run <b>Flash &amp; Go</b>. Wait for the emission to settle before aligning. Skip this on a Schottky or thermionic gun.</li>
-        <li>Bring the beam to <b>crossover</b> with the brightness knob, so it is a small spot.</li>
-        <li>Select a <b>large spot number</b> (the smallest spot). Center the spot on the screen with <b>beam shift</b>.</li>
-        <li>Select a <b>small spot number</b> (a larger spot). If the spot has moved, center it with <b>gun shift</b>, not beam shift.</li>
-        <li>Repeat steps 3 and 4 until the spot stays put as you change spot size.</li>
-        <li>Select <b>gun tilt</b> and adjust it to <b>maximize the screen current</b> (or the brightness of the spot).</li>
+        <li><b>Cold FEG only.</b> If the emission current has dropped, or at the start of the session, run Flash &amp; Go and wait for the emission to stabilize. Skip this on other sources.</li>
+        <li>Condense the beam to crossover with the brightness knob.</li>
+        <li>Select a high spot number (small spot) and center the beam with <b>beam shift</b>.</li>
+        <li>Select a low spot number (large spot). If the beam has moved, center it with <b>gun shift</b>.</li>
+        <li>Repeat steps 3 and 4 until the beam stays in place at both spot sizes.</li>
+        <li>Select <b>gun tilt</b> and adjust for maximum screen current.</li>
       </ol>
-      <div class="done">The crossover stays centered at every spot size, and the screen current is at its maximum.</div>
-      <div class="note"><span class="h">Why two knobs</span>Beam shift moves the beam below the condenser lenses; gun shift moves it at the source, and how far a source offset moves the spot depends on the spot size. Correcting at each end of the spot range and iterating converges on both. If your direct-alignment software prompts for a different spot size or knob, follow its prompts.</div>
+      <p class="result"><b>Result.</b> The crossover stays centered at all spot sizes and the screen current is at its maximum.</p>
+      <div class="note"><b>Note.</b> Beam shift acts below the condenser lenses and gun shift acts at the source. How far a source offset moves the spot depends on the spot size, so correcting at each end of the spot range and repeating converges on both. If your alignment software asks for a different spot size or knob at each stage, follow the software.</div>
     </div>
-    <div style="display:grid;gap:10pt">
-      <figure class="fig"><img src="fig/gun_walk.jpg" alt=""><figcaption><span class="tag bad">Off</span>Two spot sizes superimposed: the crossover <b>walks</b> when the spot size changes.</figcaption></figure>
-      <figure class="fig"><img src="fig/gun_ok.jpg" alt=""><figcaption><span class="tag ok">Aligned</span>Both spot sizes land on the <b>same place</b>.</figcaption></figure>
+    <div class="stack">
+      <figure class="fig"><img src="fig/gun_walk.jpg" alt=""><figcaption><b>Fig. 1a.</b> Gun shift misaligned. Crossovers at two spot sizes, superimposed, land in different places.</figcaption></figure>
+      <figure class="fig"><img src="fig/gun_ok.jpg" alt=""><figcaption><b>Fig. 1b.</b> Gun shift aligned. Both spot sizes land at the same place.</figcaption></figure>
     </div>
   </div>
-  <div class="foot"><span class="brand"><i class="dot"></i>Seeing with Electrons · TEM-view</span><span>3</span></div>
+  <div class="foot"><span>Seeing with Electrons · TEM-view</span><span>3</span></div>
 </section>
 
 <!-- 4 · step 2 illumination -->
 <section class="page">
-  <div class="run"><span>SOP-01 · TEM direct alignment</span><span>Step 2 of 5</span></div>
-  <div class="kicker"><span class="n">2</span>Illumination</div>
-  <h2>Crossover, <em>C2 aperture</em>, condenser stigmator</h2>
-  <p class="lede">A centered C2 aperture makes the beam open and close about one point, so changing brightness never moves the illuminated area. A corrected condenser stigmator keeps the beam round on both sides of focus.</p>
+  <div class="run"><span>SOP-01 TEM direct alignment</span><span>Step 2 of 5</span></div>
+  <div class="step">Step 2</div>
+  <h2>Illumination: C2 aperture and condenser stigmator</h2>
+  <p class="lede">With the C2 aperture centered, the beam spreads and condenses about a fixed point, so a change in brightness does not move the illuminated area. With the condenser stigmator corrected, the beam stays round on both sides of crossover.</p>
   <div class="cols">
     <div>
       <h3>C2 aperture</h3>
       <ol class="proc">
-        <li>At crossover, center the spot with <b>beam shift</b>.</li>
+        <li>At crossover, center the beam with beam shift.</li>
         <li>Spread the beam with the brightness knob until it fills about half the screen.</li>
-        <li>If it does not expand <b>concentrically</b> about the center, move the <b>C2 aperture</b> (mechanical or motorized) toward the center.</li>
-        <li>Return to crossover, re-center with beam shift, spread again. Repeat until the beam opens about one point.</li>
+        <li>If the beam does not spread evenly about the center, move the C2 aperture toward the center.</li>
+        <li>Return to crossover, re-center with beam shift, and spread again. Repeat until the beam spreads concentrically.</li>
       </ol>
     </div>
     <div>
       <h3>Condenser stigmator</h3>
       <ol class="proc">
-        <li>Go a little to <b>one side of crossover</b>: an astigmatic beam is an ellipse.</li>
-        <li>Go to the <b>other side</b>: the ellipse turns by 90°. That flip is condenser astigmatism.</li>
-        <li>Select the <b>condenser stigmator</b> and adjust X and Y until the beam is <b>round</b> on both sides of crossover.</li>
+        <li>Spread the beam slightly to one side of crossover. With condenser astigmatism, the beam is elliptical.</li>
+        <li>Go to the other side of crossover. The long axis of the ellipse turns by 90°.</li>
+        <li>Select the condenser stigmator and adjust X and Y until the beam is round on both sides of crossover.</li>
       </ol>
-      <div class="done">The beam expands concentrically about the screen center, and stays round on both sides of focus.</div>
+      <p class="result"><b>Result.</b> The beam spreads concentrically about the screen center and is round on both sides of crossover.</p>
     </div>
   </div>
-  <div class="figs5" style="margin-top:10pt">
-    <figure class="fig"><img src="fig/c2_off.jpg" alt=""><figcaption><span class="tag bad">C2 off</span>The spread beam opens <b>to one side</b> of the crossover.</figcaption></figure>
-    <figure class="fig"><img src="fig/c2_ok.jpg" alt=""><figcaption><span class="tag ok">C2 centered</span>It opens <b>concentrically</b>.</figcaption></figure>
-    <figure class="fig"><img src="fig/stig_over.jpg" alt=""><figcaption><span class="tag bad">Over</span>Elliptical on one side of crossover…</figcaption></figure>
-    <figure class="fig"><img src="fig/stig_under.jpg" alt=""><figcaption><span class="tag bad">Under</span>…and <b>turned 90°</b> on the other.</figcaption></figure>
-    <figure class="fig"><img src="fig/stig_ok.jpg" alt=""><figcaption><span class="tag ok">Stigmated</span><b>Round</b> on both sides.</figcaption></figure>
+  <div class="figs5" style="margin-top:8pt">
+    <figure class="fig"><img src="fig/c2_off.jpg" alt=""><figcaption><b>Fig. 2a.</b> C2 aperture off-axis. The spread beam is not centered on the crossover.</figcaption></figure>
+    <figure class="fig"><img src="fig/c2_ok.jpg" alt=""><figcaption><b>Fig. 2b.</b> C2 aperture centered.</figcaption></figure>
+    <figure class="fig"><img src="fig/stig_over.jpg" alt=""><figcaption><b>Fig. 2c.</b> Condenser astigmatism, one side of crossover.</figcaption></figure>
+    <figure class="fig"><img src="fig/stig_under.jpg" alt=""><figcaption><b>Fig. 2d.</b> The other side. The ellipse has turned by 90°.</figcaption></figure>
+    <figure class="fig"><img src="fig/stig_ok.jpg" alt=""><figcaption><b>Fig. 2e.</b> Condenser stigmator corrected.</figcaption></figure>
   </div>
-  <div class="cols" style="margin-top:14pt">
-    <div class="note warn"><span class="h">Common mistakes</span>Moving the C2 aperture while the beam is spread, without first re-centering the crossover with beam shift: the two corrections then chase each other. Do one at crossover and the other spread, and alternate.</div>
-    <div class="note"><span class="h">Check the flip</span>Judging condenser astigmatism on one side of focus only can hide it: a slightly elliptical beam may just be off-round from the aperture edge. The 90° flip through crossover is the reliable sign.</div>
+  <div class="cols" style="margin-top:6pt">
+    <div class="note"><b>Note.</b> Center the crossover with beam shift before judging the C2 aperture. If both are adjusted with the beam spread, the two corrections interfere and do not converge.</div>
+    <div class="note"><b>Note.</b> Judge condenser astigmatism on both sides of crossover. A slightly elliptical beam on one side only can come from the aperture edge; the 90° change in orientation is the reliable sign of astigmatism.</div>
   </div>
-  <div class="foot"><span class="brand"><i class="dot"></i>Seeing with Electrons · TEM-view</span><span>4</span></div>
+  <div class="foot"><span>Seeing with Electrons · TEM-view</span><span>4</span></div>
 </section>
 
 <!-- 5 · step 3 eucentric height -->
 <section class="page">
-  <div class="run"><span>SOP-01 · TEM direct alignment</span><span>Step 3 of 5</span></div>
-  <div class="kicker"><span class="n">3</span>Eucentric height</div>
-  <h2>Put the specimen on the <em>tilt axis</em></h2>
-  <p class="lede">At the eucentric height, the region you are looking at stays in place when the stage tilts. It is also the height the objective lens is designed for, so focus, magnification and the later alignments are all defined there.</p>
+  <div class="run"><span>SOP-01 TEM direct alignment</span><span>Step 3 of 5</span></div>
+  <div class="step">Step 3</div>
+  <h2>Eucentric height</h2>
+  <p class="lede">At the eucentric height, the area being viewed does not move sideways when the stage is tilted. It is also the specimen height for which the objective lens is set up, and the later alignments are made at this height.</p>
   <div class="side">
     <div>
-      <h3>Procedure</h3>
       <ol class="proc">
-        <li>Find a recognizable feature (an edge, a particle) at a medium magnification and center it.</li>
-        <li>Turn on the <b>α wobbler</b> (Z-wobbler). The stage rocks back and forth, typically by ±5° to ±15°.</li>
-        <li>If the image <b>swings sideways</b>, adjust <b>stage Z</b> until the movement stops. Large swings: big Z steps; small swings: fine steps.</li>
-        <li>At the right height the feature <b>only pulses in place</b>. Turn the wobbler off.</li>
-        <li>Optionally, set the objective to its standard focus (eucentric focus) and refocus with Z, if that is your facility's practice.</li>
+        <li>Center a recognizable feature, such as an edge or a particle, at medium magnification.</li>
+        <li>Turn on the α wobbler. The stage tilts back and forth, typically by ±5° to ±15°.</li>
+        <li>If the image moves sideways, adjust stage Z until the movement stops. Use coarse steps for large movements and fine steps near the end.</li>
+        <li>When the feature only changes slightly in focus without moving, turn the wobbler off.</li>
+        <li>If your facility works at a standard objective focus, set it now and focus the image with Z.</li>
       </ol>
-      <div class="done">With the α wobbler on, the image no longer shifts laterally: it pulses in place.</div>
-      <div class="note"><span class="h">Tip</span>Re-check the eucentric height whenever you move to a new area of a specimen that is not flat, and after re-inserting the holder.</div>
-      <div class="note warn"><span class="h">If it never stops moving</span>Make sure the wobbler is tilting α (not β) and that the image shift you see is not drift: turn the wobbler off and watch for a few seconds. If the stage Z reaches its limit, the holder or specimen may be mounted too high or too low.</div>
+      <p class="result"><b>Result.</b> With the α wobbler on, the image does not move sideways.</p>
+      <div class="note"><b>Note.</b> Check the eucentric height again after moving to a different area of a specimen that is not flat, and after reinserting the holder.</div>
+      <div class="note caution"><b>If the image keeps moving.</b> Confirm that the wobbler tilts α and not β, and that the movement is not drift: turn the wobbler off and watch for a few seconds. If stage Z reaches its limit, the specimen may be mounted too high or too low in the holder.</div>
     </div>
-    <div style="display:grid;gap:10pt">
-      <figure class="fig"><img src="fig/z_off.jpg" alt=""><figcaption><span class="tag bad">Wrong Z</span>Two moments of the wobble averaged: the image <b>smears</b> as it swings sideways.</figcaption></figure>
-      <figure class="fig"><img src="fig/z_ok.jpg" alt=""><figcaption><span class="tag ok">Eucentric</span>The same two moments overlap: the image <b>stays sharp</b>.</figcaption></figure>
+    <div class="stack">
+      <figure class="fig"><img src="fig/z_off.jpg" alt=""><figcaption><b>Fig. 3a.</b> Specimen not at eucentric height. Two frames at opposite tilts, averaged; the image is blurred by the sideways movement.</figcaption></figure>
+      <figure class="fig"><img src="fig/z_ok.jpg" alt=""><figcaption><b>Fig. 3b.</b> At eucentric height. The two frames overlap.</figcaption></figure>
     </div>
   </div>
-  <div class="foot"><span class="brand"><i class="dot"></i>Seeing with Electrons · TEM-view</span><span>5</span></div>
+  <div class="foot"><span>Seeing with Electrons · TEM-view</span><span>5</span></div>
 </section>
 
 <!-- 6 · step 4 pivot points & voltage center -->
 <section class="page">
-  <div class="run"><span>SOP-01 · TEM direct alignment</span><span>Step 4 of 5</span></div>
-  <div class="kicker"><span class="n">4</span>Pivot points &amp; voltage center</div>
-  <h2>Tilt without <em>moving</em></h2>
-  <p class="lede">Pivot points make beam tilt and beam shift independent: tilting the beam must not translate it across your region of interest, and shifting it must not tilt it. The voltage (or current) center then puts the beam on the objective lens's axis.</p>
+  <div class="run"><span>SOP-01 TEM direct alignment</span><span>Step 4 of 5</span></div>
+  <div class="step">Step 4</div>
+  <h2>Pivot points and voltage center</h2>
+  <p class="lede">The pivot points separate beam tilt from beam shift, so that tilting the beam does not move it across the area of interest. The voltage center (or current center) then places the beam on the axis of the objective lens.</p>
   <div class="cols">
     <div>
       <h3>Pivot points</h3>
       <ol class="proc">
-        <li>Near crossover with a small spot, select <b>beam tilt pivot point X</b>. The wobbler tilts the beam back and forth in X.</li>
-        <li>If you see <b>two spots</b> (or one swinging spot), merge them into one with the multifunction knobs.</li>
-        <li>Repeat for <b>pivot point Y</b>.</li>
-        <li>If your instrument lists them, do the same for the <b>beam shift pivot points</b> X and Y.</li>
+        <li>Condense the beam to a small spot near crossover and select beam tilt pivot point X. The wobbler tilts the beam back and forth in X.</li>
+        <li>If two spots are visible, bring them together with the multifunction knobs.</li>
+        <li>Repeat for pivot point Y.</li>
+        <li>If your instrument has beam shift pivot points, align them in the same way.</li>
       </ol>
-      <h3>Voltage center (rotation center)</h3>
+      <h3>Voltage center</h3>
       <ol class="proc">
-        <li>Spread the beam and find a feature near the screen center.</li>
-        <li>Turn on the <b>HT wobbler</b> (voltage center), or the objective-current wobbler (current center), as your instrument offers.</li>
-        <li>The image pulses. If it <b>swings</b> to one side, adjust <b>beam tilt</b> with the multifunction knobs until it pulses <b>symmetrically about the center</b>.</li>
+        <li>Spread the beam and center a feature on the screen.</li>
+        <li>Turn on the HT wobbler (voltage center) or the objective current wobbler (current center), depending on your instrument.</li>
+        <li>The image expands and contracts. If it also moves to one side, adjust beam tilt with the multifunction knobs until it expands and contracts about the screen center.</li>
       </ol>
-      <div class="done">The pivot-point wobblers show one stationary spot, and the HT wobbler makes the image breathe in place.</div>
+      <p class="result"><b>Result.</b> Each pivot-point wobbler shows a single stationary spot, and with the HT wobbler on, the image expands and contracts about the center without moving sideways.</p>
     </div>
     <div>
       <div class="figs2">
-        <figure class="fig"><img src="fig/pp_off.jpg" alt=""><figcaption><span class="tag bad">Off</span>Two spots: tilting <b>translates</b> the beam.</figcaption></figure>
-        <figure class="fig"><img src="fig/pp_ok.jpg" alt=""><figcaption><span class="tag ok">Aligned</span>One spot: a <b>pure tilt</b>.</figcaption></figure>
-        <figure class="fig"><img src="fig/ht_off.jpg" alt=""><figcaption><span class="tag bad">Off-axis</span>The HT wobble <b>swings</b> the image: averaged, it smears.</figcaption></figure>
-        <figure class="fig"><img src="fig/ht_ok.jpg" alt=""><figcaption><span class="tag ok">Centered</span>It pulses about the center.</figcaption></figure>
+        <figure class="fig"><img src="fig/pp_off.jpg" alt=""><figcaption><b>Fig. 4a.</b> Pivot point misaligned: two spots.</figcaption></figure>
+        <figure class="fig"><img src="fig/pp_ok.jpg" alt=""><figcaption><b>Fig. 4b.</b> Pivot point aligned: one spot.</figcaption></figure>
+        <figure class="fig"><img src="fig/ht_off.jpg" alt=""><figcaption><b>Fig. 4c.</b> Voltage center off. Two frames of the HT wobble, averaged; the image is blurred by the sideways movement.</figcaption></figure>
+        <figure class="fig"><img src="fig/ht_ok.jpg" alt=""><figcaption><b>Fig. 4d.</b> Voltage center aligned.</figcaption></figure>
       </div>
-      <div class="note"><span class="h">For high resolution</span>The voltage center is a good starting point. For atomic-resolution work, follow it with a coma-free alignment (beam-tilt-induced image shift or a Zemlin tableau), with your facility's procedure.</div>
+      <div class="note"><b>Note.</b> The voltage center is a starting point. For high-resolution imaging, follow it with a coma-free alignment, using beam-tilt-induced image shift or a Zemlin tableau, according to your facility's procedure.</div>
     </div>
   </div>
-  <div class="foot"><span class="brand"><i class="dot"></i>Seeing with Electrons · TEM-view</span><span>6</span></div>
+  <div class="foot"><span>Seeing with Electrons · TEM-view</span><span>6</span></div>
 </section>
 
-<!-- 7 · step 5 objective stigmator + checklist -->
+<!-- 7 · step 5 objective stigmator + record -->
 <section class="page">
-  <div class="run"><span>SOP-01 · TEM direct alignment</span><span>Step 5 of 5</span></div>
-  <div class="kicker"><span class="n">5</span>Objective stigmator</div>
-  <h2>Round <em>Thon rings</em></h2>
-  <p class="lede">Objective astigmatism focuses one direction more strongly than the other. In the live FFT (diffractogram) of an amorphous area, it turns the circular Thon rings into ellipses, or into hyperbolas close to focus.</p>
+  <div class="run"><span>SOP-01 TEM direct alignment</span><span>Step 5 of 5</span></div>
+  <div class="step">Step 5</div>
+  <h2>Objective stigmator</h2>
+  <p class="lede">Objective astigmatism focuses one direction more strongly than the perpendicular one. In the live FFT of an amorphous area it makes the Thon rings elliptical, or hyperbolic close to focus.</p>
   <div class="side">
     <div>
       <ol class="proc">
-        <li>Move to a thin <b>amorphous</b> area (carbon film or the edge of the specimen) at high magnification.</li>
-        <li>Turn on the <b>live FFT</b>. Go somewhat <b>underfocus</b> so several rings are visible.</li>
-        <li>Select the <b>objective stigmator</b>. Adjust X, then Y, until the rings are <b>circular</b>.</li>
-        <li>Check through focus: the rings should shrink and grow evenly, without stretching in one direction.</li>
-        <li>Return to your working focus and area.</li>
+        <li>Move to a thin amorphous area, such as the support film or the edge of the specimen, at high magnification.</li>
+        <li>Turn on the live FFT and go to a moderate underfocus, so that several rings are visible.</li>
+        <li>Select the objective stigmator and adjust X and Y until the rings are circular.</li>
+        <li>Check through focus. The rings should change size evenly in all directions.</li>
+        <li>Return to the working area and focus.</li>
       </ol>
-      <div class="done">The Thon rings are circular at every defocus.</div>
-      <h3>Quick reference</h3>
+      <p class="result"><b>Result.</b> The Thon rings are circular at all defocus values.</p>
+      <h3>Record</h3>
       <table class="t">
-        <tr><th></th><th>Alignment</th><th>Done when</th><th>Initials</th></tr>
-        <tr><td class="box"></td><td>Flash &amp; Go <span style="color:var(--muted)">(cold FEG only)</span></td><td>Emission recovered and stable</td><td class="line"></td></tr>
-        <tr><td class="box"></td><td>Gun shift / gun tilt</td><td>Spot fixed across spot sizes; current maximal</td><td class="line"></td></tr>
-        <tr><td class="box"></td><td>C2 aperture</td><td>Beam opens concentrically</td><td class="line"></td></tr>
+        <tr><th></th><th>Alignment</th><th>Criterion</th><th>Initials</th></tr>
+        <tr><td class="box"></td><td>Flash &amp; Go (cold FEG only)</td><td>Emission recovered and stable</td><td class="line"></td></tr>
+        <tr><td class="box"></td><td>Gun shift and gun tilt</td><td>Beam fixed at all spot sizes; maximum current</td><td class="line"></td></tr>
+        <tr><td class="box"></td><td>C2 aperture</td><td>Beam spreads concentrically</td><td class="line"></td></tr>
         <tr><td class="box"></td><td>Condenser stigmator</td><td>Round on both sides of crossover</td><td class="line"></td></tr>
-        <tr><td class="box"></td><td>Eucentric height</td><td>No lateral shift with the α wobbler</td><td class="line"></td></tr>
-        <tr><td class="box"></td><td>Pivot points X, Y</td><td>One stationary spot</td><td class="line"></td></tr>
-        <tr><td class="box"></td><td>Voltage center</td><td>Image pulses symmetrically</td><td class="line"></td></tr>
+        <tr><td class="box"></td><td>Eucentric height</td><td>No sideways movement with α wobbler</td><td class="line"></td></tr>
+        <tr><td class="box"></td><td>Pivot points X and Y</td><td>Single stationary spot</td><td class="line"></td></tr>
+        <tr><td class="box"></td><td>Voltage center</td><td>Image expands about the center</td><td class="line"></td></tr>
         <tr><td class="box"></td><td>Objective stigmator</td><td>Circular Thon rings</td><td class="line"></td></tr>
       </table>
     </div>
-    <div style="display:grid;gap:10pt">
-      <figure class="fig"><img src="fig/fft_astig.jpg" alt=""><figcaption><span class="tag bad">Astigmatic</span>Rings stretched into a <b>bow tie</b>.</figcaption></figure>
-      <figure class="fig"><img src="fig/fft_round.jpg" alt=""><figcaption><span class="tag ok">Corrected</span><b>Circular</b> rings.</figcaption></figure>
+    <div class="stack">
+      <figure class="fig"><img src="fig/fft_astig.jpg" alt=""><figcaption><b>Fig. 5a.</b> Live FFT with objective astigmatism, 80 nm underfocus.</figcaption></figure>
+      <figure class="fig"><img src="fig/fft_round.jpg" alt=""><figcaption><b>Fig. 5b.</b> After correction with the objective stigmator.</figcaption></figure>
     </div>
   </div>
-  <div class="foot"><span class="brand"><i class="dot"></i>Seeing with Electrons · TEM-view</span><span>7</span></div>
+  <div class="foot"><span>Seeing with Electrons · TEM-view</span><span>7</span></div>
 </section>
 
 <!-- 8 · back cover -->
 <section class="page back">
-  <div class="kicker" style="color:var(--accent)">Practice before your session</div>
-  <h2 style="font-size:38pt">Try it on the <em>digital twin</em></h2>
-  <p class="lede" style="color:#c3d3e1">Every figure in this guide was computed by TEM-view, a physics-based transmission electron microscope that runs in your browser. Its training task <b style="color:#fff">“TEM: direct alignments”</b> hides a different misalignment at each of these steps every time. At the end, it shows you how close you got.</p>
-  <div style="display:flex;gap:22pt;align-items:center;margin:22pt 0 26pt">
+  <h2 style="font-size:32pt;margin-bottom:12pt">Practice on TEM-view</h2>
+  <p class="lede" style="color:#c3d3e1">The figures in this procedure were computed with TEM-view, a physics-based TEM simulator that runs in a web browser. Its training task “TEM: direct alignments” sets a different random misalignment at each step and reports the result of every check at the end.</p>
+  <div style="display:flex;gap:22pt;align-items:center;margin:22pt 0 28pt">
     <div class="qr" id="qr"></div>
     <div>
-      <div class="panel" style="background:#0d1626"><span class="k">Open the training task</span><p style="font:500 11pt var(--mono);margin:6pt 0 0"><a id="link" href=""></a></p></div>
-      <p style="margin-top:10pt;color:#9fb4c6">On a phone, scan the code. On a computer, open the link, or open TEM-view and press <b style="color:#fff">Training</b>.</p>
+      <p style="margin:0 0 4pt;color:#9fb4c6">Open the training task</p>
+      <p style="font-size:11pt;margin:0 0 10pt"><a id="link" href=""></a></p>
+      <p style="color:#9fb4c6;margin:0">Scan the code with a phone, or open TEM-view and select Training.</p>
     </div>
   </div>
-  <div class="cols3" style="margin-top:6pt">
-    <div class="panel"><span class="k">See the physics</span><p style="margin:6pt 0 0">Click any part of the 3D column to learn what it does and how it is measured.</p></div>
-    <div class="panel"><span class="k">Get your true score</span><p style="margin:6pt 0 0">Rate your alignment, then see the hidden answer and each check, pass or fail.</p></div>
-    <div class="panel"><span class="k">Help build better microscopes</span><p style="margin:6pt 0 0">With your consent, anonymous practice sessions train AI that can assist real alignments.</p></div>
+  <div class="cols3">
+    <div><h3>Simulated column</h3><p>Select any part of the 3D column to see what it does and how it is measured.</p></div>
+    <div><h3>Scored practice</h3><p>Rate your own alignment, then compare it with the hidden misalignment.</p></div>
+    <div><h3>Research data</h3><p>With your consent, anonymous practice sessions are used to study how people align microscopes.</p></div>
   </div>
-  <div style="position:absolute;left:0.7in;right:0.7in;bottom:0.6in;display:flex;justify-content:space-between;align-items:flex-end">
-    <div style="font:400 7.4pt/1.7 var(--mono);color:#7f93a6">SOP-01 · TEM direct alignment · v1.0 · October 2026<br>An educational guide. Follow your facility's procedures and<br>the instrument manufacturer's documentation first.<br>Figures: TEM-view simulations. github.com/Advanced-EM/TEM-view</div>
-    <div class="logo" style="font:italic 400 22pt var(--serif);color:#fff;text-align:right;line-height:1">Seeing with Electrons<small style="display:block;font:500 7pt var(--mono);letter-spacing:.2em;text-transform:uppercase;color:var(--accent);margin-top:6pt">TEM-view · Advanced-EM</small></div>
+  <div class="fine">
+    <div>SOP-01 TEM direct alignment, version 1.1, October 2026<br>For training. Follow your facility's procedures and the<br>manufacturer's documentation.<br>github.com/Advanced-EM/TEM-view</div>
+    <div class="logo">Seeing with Electrons<small>TEM-view · Advanced-EM</small></div>
   </div>
 </section>
 
 <script>
   const url = 'https://advanced-em.github.io/TEM-view/?train=tem-direct-align';
-  document.getElementById('link').href = url;
-  document.getElementById('link').textContent = url.replace('https://', '');
+  const a = document.getElementById('link'); a.href = url; a.textContent = url.replace('https://', '');
   try { const q = qrcode(0, 'M'); q.addData(url); q.make(); document.getElementById('qr').innerHTML = q.createSvgTag({ cellSize: 4, margin: 0, scalable: true }); } catch { /* offline: link only */ }
 </script>
 </body>

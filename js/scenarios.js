@@ -153,6 +153,26 @@ export class Scenarios {
     c.querySelector('[data-x="done"]').onclick = () => this.judge();
     c.querySelector('[data-x="give"]').onclick = () => this.finish('gave_up');
     sc.mount?.(this.api, c);
+    this.draggable(c, c.querySelector('.scnhead'));
+  }
+  // the card can be moved by its header (it would otherwise cover the detector or the column); the spot is kept
+  // for the rest of the visit, and a double-click on the header puts it back
+  draggable(c, handle) {
+    const place = (x, y) => {
+      const r = c.getBoundingClientRect();
+      x = Math.max(4, Math.min(innerWidth - r.width - 4, x)); y = Math.max(4, Math.min(innerHeight - 40, y));
+      Object.assign(c.style, { left: `${x}px`, top: `${y}px`, transform: 'none' }); this.cardPos = [x, y];
+    };
+    if (this.cardPos) place(...this.cardPos);
+    handle.title = 'Drag to move · double-click to put back';
+    handle.onpointerdown = (e) => {
+      if (e.button !== 0 || e.target.closest('button')) return;
+      const r = c.getBoundingClientRect(), dx = e.clientX - r.left, dy = e.clientY - r.top;
+      handle.setPointerCapture(e.pointerId); c.classList.add('dragging');
+      handle.onpointermove = (m) => place(m.clientX - dx, m.clientY - dy);
+      handle.onpointerup = handle.onpointercancel = () => { handle.onpointermove = null; c.classList.remove('dragging'); };
+    };
+    handle.ondblclick = (e) => { if (e.target.closest('button')) return; this.cardPos = null; Object.assign(c.style, { left: '', top: '', transform: '' }); };
   }
   tick() {
     const now = performance.now(), dt = Math.min(0.1, (now - (this.lastTick ?? now)) / 1000); this.lastTick = now;

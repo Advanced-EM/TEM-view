@@ -9,7 +9,7 @@
 // https://buymeacoffee.com/<name> address (the button stays hidden while it is empty); newsletter is an optional
 // email-signup page (Buttondown, Substack, …). GitHub release notifications are always offered.
 export const SUPPORT = {
-  coffee: '',
+  coffee: 'https://buymeacoffee.com/rmsreis',
   newsletter: '',
   repo: 'https://github.com/Advanced-EM/TEM-view',
 };
