@@ -9,7 +9,7 @@
 // Without HF_TOKEN it runs as a dry run: sessions are validated and acknowledged, nothing is stored.
 // No IP addresses are stored; the optional rate limiter keys on a salted hash and keeps nothing.
 //
-// It also keeps the news mailing list: POST /subscribe {email} stores the address in the SUBSCRIBERS KV
+// It also keeps the news mailing list: POST /subscribe {email, name, institution, role} stores the address in the SUBSCRIBERS KV
 // namespace (private to the Cloudflare account, never in the public dataset). Without that binding, /subscribe
 // answers 503.
 import { clean, Invalid, MAX_BYTES } from './schema.js';
@@ -51,6 +51,8 @@ async function commit(env, path, text, summary) {
 // a plain sanity check, not full RFC 5322: one @, a dot in the domain, no spaces
 const EMAIL = /^[^\s@<>()",;:]{1,64}@[^\s@<>()",;:]+\.[a-z]{2,}$/i;
 
+const ROLES = ['student', 'staff', 'faculty', 'hobbyist'];
+
 async function subscribe(req, env, h) {
   if (!env.SUBSCRIBERS) return json({ detail: 'the mailing list is not set up yet' }, 503, h);
   let b;
@@ -58,9 +60,14 @@ async function subscribe(req, env, h) {
   if (b?.website) return json({ ok: true }, 200, h); // honeypot field, filled only by bots
   const email = String(b?.email ?? '').trim().toLowerCase();
   if (email.length > 254 || !EMAIL.test(email)) return json({ detail: 'please enter a valid email address' }, 422, h);
+  // name and role are required, institution is optional (a hobbyist may have none)
+  const text = (v, n) => String(v ?? '').replace(/[\u0000-\u001f<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, n);
+  const name = text(b?.name, 100), institution = text(b?.institution, 160), role = String(b?.role ?? '').toLowerCase();
+  if (!name) return json({ detail: 'please enter your name' }, 422, h);
+  if (!ROLES.includes(role)) return json({ detail: `role must be one of: ${ROLES.join(', ')}` }, 422, h);
   const key = `email:${email}`;
   if (await env.SUBSCRIBERS.get(key)) return json({ ok: true, already: true }, 200, h);
-  await env.SUBSCRIBERS.put(key, JSON.stringify({ email, subscribed: new Date().toISOString().slice(0, 10), source: String(b?.source ?? 'exhibit').slice(0, 40) }));
+  await env.SUBSCRIBERS.put(key, JSON.stringify({ email, name, institution, role, subscribed: new Date().toISOString().slice(0, 10), source: text(b?.source ?? 'exhibit', 40) }));
   return json({ ok: true }, 200, h);
 }
 

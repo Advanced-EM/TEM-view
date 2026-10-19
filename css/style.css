@@ -498,9 +498,16 @@ body.detBig .cmdbar { display: none; }
 .support { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; pointer-events: auto; }
 .spill { display: inline-flex; align-items: center; gap: 6px; font: 500 12px var(--sans); color: var(--text); text-decoration: none; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--panel); backdrop-filter: blur(10px); cursor: pointer; }
 .spill:hover { border-color: var(--accent); color: var(--accent); }
-.newsform { display: flex; gap: 8px; margin: 12px 0 6px; }
-.newsform input[type='email'] { flex: 1; min-width: 0; font: 14px var(--sans); color: var(--text); background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line-2); border-radius: 8px; padding: 9px 12px; }
-.newsform input[type='email']:focus { outline: none; border-color: var(--accent); }
+.newsform { display: grid; gap: 10px; margin: 12px 0 6px; }
+.newsform label { display: grid; gap: 4px; font: 500 12px var(--sans); color: var(--muted); }
+.newsform label small { font-weight: 400; }
+.newsform input:not([type='radio']) { font: 14px var(--sans); color: var(--text); background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line-2); border-radius: 8px; padding: 9px 12px; }
+.newsform input:not([type='radio']):focus { outline: none; border-color: var(--accent); }
+.newsform fieldset { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
+.newsform legend { font: 500 12px var(--sans); color: var(--muted); padding: 0; margin-bottom: 6px; width: 100%; }
+.newsform label.role { display: inline-flex; align-items: center; gap: 6px; font: 400 14px var(--sans); color: var(--text); cursor: pointer; }
+.newsform label.role input { accent-color: var(--accent); margin: 0; }
+.newsform button[type='submit'] { justify-self: start; }
 .newsform .hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
 #newsBody .err { color: #ff9b85; }
 #newsBody .thanks { font-size: 17px; color: var(--accent); margin-top: 6px; }

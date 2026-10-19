@@ -966,7 +966,10 @@ function wire() {
   $('#btnNews').addEventListener('click', () => {
     $('#newsBody').innerHTML = `<p>New modes, training tasks, guides and the TEM-view Console: get an email when they ship.</p>
       ${SUPPORT.subscribe ? `<form id="newsForm" class="newsform" novalidate>
-        <input type="email" name="email" placeholder="you@example.org" autocomplete="email" required aria-label="Email address">
+        <label>Name<input name="name" autocomplete="name" required maxlength="100"></label>
+        <label>Email<input type="email" name="email" placeholder="you@example.org" autocomplete="email" required></label>
+        <label><span>Institution <small>(optional)</small></span><input name="institution" autocomplete="organization" maxlength="160"></label>
+        <fieldset><legend>I am a</legend>${['student', 'staff', 'faculty', 'hobbyist'].map((r) => `<label class="role"><input type="radio" name="role" value="${r}" required>${r[0].toUpperCase() + r.slice(1)}</label>`).join('')}</fieldset>
         <input type="text" name="website" tabindex="-1" autocomplete="off" class="hp" aria-hidden="true">
         <button class="btn primary" type="submit">Subscribe</button>
       </form>
@@ -976,17 +979,20 @@ function wire() {
     $('#newsModal').hidden = false;
     const f = $('#newsForm');
     if (!f) return;
-    f.email.focus();
+    f.name.focus();
     f.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const msg = $('#newsMsg'), btn = f.querySelector('button'), email = f.email.value.trim();
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) { msg.textContent = 'Please enter a valid email address.'; msg.className = 'err'; f.email.focus(); return; }
+      const msg = $('#newsMsg'), btn = f.querySelector('button[type=submit]'), email = f.email.value.trim(), name = f.name.value.trim(), role = f.role.value;
+      const bad = (text, el) => { msg.textContent = text; msg.className = 'err'; el?.focus(); };
+      if (!name) return bad('Please enter your name.', f.name);
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return bad('Please enter a valid email address.', f.email);
+      if (!role) return bad('Please choose student, staff, faculty or hobbyist.', f.querySelector('[name=role]'));
       btn.disabled = true; btn.textContent = 'Subscribing…';
       try {
-        const r = await fetch(SUPPORT.subscribe, { method: 'POST', headers: { 'content-type': 'text/plain' }, body: JSON.stringify({ email, website: f.website.value, source: 'exhibit' }) });
+        const r = await fetch(SUPPORT.subscribe, { method: 'POST', headers: { 'content-type': 'text/plain' }, body: JSON.stringify({ email, name, institution: f.institution.value.trim(), role, website: f.website.value, source: 'exhibit' }) });
         const j = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(j.detail || `error ${r.status}`);
-        $('#newsBody').innerHTML = `<p class="thanks"><b>Thanks for subscribing!</b></p><p>${j.already ? 'This address is already on the list' : 'TEM-view news will go to'} <b>${email.replace(/[<>&"]/g, '')}</b>.</p>`;
+        $('#newsBody').innerHTML = `<p class="thanks"><b>Thanks for subscribing${j.already ? '' : `, ${name.split(' ')[0].replace(/[<>&"]/g, '')}`}!</b></p><p>${j.already ? 'This address is already on the list' : 'TEM-view news will go to'} <b>${email.replace(/[<>&"]/g, '')}</b>.</p>`;
       } catch (err) {
         msg.textContent = `Could not subscribe: ${err.message}. Please try again later.`; msg.className = 'err';
         btn.disabled = false; btn.textContent = 'Subscribe';
