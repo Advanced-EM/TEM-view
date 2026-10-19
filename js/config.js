@@ -11,6 +11,8 @@
 export const SUPPORT = {
   coffee: 'https://buymeacoffee.com/rmsreis',
   newsletter: '',
+  // the news form posts {email} here (the collector Worker's /subscribe, hf/worker); empty hides the form
+  subscribe: 'https://tem-view-collector.tem-view.workers.dev/subscribe',
   repo: 'https://github.com/Advanced-EM/TEM-view',
 };
 
