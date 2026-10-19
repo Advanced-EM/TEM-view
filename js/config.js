@@ -18,7 +18,8 @@ export const SUPPORT = {
 
 // agent: the local temview-mcp server (tools/temview-mcp) an AI agent runs; the exhibit connects only when the
 // visitor clicks "Connect agent".
-export const AGENT = { url: 'ws://127.0.0.1:8791' };
+// It tries each address in turn: 8790 is temview-mcp's default, 8791 a common choice when 8790 is taken.
+export const AGENT = { urls: ['ws://127.0.0.1:8790', 'ws://127.0.0.1:8791'] };
 
 export const SHARE = {
   url: 'https://tem-view-collector.tem-view.workers.dev/submit',

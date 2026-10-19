@@ -26,9 +26,14 @@ That example uses Claude Code; other MCP clients use the same command over stdio
 
 | Variable | Default | |
 | --- | --- | --- |
-| `TEMVIEW_PORT` | 8790 | local WebSocket port for the exhibit (bound to 127.0.0.1 only) |
+| `TEMVIEW_PORT` | 8790 | local WebSocket port for the exhibit (bound to 127.0.0.1 only). The exhibit tries 8790, then 8791 |
 | `TEMVIEW_ORIGINS` | `https://advanced-em.github.io` | sites allowed to connect, besides localhost |
 | `TEMVIEW_OUT` | `./temview-out` | where simulations and saved acquisitions go |
+
+Each AI client starts its own copy of the server, and only one copy can hold a port. With two clients running, the
+exhibit joins whichever server holds 8790; start a second client with `TEMVIEW_PORT=8791`, or run one at a time.
+The full setup, with Claude, OpenAI Codex, Ollama and emskills, is in
+[SOP-03](../../docs/guides/pdf/sop-03-ai-agents.pdf).
 
 ## Tools
 
