@@ -738,7 +738,7 @@ const voice = new Voice({
   },
 });
 const agent = new AgentBridge({
-  url: AGENT.url,
+  urls: AGENT.urls ?? [AGENT.url],
   state: stateSummary,
   busy: () => (scn?.active ? 'A training task is running in the exhibit; the agent cannot change settings until it ends.' : scn?.replay ? 'A session replay is playing.' : null),
   run: (ops) => ops.filter((op) => op.op !== 'export').map((op) => { runOp(op); return op.op === 'analyze' ? (op.result ?? { error: op.error }) : describe(op); }),

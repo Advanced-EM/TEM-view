@@ -83,3 +83,12 @@ table.t td.line { width: 1in; }
 .qr { background: #fff; padding: 7pt; width: 1.3in; height: 1.3in; }
 .qr svg { width: 100%; height: 100%; display: block; }
 .back .fine { position: absolute; left: 0.75in; right: 0.75in; bottom: 0.6in; display: flex; justify-content: space-between; align-items: flex-end; font-size: 7.5pt; line-height: 1.6; color: #7f93a6; }
+
+/* screenshots and code (SOP-03) */
+.fig.ui img { aspect-ratio: auto; object-fit: contain; border: 0.5pt solid var(--rule); }
+pre { font: 400 7.6pt/1.45 ui-monospace, 'SF Mono', Menlo, monospace; background: #f3f5f7; border-left: 2pt solid var(--rule); padding: 6pt 8pt; margin: 4pt 0 8pt; white-space: pre-wrap; word-break: break-word; }
+code { font: 400 8.2pt ui-monospace, 'SF Mono', Menlo, monospace; background: #f3f5f7; padding: 0 2pt; }
+pre code { background: none; padding: 0; font-size: inherit; }
+.cover .shot { position: absolute; left: 0.75in; right: 0.75in; top: 4.2in; border: 0.5pt solid #2a3646; }
+.cover .shot img { display: block; width: 100%; }
+.diagram { width: 100%; margin: 6pt 0 10pt; }

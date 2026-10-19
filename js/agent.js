@@ -5,17 +5,23 @@
 // default), and it refuses control while a training task is running so the behavior data stays the visitor's own.
 
 export class AgentBridge {
-  // api: { url, state(), run(ops) → [descriptions], command(text) → {done, ask}, acquire(withData) → {...}, say(text), busy() → reason|null, onStatus(status) }
+  // api: { urls (tried in turn), state(), run(ops) → [descriptions], command(text) → {done, ask}, acquire(withData) → {...}, say(text), busy() → reason|null, onStatus(status) }
   constructor(api) { this.api = api; this.ws = null; this.status = 'off'; }
   get connected() { return this.status === 'on'; }
 
-  connect() {
+  connect(i = 0) {
     if (this.ws) return;
+    const urls = this.api.urls, url = urls[i];
     let ws;
-    try { ws = new WebSocket(this.api.url); } catch (e) { this.set('error', `Could not open ${this.api.url}`); return; }
+    try { ws = new WebSocket(url); } catch (e) { this.set('error', `Could not open ${url}`); return; }
     this.ws = ws; this.set('connecting');
-    ws.onopen = () => { this.set('on'); ws.send(JSON.stringify({ event: 'hello', state: this.api.state() })); };
-    ws.onclose = () => { const was = this.status; this.ws = null; this.set(was === 'connecting' ? 'error' : 'off', was === 'connecting' ? `No agent server at ${this.api.url}. Start temview-mcp from your agent (see tools/temview-mcp).` : ''); };
+    ws.onopen = () => { this.url = url; this.set('on'); ws.send(JSON.stringify({ event: 'hello', state: this.api.state() })); };
+    ws.onclose = () => {
+      const was = this.status; this.ws = null;
+      // nothing listening here: try the next address before giving up
+      if (was === 'connecting' && i + 1 < urls.length) { this.connect(i + 1); return; }
+      this.set(was === 'connecting' ? 'error' : 'off', was === 'connecting' ? `No agent server at ${urls.join(' or ')}. Start temview-mcp from your agent (see tools/temview-mcp).` : '');
+    };
     ws.onerror = () => { /* onclose follows */ };
     ws.onmessage = async (e) => {
       let m; try { m = JSON.parse(e.data); } catch { return; }
