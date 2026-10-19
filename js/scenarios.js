@@ -20,6 +20,23 @@ export function flatAngle(lam, df, Cs, ab, apMrad) {
   return apMrad;
 }
 
+// Ronchigram scoring: the true residual phase error inside the target cone, in units of π/4. E ≤ 1 means the
+// flat region already reaches the target; the score then falls off smoothly instead of failing at a hard cutoff.
+// The whole aberration function is used (not each term alone), so balancing C1 against C3 counts as it should.
+export function phaseError(lam, df, Cs, ab, refMrad) {
+  const ref = refMrad * 1e-3; let m = 0;
+  for (let i = 1; i <= 24; i++) for (let k = 0; k < 72; k++) m = Math.max(m, Math.abs(P.chiAngle((i / 24) * ref, (k / 72) * 2 * Math.PI, lam, df, Cs, ab)));
+  return m / (Math.PI / 4);
+}
+// how much each residual alone contributes at the edge of the target cone (π/4 units): shows what to fix first
+function phaseByTerm(lam, df, Cs, ab, refMrad) {
+  const z = { A1: 0, A1a: 0, B2: 0, B2a: 0, A2: 0, A2a: 0, A3: 0, A3a: 0 }, ref = refMrad * 1e-3;
+  const one = (C1, C3, a) => { let m = 0; for (let k = 0; k < 72; k++) m = Math.max(m, Math.abs(P.chiAngle(ref, (k / 72) * 2 * Math.PI, lam, C1, C3, a))); return r1(m / (Math.PI / 4), 2); };
+  return { C1: one(df, 0, z), A1: one(0, 0, { ...z, A1: ab.A1, A1a: ab.A1a }), B2: one(0, 0, { ...z, B2: ab.B2, B2a: ab.B2a }), A2: one(0, 0, { ...z, A2: ab.A2, A2a: ab.A2a }), C3: one(0, Cs, z), A3: one(0, 0, { ...z, A3: ab.A3, A3a: ab.A3a }) };
+}
+export const ronchScore = (E) => Math.round(E <= 1 ? 100 : 100 * Math.exp(-(((E - 1) / 3) ** 2)));
+const RONCH_PASS = 75;
+
 export const SCENARIOS = {
   'tem-focus-stig': {
     title: 'TEM: focus and stigmate',
@@ -57,8 +74,8 @@ export const SCENARIOS = {
   },
   'corrector-ronch': {
     title: 'Corrector: tune the Ronchigram',
-    short: 'A drifted probe corrector: hidden C1, A1, B2, A2, C3 and A3. Grow the flat center of the Ronchigram to 30 mrad.',
-    brief: 'The probe corrector has drifted: defocus, spherical aberration and several asymmetric aberrations are present, and the slider readings are not the true values. On the Ronchigram of amorphous carbon, make the flat, featureless center as <b>large and round</b> as you can (target: at least <b>30 mrad</b>). Adjust defocus, Cₛ and the A1, B2, A2, A3 magnitudes and angles with the sliders, or with the control panel (<kbd>V</kbd>): <kbd>Tab</kbd> picks what the multifunction knobs (<kbd>H</kbd>/<kbd>L</kbd>, <kbd>K</kbd>/<kbd>J</kbd>, Shift for big steps) drive: stigmator A1, coma B2, 3-fold A2, 4-fold A3 or Cₛ. Auto-tune is disabled. Press <b>I\'m done</b> when you are satisfied.',
+    short: 'A drifted probe corrector: hidden C1, A1, B2, A2, C3 and A3. Grow the flat center of the Ronchigram toward 30 mrad; scored by how close the true aberrations are to zero.',
+    brief: 'The probe corrector has drifted: defocus, spherical aberration and several asymmetric aberrations are present, and the slider readings are not the true values. On the Ronchigram of amorphous carbon, make the flat, featureless center as <b>large and round</b> as you can. The score depends on how close the true aberrations end up to zero: a flat region of about <b>30 mrad</b> scores 100, and a little less still counts as aligned. Adjust defocus, Cₛ and the A1, B2, A2, A3 magnitudes and angles with the sliders, or with the control panel (<kbd>V</kbd>): <kbd>Tab</kbd> picks what the multifunction knobs (<kbd>H</kbd>/<kbd>L</kbd>, <kbd>K</kbd>/<kbd>J</kbd>, Shift for big steps) drive: stigmator A1, coma B2, 3-fold A2, 4-fold A3 or Cₛ. Auto-tune is disabled. Press <b>I\'m done</b> when you are satisfied.',
     cues: ['Flat center is large', 'Flat center is round', 'Streaks or rings gone', 'Symmetry of the pattern', 'Used the phase plate panel', 'Used the aberration budget bars', 'Guessed'],
     setup(api, rng) {
       const { S } = api;
@@ -71,14 +88,22 @@ export const SCENARIOS = {
       return { hidden: { mis: S.mis, terms: h }, target: { flat_mrad: 30, aperture_mrad: 45 } };
     },
     metrics(api, sc) {
-      const { S, sim } = api, ab = sim.abA(), flat = flatAngle(sim.lam, sim.dfA(), sim.CsA(), ab, S.ronchAp);
+      const { S, sim } = api, ab = sim.abA(), ref = sc.target.flat_mrad;
+      const flat = flatAngle(sim.lam, sim.dfA(), sim.CsA(), ab, S.ronchAp), E = phaseError(sim.lam, sim.dfA(), sim.CsA(), ab, ref), score = ronchScore(E);
       return {
-        score: Math.round(Math.min(100, (flat / sc.target.flat_mrad) * 100)), flat_mrad: r1(flat, 2),
+        score, phase_error: r1(E, 2), flat_mrad: r1(flat, 2), ...Object.fromEntries(Object.entries(phaseByTerm(sim.lam, sim.dfA(), sim.CsA(), ab, ref)).map(([k, v]) => [`phase_${k}`, v])),
         C1_nm: r1(sim.dfA() / 10, 2), C3_um: r1(sim.CsA() / 1e4, 2), A1_nm: r1(ab.A1 / 10, 1), B2_nm: r1(ab.B2 / 10, 0), A2_nm: r1(ab.A2 / 10, 0), A3_um: r1(ab.A3 / 1e4, 2),
-        dose: r1(sim.doseAcc || 0), success: flat >= sc.target.flat_mrad,
+        dose: r1(sim.doseAcc || 0), success: score >= RONCH_PASS,
+        verdict: score >= 95 ? 'Excellent ✓' : score >= RONCH_PASS ? 'Aligned ✓' : score >= 50 ? 'Close' : 'Not quite',
       };
     },
-    explain: (m) => `Your flat region reached ${m.flat_mrad} mrad (target 30). True residuals at the end: C1 ${m.C1_nm} nm, A1 ${m.A1_nm} nm, B2 ${m.B2_nm} nm, A2 ${m.A2_nm} nm, C3 ${m.C3_um} µm, A3 ${m.A3_um} µm. Correctors are tuned order by order: first defocus and two-fold astigmatism (they stretch the whole pattern), then coma and three-fold astigmatism (lopsided and triangular distortions), then C3 and four-fold.`,
+    explain: (m) => {
+      const names = { C1: 'defocus C1', A1: 'two-fold astigmatism A1', B2: 'coma B2', A2: 'three-fold A2', C3: 'spherical C3', A3: 'four-fold A3' };
+      const worst = Object.keys(names).map((k) => [k, m[`phase_${k}`] ?? 0]).sort((a, b) => b[1] - a[1])[0];
+      return `The score measures how far the true optics are from perfect: the largest phase error left inside a 30 mrad cone is ${m.phase_error}× π/4. At 1 or less the score is 100, and any score of ${RONCH_PASS} or more counts as aligned. Your flat region reached ${m.flat_mrad} mrad.
+        True residuals: C1 ${m.C1_nm} nm, A1 ${m.A1_nm} nm, B2 ${m.B2_nm} nm, A2 ${m.A2_nm} nm, C3 ${m.C3_um} µm, A3 ${m.A3_um} µm.${worst && worst[1] > 0.5 ? ` The largest contribution came from <b>${names[worst[0]]}</b> (${worst[1]}× π/4 on its own at 30 mrad).` : ''}
+        Correctors are tuned order by order: first defocus and two-fold astigmatism (they stretch the whole pattern), then coma and three-fold astigmatism (lopsided and triangular distortions), then C3 and four-fold.`;
+    },
     blocked: ['autotune', 'scramble'],
   },
   'tem-direct-align': ALIGN_SCENARIO,
@@ -214,7 +239,7 @@ export class Scenarios {
     this.active = null;
     const m = this.el('scnModal', 'modal', `<div class="card"><button class="close" aria-label="Close">×</button>
       <p class="eyebrow">${outcome === 'done' ? 'Result' : 'Gave up'} · ${sc.title}</p>
-      <h2>${mt.success ? 'Aligned ✓' : 'Not quite'} <em>${mt.score}/100</em></h2>
+      <h2>${mt.verdict ?? (mt.success ? 'Aligned ✓' : 'Not quite')} <em>${mt.score}/100</em></h2>
       ${rating ? `<p>You rated it <b>${rating}/5</b>${mt.success === rating >= 4 ? ', and the simulator agrees.' : mt.success ? ', but it was actually aligned.' : ', but it was still off.'}</p>` : ''}
       <p>${sc.explain(mt, a)}</p>
       <table class="data">${[['Time', `${Math.floor(secs / 60)} min ${Math.round(secs % 60)} s`], ...(sess ? [['Adjustments', `${changes.length} (${Object.entries(bySrc).map(([k, v]) => `${k} ${v}`).join(', ') || '—'})`]] : []), ...(mt.dose != null ? [['Dose used', `${mt.dose} e⁻/Å²`]] : [])].map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('')}</table>
