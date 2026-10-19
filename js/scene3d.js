@@ -261,9 +261,14 @@ export class Scene3D {
     this.tipGlow = this.sprite(0x8dffae, 0.9);
     this.tipGlow.position.set(0, 5.32, 0);
     col.add(this.tipGlow);
-    // anode + accelerator
-    col.add(halfSolid([[0.06, Y.anode - 0.03], [0.62, Y.anode - 0.03], [0.62, Y.anode + 0.05], [0.06, Y.anode + 0.05]], M.plat, M.cut));
-    for (let i = 0; i < 3; i++) col.add(halfSolid(rectPts(0.3, 0.7, 4.3 - i * 0.18, 4.36 - i * 0.18), M.plat, M.cut, 40));
+    // below the gun: the extraction anode, then the accelerator, a stack of anode disks on ceramic spacers that
+    // takes the electrons from the extraction voltage to the full high tension
+    col.add(halfSolid([[0.05, 5.1], [0.55, 5.1], [0.55, 5.16], [0.05, 5.16]], M.plat, M.cut));
+    for (let i = 0; i < 6; i++) {
+      const y = 4.95 - i * 0.13;
+      col.add(halfSolid(rectPts(0.07 + i * 0.012, 0.72, y, y + 0.045), M.plat, M.cut, 40));
+      if (i < 5) col.add(halfSolid(rectPts(0.64, 0.72, y - 0.085, y), M.ceramic, M.ceramic, 40));
+    }
     // column wall
     col.add(halfSolid([[0.46, -3.0], [0.5, -3.0], [0.5, 5.75], [0.46, 5.75]], M.dark, M.cut));
     const shell = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.6, 10.6, 64, 1, true, -Math.PI / 2, Math.PI), M.glass);
@@ -278,12 +283,17 @@ export class Scene3D {
     col.add(lens(M, Y.proj, 0.42, 1.12, 0.6, 0.12));
     // condenser aperture
     col.add(aperturePlate(M, Y.cap, 0.19, -1));
-    // scan coils
+    // scan / deflection coils: magnetic coils whose axes are perpendicular to the column. At each of two levels
+    // (upper and lower deflector) a pair deflects in x and a pair in y; driven together they shift or tilt the beam
     this.scanCoils = new THREE.Group();
-    for (const dy of [0.12, -0.12]) {
-      const t = new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.035, 12, 48, Math.PI), M.copper);
-      t.rotation.x = -Math.PI / 2; t.position.y = Y.scan + dy;
-      this.scanCoils.add(t);
+    for (const dy of [0.15, -0.15]) {
+      for (let k = 0; k < 4; k++) {
+        const a = (k * Math.PI) / 2, r = 0.3;
+        const coil = new THREE.Mesh(new THREE.TorusGeometry(0.1, 0.022, 10, 32), M.copper);
+        coil.position.set(r * Math.cos(a), Y.scan + dy, r * Math.sin(a));
+        coil.lookAt(0, Y.scan + dy, 0); // the coil's axis points across the beam
+        this.scanCoils.add(coil);
+      }
     }
     col.add(this.scanCoils);
     // probe aberration corrector: two hexapoles with transfer doublet between them
@@ -478,11 +488,11 @@ export class Scene3D {
   buildLabels() {
     const L = [
       ['Electron gun', [0.4, Y.gun + 0.1, 0], null],
-      ['High-voltage accelerator', [1.05, 6.3, 0], null],
+      ['High-voltage accelerator', [0.95, 4.62, 0], null],
       ['Condenser lens 1', [1.18, Y.c1, 0], null],
       ['Condenser lens 2', [1.18, Y.c2, 0], null],
       ['Condenser aperture', [-0.5, Y.cap, 0], null, 'left'],
-      ['Scan coils', [-0.4, Y.scan, 0], ['stem', '4d', 'eds', 'eels'], 'left'],
+      ['Scan coils', [-0.4, Y.scan, 0], null, 'left'],
       ['Aberration corrector', [0.55, 2.22, 0], ['corr']],
       ['Objective lens', [1.6, Y.objTop - 0.1, 0], null],
       ['Specimen', [0.9, Y.spec + 0.1, 0.1], null],
@@ -748,7 +758,7 @@ export class Scene3D {
     this.biprism.position.x = (1 - A.bip) * -2.6;
     this.biprism.visible = A.bip > 0.02;
     this.bipMat.emissiveIntensity = m === 'oah' ? 0.45 + 0.15 * Math.sin(this.time * 3) : 0;
-    this.scanCoils.children.forEach((c) => (c.material = stemLike ? this.M.copper : this.M.iron));
+    this.scanCoils.children.forEach((c) => (c.material = this.M.copper)); // deflectors work in every mode (scan in STEM, shift and tilt in TEM)
     // apertures
     const setAp = (grp, target, center, key, keyX, y, side) => {
       const on = target !== null && target !== undefined;

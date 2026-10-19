@@ -4,6 +4,7 @@
 import * as P from './physics.js';
 import { Recorder } from './telemetry.js';
 import { SHARE } from './config.js';
+import { ALIGN_SCENARIO } from './align.js';
 
 const DEG = Math.PI / 180;
 const esc = (t) => String(t).replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' })[c]);
@@ -80,6 +81,7 @@ export const SCENARIOS = {
     explain: (m) => `Your flat region reached ${m.flat_mrad} mrad (target 30). True residuals at the end: C1 ${m.C1_nm} nm, A1 ${m.A1_nm} nm, B2 ${m.B2_nm} nm, A2 ${m.A2_nm} nm, C3 ${m.C3_um} µm, A3 ${m.A3_um} µm. Correctors are tuned order by order: first defocus and two-fold astigmatism (they stretch the whole pattern), then coma and three-fold astigmatism (lopsided and triangular distortions), then C3 and four-fold.`,
     blocked: ['autotune', 'scramble'],
   },
+  'tem-direct-align': ALIGN_SCENARIO,
 };
 
 // ---------------------------------------------------------------------------------------------- runner
@@ -88,6 +90,7 @@ export class Scenarios {
   constructor(api) {
     this.api = api;
     this.recorder = new Recorder({ S: api.S, version: api.version });
+    this.api.noteSource ??= (src) => this.recorder.noteSource(src);
     this.active = null; this.lastSession = null; this.replay = null;
     this.el = (id, cls, html = '') => { let e = document.getElementById(id); if (!e) { e = document.createElement('div'); e.id = id; e.className = cls; document.body.appendChild(e); } e.innerHTML = html; e.hidden = false; return e; };
   }
@@ -149,8 +152,11 @@ export class Scenarios {
     c.querySelector('[data-x="brief"]').onclick = () => c.classList.toggle('mini');
     c.querySelector('[data-x="done"]').onclick = () => this.judge();
     c.querySelector('[data-x="give"]').onclick = () => this.finish('gave_up');
+    sc.mount?.(this.api, c);
   }
   tick() {
+    const now = performance.now(), dt = Math.min(0.1, (now - (this.lastTick ?? now)) / 1000); this.lastTick = now;
+    if (this.active) SCENARIOS[this.active.id].tick?.(this.api, dt);
     this.recorder.tick();
     if (this.active) { const s = Math.floor((performance.now() - this.active.t0) / 1000), t = document.getElementById('scnTime'); if (t) t.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }
     this.replayTick();
@@ -183,6 +189,7 @@ export class Scenarios {
     const changes = sess ? sess.events.filter((e) => e.k === 'change' && !['paused'].includes(e.key)) : [];
     const bySrc = {};
     for (const e of changes) bySrc[e.src] = (bySrc[e.src] ?? 0) + 1;
+    sc.unmount?.(this.api);
     document.getElementById('scnCard').hidden = true;
     this.active = null;
     const m = this.el('scnModal', 'modal', `<div class="card"><button class="close" aria-label="Close">×</button>
@@ -190,7 +197,7 @@ export class Scenarios {
       <h2>${mt.success ? 'Aligned ✓' : 'Not quite'} <em>${mt.score}/100</em></h2>
       ${rating ? `<p>You rated it <b>${rating}/5</b>${mt.success === rating >= 4 ? ', and the simulator agrees.' : mt.success ? ', but it was actually aligned.' : ', but it was still off.'}</p>` : ''}
       <p>${sc.explain(mt, a)}</p>
-      <table class="data">${[['Time', `${Math.floor(secs / 60)} min ${Math.round(secs % 60)} s`], ...(sess ? [['Adjustments', `${changes.length} (${Object.entries(bySrc).map(([k, v]) => `${k} ${v}`).join(', ') || '—'})`]] : []), ['Dose used', `${mt.dose} e⁻/Å²`]].map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('')}</table>
+      <table class="data">${[['Time', `${Math.floor(secs / 60)} min ${Math.round(secs % 60)} s`], ...(sess ? [['Adjustments', `${changes.length} (${Object.entries(bySrc).map(([k, v]) => `${k} ${v}`).join(', ') || '—'})`]] : []), ...(mt.dose != null ? [['Dose used', `${mt.dose} e⁻/Å²`]] : [])].map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('')}</table>
       <div class="crow">${sess ? '<button class="btn primary" id="scnDl">Download the session file</button><button class="btn" id="scnReplay">Replay</button>' : '<span class="muted">This session was not recorded.</span>'}<button class="btn" id="scnAgain">Try another one</button></div>
       ${sess && a.share ? '<div class="share"><h4>Shared with the research dataset</h4><div class="crow"><span class="muted" id="scnSent">Sending…</span></div></div>' : ''}
       ${sess && SHARE.url && !a.share ? `<div class="share"><h4>Share with the research dataset</h4>
@@ -237,7 +244,9 @@ export class Scenarios {
   }
 
   // back to the normal exhibit: no hidden misalignment
-  clear() { this.api.S.mis = null; this.api.invalidateAll(); }
+  clear() { this.api.S.mis = null; this.api.S.align = null; this.api.invalidateAll(); }
+  // the active scenario may take over the panel's multifunction knobs (alignment pads)
+  mfOverride() { return (this.active && SCENARIOS[this.active.id].mf?.()) || null; }
   downloadSession(sess) {
     this.api.download(new Blob([JSON.stringify(sess)], { type: 'application/json' }), `tem-view-session-${sess.scenario?.id ?? 'free'}-${sess.session.id.slice(0, 8)}.json`);
   }

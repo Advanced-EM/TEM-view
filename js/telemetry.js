@@ -29,6 +29,11 @@ export function flatState(S) {
   const o = {};
   for (const k of KEYS) o[k] = round(S[k]);
   for (const k of AB) o[`ab.${k}`] = round(S.ab[k]);
+  if (S.align) { // direct-alignment scenario
+    const A = S.align;
+    Object.assign(o, { 'al.step': A.step, 'al.spot': A.spot, 'al.bright': round(A.bright), 'al.z': round(A.z), 'al.wob': A.wob, 'al.emission': Math.round(A.emission * 100) / 100 });
+    for (const k of ['gunShift', 'gunTilt', 'beamShift', 'c2', 'condStig', 'ppX', 'ppY', 'rot']) { o[`al.${k}.x`] = round(A[k][0]); o[`al.${k}.y`] = round(A[k][1]); }
+  }
   return o;
 }
 
