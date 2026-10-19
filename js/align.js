@@ -1,5 +1,5 @@
-// TEM direct alignments, as a guided training scenario: the order a microscopist follows on a cold-FEG instrument.
-//   1 Gun            Flash & Go when the emission has decayed; gun shift (crossover walks with spot size) and gun tilt
+// TEM direct alignments, as a guided training scenario: the order a microscopist follows on a FEG instrument.
+//   1 Gun            Flash & Go when the emission has decayed (cold FEG only: a Schottky source runs hot and stays steady); gun shift (crossover walks with spot size) and gun tilt
 //                    (screen current) at crossover
 //   2 Illumination   beam centered at crossover; C2 aperture centered (the beam spreads concentrically); condenser
 //                    astigmatism (round through both sides of focus)
@@ -12,7 +12,7 @@
 // are in screen units (1 = the screen's radius). The fluorescent screen is drawn over the detector view.
 
 const STEPS = [
-  { id: 'gun', title: 'Gun', short: 'Flash & Go · gun shift · gun tilt' },
+  { id: 'gun', title: 'Gun', short: 'Flash & Go (cold FEG only) · gun shift · gun tilt' },
   { id: 'ill', title: 'Illumination', short: 'Crossover · C2 aperture · condenser stigmator' },
   { id: 'z', title: 'Eucentric height', short: 'Alpha wobbler · stage Z' },
   { id: 'pp', title: 'Pivot points & voltage center', short: 'Beam-tilt pivot points · HT wobbler' },
@@ -28,6 +28,8 @@ const KNOBS = {
 };
 const TOL = { gunShift: 0.03, gunTilt: 0.12, beamShift: 0.03, c2: 0.03, condStig: 0.035, z: 0.5, ppX: 0.03, ppY: 0.03, rot: 0.03 };
 const XY = ['gunShift', 'gunTilt', 'beamShift', 'c2', 'condStig', 'ppX', 'ppY', 'rot'];
+// Flash & Go applies only to a cold field-emission source; Schottky (and thermionic) guns have steady emission
+export const isColdFEG = (S) => /cold/i.test(S.profile?.gun ?? '');
 const hyp = (v) => Math.hypot(v[0], v[1]);
 const r3 = (v) => +v.toFixed(3);
 const esc = (t) => String(t).replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' })[c]);
@@ -40,7 +42,7 @@ function eff(S, k) {
 
 export const ALIGN_SCENARIO = {
   title: 'TEM: direct alignments',
-  short: 'The full routine on a cold-FEG TEM: gun, illumination and C2, eucentric height, pivot points and voltage center, then the objective stigmator.',
+  short: 'The full routine on a FEG TEM: gun, illumination and C2, eucentric height, pivot points and voltage center, then the objective stigmator.',
   brief: 'Every alignment is off by a hidden amount, as after a column bake or a gun refresh. Work through the five steps in order, using the cues on the fluorescent screen, then press <b>I\'m done</b>.',
   cues: ['Screen current is maximal', 'Crossover stays put with spot size', 'Beam expands concentrically', 'Beam stays round through focus', 'Image stops moving with the alpha wobbler', 'Wobbler spots merge', 'Image pulses without swinging', 'Thon rings are round', 'Guessed'],
   blocked: ['autotune', 'scramble'],
@@ -51,12 +53,13 @@ export const ALIGN_SCENARIO = {
     Object.assign(S, { corrector: false, objAp: 'none', camera: 'screen', clarity: 'edu' });
     api.setSpec('au'); api.setMode('tem');
     S.ab = { A1: 0, A1a: 0, B2: 0, B2a: 0, A2: 0, A2a: 0, A3: 0, A3a: 0 };
-    S.align = { step: 0, emission: 0.55, flashT: -1, spot: 5, bright: 0.45, z: 0, wob: null, sel: 'gunShift', ...Object.fromEntries(XY.map((k) => [k, [0, 0]])) };
+    const cold = isColdFEG(S);
+    S.align = { step: 0, cold, emission: cold ? 0.55 : 1, flashT: -1, spot: 5, bright: 0.45, z: 0, wob: null, sel: 'gunShift', ...Object.fromEntries(XY.map((k) => [k, [0, 0]])) };
     const hidden = { gunShift: v(0.12, 0.25), gunTilt: v(0.5, 1.0), beamShift: v(0.2, 0.4), c2: v(0.15, 0.3), condStig: v(0.12, 0.25), z: r3(sg() * (3 + rng() * 7)),
       ppX: v(0.1, 0.2), ppY: v(0.1, 0.2), rot: v(0.1, 0.2) };
     const A1 = 15 + rng() * 25, A1a = rng() * 180, ph = (A1a * Math.PI) / 90;
     S.mis = { df: 0, C3: 0, A1: [r3(A1 * Math.cos(ph)), r3(A1 * Math.sin(ph))], B2: [0, 0], A2: [0, 0], A3: [0, 0], align: hidden };
-    return { hidden: { mis: S.mis, A1: r3(A1), A1a: r3(A1a) }, target: { tolerances: TOL, emission_min: 0.9, A1_nm: 2 } };
+    return { hidden: { mis: S.mis, A1: r3(A1), A1a: r3(A1a) }, target: { tolerances: TOL, gun: S.profile?.gun ?? null, emission_min: cold ? 0.9 : null, A1_nm: 2 } };
   },
 
   metrics(api) {
@@ -67,18 +70,19 @@ export const ALIGN_SCENARIO = {
       const e = k === 'z' ? Math.abs(eff(S, k)) : hyp(eff(S, k));
       out[`${k}_err`] = r3(e); n++; if (e <= TOL[k]) pass++;
     }
-    out.emission = r3(S.align.emission); n++; if (S.align.emission >= 0.9) pass++;
+    out.emission = r3(S.align.emission);
+    if (S.align.cold) { n++; if (S.align.emission >= 0.9) pass++; }
     const A1 = sim.abA().A1 / 10; out.A1_true_nm = +A1.toFixed(2); n++; if (A1 <= 2) pass++;
-    out.dose = r3(sim.doseAcc || 0); out.passed = pass; out.score = Math.round((100 * pass) / n); out.success = pass === n;
+    out.cold = !!S.align.cold; out.dose = r3(sim.doseAcc || 0); out.passed = pass; out.score = Math.round((100 * pass) / n); out.success = pass === n;
     return out;
   },
 
   explain(m) {
     const ok = (b) => (b ? '✓' : '✗');
-    return `Gun: emission ${Math.round(m.emission * 100)} % ${ok(m.emission >= 0.9)}, gun shift ${ok(m.gunShift_err <= TOL.gunShift)}, gun tilt ${ok(m.gunTilt_err <= TOL.gunTilt)}.
+    return `Gun: ${m.cold ? `emission ${Math.round(m.emission * 100)} % ${ok(m.emission >= 0.9)}, ` : ''}gun shift ${ok(m.gunShift_err <= TOL.gunShift)}, gun tilt ${ok(m.gunTilt_err <= TOL.gunTilt)}.
       Illumination: crossover ${ok(m.beamShift_err <= TOL.beamShift)}, C2 aperture ${ok(m.c2_err <= TOL.c2)}, condenser stigmator ${ok(m.condStig_err <= TOL.condStig)}.
       Eucentric height off by ${m.z_err} µm ${ok(m.z_err <= TOL.z)}. Pivot points X ${ok(m.ppX_err <= TOL.ppX)} and Y ${ok(m.ppY_err <= TOL.ppY)}, voltage center ${ok(m.rot_err <= TOL.rot)}.
-      Objective astigmatism ${m.A1_true_nm} nm ${ok(m.A1_true_nm <= 2)}. ${m.passed} of ${Object.keys(TOL).length + 2} checks passed. The order matters: an off-center C2 or a wrong height makes every later alignment drift.`;
+      Objective astigmatism ${m.A1_true_nm} nm ${ok(m.A1_true_nm <= 2)}. ${m.passed} of ${Object.keys(TOL).length + (m.cold ? 2 : 1)} checks passed. The order matters: an off-center C2 or a wrong height makes every later alignment drift.`;
   },
 
   // ---------------------------------------------------------------- the card: steps, controls, readouts
@@ -104,8 +108,8 @@ export const ALIGN_SCENARIO = {
     const knobs = KNOBS[st.id];
     body.innerHTML = `
       <div class="algn-steps">${STEPS.map((s, i) => `<button data-step="${i}" class="${i === A.step ? 'on' : ''}" title="${esc(s.short)}">${i + 1}<span>${esc(s.title)}</span></button>`).join('')}</div>
-      <p class="algn-how">${HOW[st.id]}</p>
-      <div class="algn-row">${CONTROLS[st.id] ?? ''}</div>
+      <p class="algn-how">${st.id === 'gun' ? HOW_GUN(A.cold, api.S.profile?.gun) : HOW[st.id]}</p>
+      <div class="algn-row">${st.id === 'gun' && !A.cold ? CONTROLS.gun.replace(FLASH_BTN, '') : CONTROLS[st.id] ?? ''}</div>
       <div class="algn-knobs">${knobs.map(([k, l, kind]) => kind === 'xy'
         ? `<div class="algn-pad${A.sel === k ? ' sel' : ''}" data-k="${k}"><b>${esc(l)}</b><div class="pad"><i></i></div><small></small></div>`
         : `<div class="algn-z${A.sel === k ? ' sel' : ''}" data-k="${k}"><b>${esc(l)}</b><div class="zrow"><button data-dz="-1">−1</button><button data-dz="-0.1">−0.1</button><span></span><button data-dz="0.1">+0.1</button><button data-dz="1">+1</button></div><small>µm</small></div>`).join('')}</div>
@@ -130,7 +134,7 @@ export const ALIGN_SCENARIO = {
   select(k) { this.ui.api.S.align.sel = k; this.ui.body.querySelectorAll('[data-k]').forEach((e) => e.classList.toggle('sel', e.dataset.k === k)); },
   act(a) {
     const A = this.ui.api.S.align;
-    if (a === 'flash') { A.flashT = performance.now(); A.emission = 1; }
+    if (a === 'flash') { if (!A.cold) return; A.flashT = performance.now(); A.emission = 1; }
     else if (a === 'spot-') A.spot = Math.max(1, A.spot - 1);
     else if (a === 'spot+') A.spot = Math.min(9, A.spot + 1);
     else if (a.startsWith('wob:')) { const w = a.slice(4); A.wob = A.wob === w ? null : w; }
@@ -172,7 +176,7 @@ export const ALIGN_SCENARIO = {
     body.querySelectorAll('[data-act^="wob:"]').forEach((b) => b.classList.toggle('on', b.dataset.act === `wob:${A.wob}`));
     const sp = body.querySelector('#alSpot'); if (sp) sp.textContent = A.spot;
     const r = this.read();
-    body.querySelector('.algn-read').innerHTML = `Emission <b>${Math.round(A.emission * 100)} %</b> · screen current <b>${r.current.toFixed(0)} pA</b> · spot <b>${A.spot}</b> · ${Math.abs(A.bright) < 0.04 ? '<b>at crossover</b>' : `brightness ${A.bright > 0 ? 'over' : 'under'}focused`}`;
+    body.querySelector('.algn-read').innerHTML = `${A.cold ? `Emission <b>${Math.round(A.emission * 100)} %</b> · ` : ''}Screen current <b>${r.current.toFixed(0)} pA</b> · spot <b>${A.spot}</b> · ${Math.abs(A.bright) < 0.04 ? '<b>at crossover</b>' : `brightness ${A.bright > 0 ? 'over' : 'under'}focused`}`;
   },
 
   // what the screen shows right now
@@ -190,8 +194,8 @@ export const ALIGN_SCENARIO = {
   tick(api, dt) {
     if (!this.ui) return;
     const S = api.S, A = S.align;
-    // cold FEG: the emission decays and gets noisier until the next Flash & Go
-    A.emission = Math.max(0.35, A.emission * Math.exp(-dt / 140));
+    // cold FEG: the emission decays and gets noisier until the next Flash & Go (a Schottky gun stays steady)
+    if (A.cold) A.emission = Math.max(0.35, A.emission * Math.exp(-dt / 140));
     this.draw(dt);
     this.frame = (this.frame ?? 0) + 1;
     if (this.frame % 6 === 0) this.update();
@@ -257,14 +261,18 @@ export const ALIGN_SCENARIO = {
 };
 
 const HOW = {
-  gun: 'Cold-FEG emission falls over time: press <b>Flash &amp; Go</b> when it has dropped. Bring the beam to crossover (brightness at the middle). Step the <b>spot size</b> up and down: if the crossover walks, correct it with <b>gun shift</b>. Then maximize the <b>screen current</b> with <b>gun tilt</b>.',
+  gun: 'Bring the beam to crossover (brightness at the middle). Step the <b>spot size</b> up and down: if the crossover walks, correct it with <b>gun shift</b>. Then maximize the <b>screen current</b> with <b>gun tilt</b>.',
   ill: 'At crossover, center the spot with <b>beam shift</b>. Spread the beam with the brightness: if it does not expand concentrically about the center, move the <b>C2 aperture</b>. If it is elliptical when spread, correct the <b>condenser stigmator</b> until it stays round on <b>both sides</b> of focus.',
   z: 'Turn on the <b>α wobbler</b> (the stage rocks ±15°). Adjust <b>stage Z</b> until the image stops shifting sideways and only pulses in place: the specimen is then at the eucentric height.',
   pp: 'With a small spot near crossover, turn on the <b>pivot-point X wobbler</b>: two spots mean the pivot is off; merge them with <b>pivot point X</b>. Repeat for Y. Then turn on the <b>HT wobbler</b> and adjust <b>beam tilt</b> until the image pulses symmetrically about the screen center without swinging: the voltage (coma-free) center.',
   stig: 'Now the objective: switch the right-hand view to the FFT if needed, and use the <b>objective stigmator</b> (sliders in the controls, or the multifunction knobs) until the Thon rings are round. Then press <b>I\'m done</b>.',
 };
+const HOW_GUN = (cold, gun) => (cold
+  ? 'This is a <b>cold FEG</b>: its emission falls over time as gas adsorbs on the tip, so press <b>Flash &amp; Go</b> when it has dropped. '
+  : `This is a <b>${esc(gun || 'Schottky FEG')}</b>: it runs hot and its emission stays steady, so there is no Flash &amp; Go (that is only for cold-FEG sources; pick the cold-FEG instrument profile to practice it). `) + HOW.gun;
+const FLASH_BTN = '<button class="btn" data-act="flash">⚡ Flash &amp; Go</button>';
 const CONTROLS = {
-  gun: '<button class="btn" data-act="flash">⚡ Flash &amp; Go</button><span class="algn-spot">Spot <button data-act="spot-">−</button><b id="alSpot"></b><button data-act="spot+">+</button></span><label class="algn-bright">Brightness <input id="alBright" type="range" min="-1" max="1" step="0.01" value="0.45"></label>',
+  gun: FLASH_BTN + '<span class="algn-spot">Spot <button data-act="spot-">−</button><b id="alSpot"></b><button data-act="spot+">+</button></span><label class="algn-bright">Brightness <input id="alBright" type="range" min="-1" max="1" step="0.01" value="0.45"></label>',
   ill: '<label class="algn-bright">Brightness <input id="alBright" type="range" min="-1" max="1" step="0.01" value="0.45"></label><span class="algn-spot">Spot <button data-act="spot-">−</button><b id="alSpot"></b><button data-act="spot+">+</button></span>',
   z: '<button class="btn" data-act="wob:alpha">α wobbler</button>',
   pp: '<button class="btn" data-act="wob:ppx">PP X wobbler</button><button class="btn" data-act="wob:ppy">PP Y wobbler</button><button class="btn" data-act="wob:ht">HT wobbler</button><label class="algn-bright">Brightness <input id="alBright" type="range" min="-1" max="1" step="0.01" value="0.45"></label>',
