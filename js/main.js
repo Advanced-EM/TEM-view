@@ -958,14 +958,40 @@ function wire() {
   $('#btnLabels').addEventListener('click', () => set('showLabels', !S.showLabels));
   $('#btnFull').addEventListener('click', () => { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.(); });
   $('#btnHelp').addEventListener('click', () => ($('#help').hidden = false));
+  // the explanation panel grows up from the bottom: stop it below the hero, so the support buttons stay visible
+  { const hero = $('.hero'), fit = () => document.documentElement.style.setProperty('--heroB', `${Math.round(hero.getBoundingClientRect().bottom)}px`);
+    new ResizeObserver(fit).observe(hero); addEventListener('resize', fit); fit(); }
   // support and news (top left)
   if (SUPPORT.coffee) { $('#btnCoffee').href = SUPPORT.coffee; $('#btnCoffee').hidden = false; }
   $('#btnNews').addEventListener('click', () => {
-    $('#newsBody').innerHTML = `<p>New modes, scenarios and the TEM-view Console: hear about them when they ship.</p>
-      ${SUPPORT.newsletter ? `<p><a class="btn primary" href="${SUPPORT.newsletter}" target="_blank" rel="noopener">Subscribe by email</a></p>` : ''}
-      <p><a class="btn" href="${SUPPORT.repo}/releases" target="_blank" rel="noopener">Release notes on GitHub</a></p>
-      <p class="muted">On GitHub, choose <b>Watch → Custom → Releases</b> on the repository to get an email for every release.</p>`;
+    $('#newsBody').innerHTML = `<p>New modes, training tasks, guides and the TEM-view Console: get an email when they ship.</p>
+      ${SUPPORT.subscribe ? `<form id="newsForm" class="newsform" novalidate>
+        <input type="email" name="email" placeholder="you@example.org" autocomplete="email" required aria-label="Email address">
+        <input type="text" name="website" tabindex="-1" autocomplete="off" class="hp" aria-hidden="true">
+        <button class="btn primary" type="submit">Subscribe</button>
+      </form>
+      <p class="muted" id="newsMsg">Only used for TEM-view news, a few emails a year. Reply to any of them to unsubscribe.</p>`
+      : SUPPORT.newsletter ? `<p><a class="btn primary" href="${SUPPORT.newsletter}" target="_blank" rel="noopener">Subscribe by email</a></p>` : ''}
+      <p class="muted">Or follow the release notes on <a href="${SUPPORT.repo}/releases" target="_blank" rel="noopener">GitHub</a>.</p>`;
     $('#newsModal').hidden = false;
+    const f = $('#newsForm');
+    if (!f) return;
+    f.email.focus();
+    f.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const msg = $('#newsMsg'), btn = f.querySelector('button'), email = f.email.value.trim();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) { msg.textContent = 'Please enter a valid email address.'; msg.className = 'err'; f.email.focus(); return; }
+      btn.disabled = true; btn.textContent = 'Subscribing…';
+      try {
+        const r = await fetch(SUPPORT.subscribe, { method: 'POST', headers: { 'content-type': 'text/plain' }, body: JSON.stringify({ email, website: f.website.value, source: 'exhibit' }) });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(j.detail || `error ${r.status}`);
+        $('#newsBody').innerHTML = `<p class="thanks"><b>Thanks for subscribing!</b></p><p>${j.already ? 'This address is already on the list' : 'TEM-view news will go to'} <b>${email.replace(/[<>&"]/g, '')}</b>.</p>`;
+      } catch (err) {
+        msg.textContent = `Could not subscribe: ${err.message}. Please try again later.`; msg.className = 'err';
+        btn.disabled = false; btn.textContent = 'Subscribe';
+      }
+    });
   });
   $('#newsModal .close').addEventListener('click', () => ($('#newsModal').hidden = true));
   $('#newsModal').addEventListener('click', (e) => { if (e.target.id === 'newsModal') $('#newsModal').hidden = true; });

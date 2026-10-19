@@ -8,6 +8,10 @@
 //   ALLOWED_ORIGINS  comma-separated origins allowed to send
 // Without HF_TOKEN it runs as a dry run: sessions are validated and acknowledged, nothing is stored.
 // No IP addresses are stored; the optional rate limiter keys on a salted hash and keeps nothing.
+//
+// It also keeps the news mailing list: POST /subscribe {email} stores the address in the SUBSCRIBERS KV
+// namespace (private to the Cloudflare account, never in the public dataset). Without that binding, /subscribe
+// answers 503.
 import { clean, Invalid, MAX_BYTES } from './schema.js';
 
 const json = (body, status = 200, headers = {}) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', ...headers } });
@@ -44,19 +48,36 @@ async function commit(env, path, text, summary) {
   if (!r.ok) throw new Error(`hub ${r.status}`);
 }
 
+// a plain sanity check, not full RFC 5322: one @, a dot in the domain, no spaces
+const EMAIL = /^[^\s@<>()",;:]{1,64}@[^\s@<>()",;:]+\.[a-z]{2,}$/i;
+
+async function subscribe(req, env, h) {
+  if (!env.SUBSCRIBERS) return json({ detail: 'the mailing list is not set up yet' }, 503, h);
+  let b;
+  try { b = JSON.parse(await req.text()); } catch { return json({ detail: 'not JSON' }, 400, h); }
+  if (b?.website) return json({ ok: true }, 200, h); // honeypot field, filled only by bots
+  const email = String(b?.email ?? '').trim().toLowerCase();
+  if (email.length > 254 || !EMAIL.test(email)) return json({ detail: 'please enter a valid email address' }, 422, h);
+  const key = `email:${email}`;
+  if (await env.SUBSCRIBERS.get(key)) return json({ ok: true, already: true }, 200, h);
+  await env.SUBSCRIBERS.put(key, JSON.stringify({ email, subscribed: new Date().toISOString().slice(0, 10), source: String(b?.source ?? 'exhibit').slice(0, 40) }));
+  return json({ ok: true }, 200, h);
+}
+
 export default {
   async fetch(req, env) {
     const url = new URL(req.url), h = cors(req, env);
     const dry = !(env.HF_TOKEN && env.DATASET_REPO);
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: h });
-    if (req.method === 'GET' && url.pathname === '/') return json({ service: 'tem-view session collector', dataset: env.DATASET_REPO || null, dry_run: dry }, 200, h);
-    if (req.method !== 'POST' || url.pathname !== '/submit') return json({ detail: 'not found' }, 404, h);
+    if (req.method === 'GET' && url.pathname === '/') return json({ service: 'tem-view session collector', dataset: env.DATASET_REPO || null, dry_run: dry, mailing_list: !!env.SUBSCRIBERS }, 200, h);
+    if (req.method !== 'POST' || !['/submit', '/subscribe'].includes(url.pathname)) return json({ detail: 'not found' }, 404, h);
     // browsers send from the exhibit only; sendBeacon carries the origin too
     if (!h['access-control-allow-origin']) return json({ detail: 'origin not allowed' }, 403);
     if (env.LIMITER) {
       const { success } = await env.LIMITER.limit({ key: await hashIp(req) });
       if (!success) return json({ detail: 'too many submissions, try again later' }, 429, h);
     }
+    if (url.pathname === '/subscribe') return subscribe(req, env, h);
     const text = await req.text();
     if (text.length > MAX_BYTES) return json({ detail: 'session too large' }, 413, h);
     let s;

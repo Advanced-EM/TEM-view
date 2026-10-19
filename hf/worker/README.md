@@ -28,6 +28,29 @@ Open that URL. It should show `"dry_run": false`. Then set `url: '<that URL>/sub
 also holds a rate limit of 10 sessions per minute per visitor, keyed on a daily salted hash, and nothing is
 stored. The free plan allows 100,000 requests per day.
 
+## News mailing list
+
+The exhibit's "Subscribe for news" form posts the visitor's email to `/subscribe`. The address is stored in a
+Cloudflare KV namespace that only your Cloudflare account can read. It never goes to the public dataset.
+
+Set it up once:
+
+```bash
+npx wrangler kv namespace create SUBSCRIBERS
+```
+
+Paste the `id` it prints into `wrangler.toml` (replacing `PASTE_THE_ID_HERE`), then run `npx wrangler deploy`.
+The status page (`/`) then shows `"mailing_list": true`.
+
+To export the list:
+
+```bash
+npx wrangler kv key list --binding SUBSCRIBERS --remote
+```
+
+Each key is `email:<address>`, and its value holds the address and the date it subscribed. To remove someone,
+run `npx wrangler kv key delete --binding SUBSCRIBERS --remote "email:<address>"`.
+
 ## Test
 
 ```bash

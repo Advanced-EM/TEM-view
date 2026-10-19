@@ -29,3 +29,15 @@ globalThis.fetch = async () => new Response('nope', { status: 403 });
 ok((await post(sample)).status === 502, 'hub failure reported');
 r = await worker.fetch(new Request('https://x.workers.dev/'), env);
 ok((await r.json()).dry_run === false, 'status page');
+
+// mailing list
+const kv = new Map(), kvEnv = { ...env, SUBSCRIBERS: { get: async (k) => kv.get(k) ?? null, put: async (k, v) => void kv.set(k, v) } };
+const sub = (body, e = kvEnv, origin = 'http://localhost:8765') => worker.fetch(new Request('https://x.workers.dev/subscribe', { method: 'POST', body: JSON.stringify(body), headers: { origin } }), e);
+r = await sub({ email: ' Ada@Example.org ' });
+ok(r.status === 200 && (await r.json()).ok && JSON.parse(kv.get('email:ada@example.org')).email === 'ada@example.org', 'subscribe stores the lowercased address');
+ok((await (await sub({ email: 'ada@example.org' })).json()).already === true, 'second subscribe is acknowledged, not duplicated');
+ok((await sub({ email: 'not-an-email' })).status === 422, 'bad address rejected');
+r = await sub({ email: 'bot@example.org', website: 'http://spam' });
+ok(r.status === 200 && !kv.has('email:bot@example.org'), 'honeypot: bots get ok but nothing is stored');
+ok((await sub({ email: 'x@example.org' }, kvEnv, 'https://evil.example')).status === 403, 'subscribe from a foreign origin refused');
+ok((await sub({ email: 'x@example.org' }, env)).status === 503, 'no KV binding: 503');
