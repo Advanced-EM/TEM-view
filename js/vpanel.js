@@ -131,7 +131,7 @@ export class VirtualPanel {
   }
   wireDrag(handle, root) {
     let d = null;
-    handle.addEventListener('pointerdown', (e) => { if (e.target.closest('button')) return; const r = root.getBoundingClientRect(); d = { x: e.clientX - r.left, y: e.clientY - r.top }; handle.setPointerCapture(e.pointerId); });
+    handle.addEventListener('pointerdown', (e) => { if (e.target.closest('button, a')) return; const r = root.getBoundingClientRect(); d = { x: e.clientX - r.left, y: e.clientY - r.top }; handle.setPointerCapture(e.pointerId); });
     handle.addEventListener('pointermove', (e) => {
       if (!d) return;
       root.style.left = `${Math.max(0, Math.min(innerWidth - 120, e.clientX - d.x))}px`; root.style.top = `${Math.max(0, Math.min(innerHeight - 60, e.clientY - d.y))}px`;

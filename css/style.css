@@ -491,3 +491,40 @@ body.detBig .cmdbar { display: none; }
 
 /* AI mode button (brain), on while the command bar is showing */
 #btnAI.on { color: var(--accent); border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+
+/* support and news buttons under the title */
+.support { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; pointer-events: auto; }
+.spill { display: inline-flex; align-items: center; gap: 6px; font: 500 12px var(--sans); color: var(--text); text-decoration: none; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--panel); backdrop-filter: blur(10px); cursor: pointer; }
+.spill:hover { border-color: var(--accent); color: var(--accent); }
+.spill.coffee { border-color: rgba(255, 221, 0, 0.45); }
+.spill.coffee:hover { color: #ffdd00; border-color: #ffdd00; }
+body.stacked .support { margin: 8px 16px 0; }
+
+/* TEM direct-alignment scenario: the fluorescent screen over the detector, and the step controls */
+.alignscreen { position: absolute; z-index: 3; pointer-events: none; border-radius: 6px; }
+.scncard .algn { display: grid; gap: 10px; margin: 8px 0 10px; }
+.algn-steps { display: flex; gap: 4px; flex-wrap: wrap; }
+.algn-steps button { display: inline-flex; align-items: center; gap: 6px; font: 600 11px var(--mono); padding: 4px 8px; border-radius: 999px; border: 1px solid var(--line-2); color: var(--muted); }
+.algn-steps button span { font: 500 11px var(--sans); }
+.algn-steps button.on { color: var(--text); border-color: var(--accent); background: var(--accent-soft); }
+.algn-how { margin: 0; font-size: 12.5px; color: #c3cad3; line-height: 1.5; }
+.algn-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.algn-row .btn.on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.algn-spot { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.algn-spot button { width: 24px; height: 24px; border-radius: 6px; border: 1px solid var(--line-2); }
+.algn-bright { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.algn-bright input { width: 140px; }
+.algn-knobs { display: flex; flex-wrap: wrap; gap: 10px; }
+.algn-pad, .algn-z { display: grid; justify-items: center; gap: 4px; padding: 6px; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; }
+.algn-pad.sel, .algn-z.sel { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.algn-pad b, .algn-z b { font: 500 10px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.algn-pad .pad { width: 104px; height: 104px; border-radius: 50%; border: 1px solid var(--line-2); background: radial-gradient(circle, rgba(111, 214, 255, 0.08), transparent 70%); position: relative; display: grid; place-items: center; touch-action: none; cursor: crosshair; }
+.algn-pad .pad::before, .algn-pad .pad::after { content: ""; position: absolute; background: var(--line); }
+.algn-pad .pad::before { width: 1px; height: 100%; } .algn-pad .pad::after { height: 1px; width: 100%; }
+.algn-pad .pad i { width: 12px; height: 12px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); z-index: 1; }
+.algn-pad small, .algn-z small { font: 10.5px var(--mono); color: var(--dim); }
+.algn-z .zrow { display: flex; gap: 4px; align-items: center; }
+.algn-z .zrow button { font: 11px var(--mono); padding: 3px 6px; border-radius: 6px; border: 1px solid var(--line-2); }
+.algn-z .zrow span { font: 600 14px var(--mono); min-width: 54px; text-align: center; color: var(--text); }
+.algn-read { margin: 0; font: 11.5px var(--mono); color: var(--muted); }
+.algn-read b { color: var(--accent); font-weight: 500; }

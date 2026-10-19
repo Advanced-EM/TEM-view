@@ -15,7 +15,7 @@ import { Scenarios } from './scenarios.js';
 import { Voice, parseCommand, describe, EXAMPLES } from './voice.js';
 import { analyze } from './analyze.js';
 import { AgentBridge } from './agent.js';
-import { AGENT } from './config.js';
+import { AGENT, SUPPORT } from './config.js';
 import { toNpz as npzBytes } from './export.js';
 import { collectData, toNpz } from './export.js';
 import { openCalibration } from './calibui.js';
@@ -156,7 +156,7 @@ const CONTROLS = [
   { exp: 'tour', title: 'Fly down the column', desc: 'Follow an electron from the gun to the detector, one component at a time.', icon: 'path' },
   { sec: 'Training scenarios' },
   { p: 'Alignment tasks with a hidden answer, as on a real microscope: the knob readings are not the true aberrations. With your consent the session is recorded (no personal data, nothing sent anywhere) to study how people align and judge an instrument.' },
-  { buttons: [['scn:tem-focus-stig', 'TEM: focus and stigmate'], ['scn:corrector-ronch', 'Corrector: tune the Ronchigram']] },
+  { buttons: [['scn:tem-direct-align', 'TEM: direct alignments'], ['scn:tem-focus-stig', 'TEM: focus and stigmate'], ['scn:corrector-ronch', 'Corrector: tune the Ronchigram']] },
   { buttons: [['replayFile', 'Replay a session file…'], ['lastSession', 'Download last session']] },
   { sec: 'Voice and agent' },
   { p: 'Turn on AI mode with the brain button at the top of the controls (or <kbd>/</kbd>) and type a command, or hold <kbd>M</kbd> and say it: "switch to STEM", "defocus minus fifty", "load graphene", "acquire", "fit the CTF", "index the rings". Close misses are confirmed before they run. Connect an AI agent (temview-mcp, for example with emskills) to answer questions and run the microscope with you.' },
@@ -632,6 +632,7 @@ const hwPanel = new Panel({
   noteSource: (s) => scn.recorder.noteSource(s),
   openVirtual: (where) => (where === 'window' ? vPanel.openWindow() : vPanel.openDock()),
   talk: (down) => (down ? voice.start() : voice.stop()),
+  mfOverride: () => scn?.mfOverride() ?? null,
   cycleMode: (d) => { const i = MODES.findIndex((m) => m[0] === S.mode); setMode(MODES[(i + d + MODES.length) % MODES.length][0]); },
   toggle: (k) => {
     if (k === 'pause') action('pause');
@@ -957,6 +958,17 @@ function wire() {
   $('#btnLabels').addEventListener('click', () => set('showLabels', !S.showLabels));
   $('#btnFull').addEventListener('click', () => { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.(); });
   $('#btnHelp').addEventListener('click', () => ($('#help').hidden = false));
+  // support and news (top left)
+  if (SUPPORT.coffee) { $('#btnCoffee').href = SUPPORT.coffee; $('#btnCoffee').hidden = false; }
+  $('#btnNews').addEventListener('click', () => {
+    $('#newsBody').innerHTML = `<p>New modes, scenarios and the TEM-view Console: hear about them when they ship.</p>
+      ${SUPPORT.newsletter ? `<p><a class="btn primary" href="${SUPPORT.newsletter}" target="_blank" rel="noopener">Subscribe by email</a></p>` : ''}
+      <p><a class="btn" href="${SUPPORT.repo}/releases" target="_blank" rel="noopener">Release notes on GitHub</a></p>
+      <p class="muted">On GitHub, choose <b>Watch → Custom → Releases</b> on the repository to get an email for every release.</p>`;
+    $('#newsModal').hidden = false;
+  });
+  $('#newsModal .close').addEventListener('click', () => ($('#newsModal').hidden = true));
+  $('#newsModal').addEventListener('click', (e) => { if (e.target.id === 'newsModal') $('#newsModal').hidden = true; });
   const openTraining = () => scn.menu({ replay: () => action('replayFile'), last: () => action('lastSession') });
   $('#btnTrain').addEventListener('click', openTraining);
   const bar = $('#cmdBar'), inp = $('#cmdInput'), hist = []; let hi = 0;
@@ -1090,7 +1102,7 @@ function wire() {
     else if (e.key === '[') fold('L');
     else if (e.key === ']') fold('R');
     else if (e.key === 'x' || e.key === 'X') setExpanded(!document.body.classList.contains('detBig'));
-    else if (e.key === 'Escape') { setExpanded(false); $('#help').hidden = true; if (scene.tour) scene.stopTour(); setAI(false); if (agent.connected || agent.status === 'connecting') { agent.disconnect(); voice.flash('<b>Agent disconnected</b><p>Press Connect agent (Controls → Voice and agent) to reconnect.</p>', 3500); } }
+    else if (e.key === 'Escape') { setExpanded(false); $('#help').hidden = true; if (scene.tour) scene.stopTour(); setAI(false); $('#newsModal').hidden = true; if (agent.connected || agent.status === 'connecting') { agent.disconnect(); voice.flash('<b>Agent disconnected</b><p>Press Connect agent (Controls → Voice and agent) to reconnect.</p>', 3500); } }
   });
   window.addEventListener('keyup', (e) => { if ((e.key === 'm' || e.key === 'M') && !['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) voice.stop(); });
   window.addEventListener('resize', resize);

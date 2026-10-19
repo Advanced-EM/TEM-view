@@ -8,38 +8,39 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=202610180101">
+<link rel="stylesheet" href="css/style.css?v=202610190422">
 <script type="importmap">
 {
  "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
-  "./js/acquire.js": "./js/acquire.js?v=202610180101",
-  "./js/agent.js": "./js/agent.js?v=202610180101",
-  "./js/analyze.js": "./js/analyze.js?v=202610180101",
-  "./js/calibrate.js": "./js/calibrate.js?v=202610180101",
-  "./js/calibui.js": "./js/calibui.js?v=202610180101",
-  "./js/components.js": "./js/components.js?v=202610180101",
-  "./js/config.js": "./js/config.js?v=202610180101",
-  "./js/explain.js": "./js/explain.js?v=202610180101",
-  "./js/export.js": "./js/export.js?v=202610180101",
-  "./js/holder.js": "./js/holder.js?v=202610180101",
-  "./js/holography.js": "./js/holography.js?v=202610180101",
-  "./js/main.js": "./js/main.js?v=202610180101",
-  "./js/narration.js": "./js/narration.js?v=202610180101",
-  "./js/npy.js": "./js/npy.js?v=202610180101",
-  "./js/panel.js": "./js/panel.js?v=202610180101",
-  "./js/physics.js": "./js/physics.js?v=202610180101",
-  "./js/profile.js": "./js/profile.js?v=202610180101",
-  "./js/render2d.js": "./js/render2d.js?v=202610180101",
-  "./js/scenarios.js": "./js/scenarios.js?v=202610180101",
-  "./js/scene3d.js": "./js/scene3d.js?v=202610180101",
-  "./js/sim.js": "./js/sim.js?v=202610180101",
-  "./js/state.js": "./js/state.js?v=202610180101",
-  "./js/techniques.js": "./js/techniques.js?v=202610180101",
-  "./js/telemetry.js": "./js/telemetry.js?v=202610180101",
-  "./js/voice.js": "./js/voice.js?v=202610180101",
-  "./js/vpanel.js": "./js/vpanel.js?v=202610180101"
+  "./js/acquire.js": "./js/acquire.js?v=202610190422",
+  "./js/agent.js": "./js/agent.js?v=202610190422",
+  "./js/align.js": "./js/align.js?v=202610190422",
+  "./js/analyze.js": "./js/analyze.js?v=202610190422",
+  "./js/calibrate.js": "./js/calibrate.js?v=202610190422",
+  "./js/calibui.js": "./js/calibui.js?v=202610190422",
+  "./js/components.js": "./js/components.js?v=202610190422",
+  "./js/config.js": "./js/config.js?v=202610190422",
+  "./js/explain.js": "./js/explain.js?v=202610190422",
+  "./js/export.js": "./js/export.js?v=202610190422",
+  "./js/holder.js": "./js/holder.js?v=202610190422",
+  "./js/holography.js": "./js/holography.js?v=202610190422",
+  "./js/main.js": "./js/main.js?v=202610190422",
+  "./js/narration.js": "./js/narration.js?v=202610190422",
+  "./js/npy.js": "./js/npy.js?v=202610190422",
+  "./js/panel.js": "./js/panel.js?v=202610190422",
+  "./js/physics.js": "./js/physics.js?v=202610190422",
+  "./js/profile.js": "./js/profile.js?v=202610190422",
+  "./js/render2d.js": "./js/render2d.js?v=202610190422",
+  "./js/scenarios.js": "./js/scenarios.js?v=202610190422",
+  "./js/scene3d.js": "./js/scene3d.js?v=202610190422",
+  "./js/sim.js": "./js/sim.js?v=202610190422",
+  "./js/state.js": "./js/state.js?v=202610190422",
+  "./js/techniques.js": "./js/techniques.js?v=202610190422",
+  "./js/telemetry.js": "./js/telemetry.js?v=202610190422",
+  "./js/voice.js": "./js/voice.js?v=202610190422",
+  "./js/vpanel.js": "./js/vpanel.js?v=202610190422"
  }
 }
 </script>
@@ -54,6 +55,7 @@
   <p class="eyebrow">Interactive exhibit · Electron optics</p>
   <h1>Seeing <em>with Electrons</em></h1>
   <p class="lede">A working transmission electron microscope. Every detector image is computed from the physics: an electron wave passing through a real arrangement of atoms. <span class="hint">Click any label on the column for the instrument physics behind it.</span></p>
+  <div class="support"><a id="btnCoffee" class="spill coffee" target="_blank" rel="noopener" hidden><span aria-hidden="true">☕</span> Buy me a coffee</a><button id="btnNews" class="spill" type="button"><span aria-hidden="true">✉</span> Subscribe for news</button></div>
 </header>
 
 <nav class="modes" aria-label="Operating mode"></nav>
@@ -61,6 +63,7 @@
 
 
 <div id="tourCap" class="tourcap" hidden></div>
+<div id="newsModal" class="modal" hidden><div class="card"><button class="close" aria-label="Close">×</button><p class="eyebrow">News</p><h2>Follow <em>TEM-view</em></h2><div id="newsBody"></div></div></div>
 
 <aside id="comp" class="card comp" hidden><button class="close" aria-label="Close">×</button><button class="speak" id="compSpeak" title="Listen" aria-label="Listen to this component"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path class="w1" d="M15.5 9a4.2 4.2 0 0 1 0 6"/><path class="w2" d="M18.3 6.5a8 8 0 0 1 0 11"/></svg></button><div class="compBody"></div></aside>
 
@@ -155,6 +158,6 @@
 <input id="fileSession" type="file" accept=".json,application/json" hidden>
 <div id="calib" class="modal calib" hidden><div class="card"><button class="close" aria-label="Close">×</button><div class="calibBody"></div></div></div>
 
-<script type="module" src="js/main.js?v=202610180101"></script>
+<script type="module" src="js/main.js?v=202610190422"></script>
 </body>
 </html>

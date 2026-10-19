@@ -66,7 +66,7 @@ export const COMPONENTS = {
   },
   'Scan coils': {
     kicker: 'Scanning',
-    role: 'Pairs of deflection coils <b>raster</b> the probe across the sample in STEM, and pivot the beam for alignments.',
+    role: 'Magnetic deflection coils with their axes across the column: at an upper and a lower level, <b>one pair deflects in x and one in y</b>. They <b>raster</b> the probe in STEM; in TEM they set the beam shift and beam tilt, whose pivot points are aligned so one does not disturb the other.',
     physics: 'Two deflectors tilt the beam in opposite directions, so it pivots about the objective’s front focal plane and lands on the specimen <b>parallel to the axis</b> at every position (a telecentric scan). Descan coils below the specimen keep the diffraction pattern stationary on the detector, which is critical for 4D-STEM.',
     specs: [['Pixel dwell time', '0.1–100 µs'], ['Frame size', '256² – 4096²'], ['Flyback delay', '~100 µs per line']],
     metrology: 'Pixel size is calibrated against a known lattice (for example Si 111 = 3.135 Å). <b>Scan distortion and drift</b> are measured by acquiring the same area at 0° and 90° scan rotation and fitting a nonlinear correction. Pivot points are aligned so beam tilt doesn’t move the probe.',

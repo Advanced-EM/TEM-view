@@ -176,6 +176,8 @@ export class Panel {
 
   // multifunction X/Y: stigmator (A1 as a vector), image shift, or specimen tilt
   multifunction(dx, dy) {
+    const o = this.api.mfOverride?.();
+    if (o) { o.apply(dx, dy); this.say(o.label()); return; }
     const { S, sim } = this.api, mf = this.mfNow();
     const k = mf === 'stig' ? 'A1' : AB_KNOB[mf] ? mf : null;
     if (k) {
