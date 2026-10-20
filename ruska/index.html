@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ruska 1933</title>
+<meta name="description" content="Drive the first electron microscope: pump Ernst Ruska's 1933 column, light its gas discharge, focus its magnetic coils and take a plate that beats the light microscope. An interactive companion to the Electron Microscopy Museum Nuremberg.">
+<meta property="og:title" content="Ruska 1933: drive the first electron microscope">
+<meta property="og:description" content="Pump the column, light the discharge, focus the coils and beat the light microscope before the beam burns your specimen.">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#070605">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="ruska.css">
+</head>
+<body>
+
+<header class="top"><div class="wrap">
+  <a class="brand" href="#">Ruska <span>1933</span></a>
+  <nav aria-label="Sections"><a href="#drive" data-i18n="nav.drive">Drive it</a><a href="#how" data-i18n="nav.how">How it works</a><a href="#history" data-i18n="nav.history">History</a><a href="#museum" data-i18n="nav.museum">The museum</a><a class="out" href="../" data-i18n="nav.out">Seeing with Electrons ↗</a></nav>
+  <div class="seg lang" role="group" aria-label="Language / Sprache"><button data-lang="en" aria-pressed="true">EN</button><button data-lang="de" aria-pressed="false">DE</button></div>
+</div></header>
+
+<main>
+  <div class="hero wrap">
+    <p class="eyebrow" data-i18n="hero.eyebrow">Interactive exhibit · Electron Microscopy Museum Nuremberg</p>
+    <h1 data-i18n="hero.h1">Drive the <em>first</em> electron microscope</h1>
+    <p class="lede" data-i18n="hero.lede">Berlin, November 1933. Ernst Ruska, 26, finishes a column of brass and magnetic coils that magnifies 12,000 times and shows detail finer than any light microscope. Pump it down, light the discharge, focus the coils, and take a plate before the beam burns your specimen.</p>
+  </div>
+
+  <section id="drive" class="lab" aria-label="The microscope">
+    <div class="wrap-wide">
+      <div class="missions" role="tablist" aria-label="Missions" id="missions"></div>
+
+      <div class="labgrid">
+        <div class="col col-stage">
+          <div class="stage" id="stage" data-i18n-aria="stage" aria-label="3D model of the microscope. Drag to orbit, click a part to read about it.">
+            <div class="tip" id="tip" hidden></div>
+            <p class="badge" id="modelNote"></p>
+          </div>
+          <div class="toolbar">
+            <button class="pill" id="cutaway" aria-pressed="false" data-i18n="tb.cutaway">Cutaway</button>
+            <button class="pill" id="spin" aria-pressed="true" data-i18n="tb.spin">Turntable</button>
+            <button class="pill" id="sound" aria-pressed="true" data-i18n="tb.sound">Sound</button>
+            <button class="pill" id="consoleBtn" aria-haspopup="dialog"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" style="vertical-align:-3px;margin-right:6px"><path fill="none" stroke="currentColor" stroke-width="1.6" d="M6 9h12a3 3 0 0 1 3 3v3a3 3 0 0 1-5.2 2L14 15h-4l-1.8 2A3 3 0 0 1 3 15v-3a3 3 0 0 1 3-3zM8 11v3M6.5 12.5h3M15.5 12h.01M17.5 14h.01"/></svg><span data-i18n="tb.console">Console</span><i class="dot" id="consoleDot" hidden></i></button>
+          </div>
+          <article class="note" id="note" aria-live="polite"></article>
+        </div>
+
+        <div class="col col-screen">
+          <div class="viewer">
+            <div class="window" id="window">
+              <canvas id="screen" width="560" height="560" data-i18n-aria="screen" aria-label="The fluorescent screen, seen through the lead-glass window"></canvas>
+              <div class="ov tl" id="ovView"></div>
+              <div class="ov tr" id="ovTemp"></div>
+              <div class="ov bl"><span class="bar" id="scaleBar"></span><span id="scaleTxt"></span></div>
+              <div class="ov br" id="ovMag"></div>
+              <div class="ov msg" id="ovMsg"></div>
+              <div class="hud" id="hud" hidden></div>
+              <div class="shutter" id="shutter" hidden><span>Plate exposing</span><b id="expTime">0.0 s</b><i><em id="expBar"></em></i></div>
+            </div>
+            <div class="viewsel seg" role="group" aria-label="Which fluorescent screen" id="viewsel">
+              <button data-view="inter" aria-pressed="false" data-i18n="view.inter">Intermediate screen <small>85×</small></button>
+              <button data-view="final" aria-pressed="true" data-i18n="view.final">Final screen</button>
+            </div>
+            <p class="hint" data-i18n="view.hint">Drag the screen to move the specimen · scroll it to turn the projector coil</p>
+          </div>
+
+          <div class="card mission" id="mission">
+            <div class="mhead"><p class="eyebrow" id="mYear"></p><h2 id="mTitle"></h2></div>
+            <p class="mintro" id="mIntro"></p>
+            <ol class="steps" id="steps"></ol>
+            <p class="coach" id="coach"></p>
+            <div class="mfoot"><button class="link" id="restart" data-i18n="m.restart">Start this mission again</button><button class="link" id="hintBtn" data-i18n="m.hint">Show me how</button></div>
+          </div>
+
+          <div class="card budget" id="budget">
+            <div class="bhead"><h3 data-i18n="b.title">What blurs the image</h3><p><span id="dNow">—</span><small data-i18n="b.small">resolution, Ruska’s edge measure</small></p></div>
+            <div id="bRows"></div>
+            <p class="bnote" data-i18n="b.note">The dashed line is the light microscope’s limit, about 200 nm. Ruska measured 50 nm on a cotton fibre in 1933.</p>
+          </div>
+        </div>
+
+        <div class="col col-panel">
+          <div class="panel" id="panel"></div>
+        </div>
+      </div>
+
+      <div class="plates" id="platesWrap">
+        <div class="phead"><h3 data-i18n="p.title">Plate box</h3><p class="muted" id="platesInfo">No plates yet. Expose one from the plate camera.</p></div>
+        <div class="platelist" id="plates"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="how"><div class="wrap">
+    <h2 data-i18n="how.h2">How it <em>works</em></h2>
+    <p class="intro" data-i18n="how.intro">Every behaviour of the simulated column follows the electron optics that Ruska described in 1934. The image is computed from these rules each frame.</p>
+    <div class="features">
+      <article data-i18n="how.1"><span class="tag">Lens</span><h3>A coil is a lens</h3><p>In 1926 Hans Busch showed that the magnetic field of a short coil bends electrons the way a glass lens bends light. Its focal length follows <span class="eq">f ∝ U / (N I)²</span>: turn up the current and the lens gets stronger. Ruska wrapped the coil in iron with a narrow gap, the <i>pole piece</i>, squeezing the field into a few millimetres. His objective focused 75 kV electrons at about 6 mm.</p></article>
+      <article data-i18n="how.2"><span class="tag">Wave</span><h3>Waves 100,000 times shorter than light</h3><p>Ruska learned of de Broglie’s matter waves in 1931 and at first feared a new wavelength limit. The arithmetic reassured him: at 75 kV, <span class="eq">λ = h / √(2meU) ≈ 4.3 pm</span>, five orders of magnitude below visible light. In 1932 Knoll and Ruska predicted a limit of 2.2 Å. It was reached about 40 years later.</p></article>
+      <article data-i18n="how.3"><span class="tag">Focus</span><h3>Change the voltage, lose the focus</h3><p>Because <span class="eq">f</span> depends on the voltage, any wander of the high voltage moves the focus, and its ripple smears every point into a disc (chromatic aberration). The gas discharge had to burn "extremely steadily". Watch the <i>HV ripple</i> bar grow when you open the discharge.</p></article>
+      <article data-i18n="how.4"><span class="tag">Rotation</span><h3>The image turns as it grows</h3><p>Electrons spiral through a magnetic lens, so the image rotates by an angle that grows with the coil current. Turn the projector coil and the specimen spins as it magnifies. Ruska’s operators lived with it; modern microscopes compensate for it.</p></article>
+      <article data-i18n="how.5"><span class="tag">Light budget</span><h3>Magnification costs light</h3><p>The image spreads the electrons over an area M² times larger. At 10,000× the specimen receives 10<sup>8</sup> times the current density of the screen. To see anything, the condenser must squeeze the beam onto a few micrometres. That heats the specimen, and an organic one chars.</p></article>
+      <article data-i18n="how.6"><span class="tag">Contrast</span><h3>Contrast by scattering, not absorption</h3><p>Ruska noticed that even very thin specimens gave contrast. Not by absorbing electrons, but by scattering them out of the lens aperture. Thin specimens absorb little and stay cooler, which made biological electron microscopy possible.</p></article>
+    </div>
+  </div></section>
+
+  <section id="history"><div class="wrap split">
+    <div>
+      <h2 data-i18n="hist.h2">From a cathode-ray tube <em>to 12,000×</em></h2>
+      <p class="intro" data-i18n="hist.intro">Ruska was an electrical-engineering student in Max Knoll’s group at the Technische Hochschule Berlin, which was building cathode-ray oscillographs to record very fast surges on high-voltage power lines. The microscope grew out of the problem of focusing their electron beams.</p>
+      <blockquote data-i18n="hist.quote">The 1933 instrument ran on a research stipend of 100 Reichsmark a month. Looking back in his Nobel lecture, Ruska doubted that German science funding had ever bought an electron microscope more cheaply.</blockquote>
+    </div>
+    <ol class="timeline" id="timeline">
+      <li><b data-i18n="tly.1924">1924</b><span data-i18n="tl.1924">Louis de Broglie proposes that electrons are waves.</span></li>
+      <li><b data-i18n="tly.1926">1926</b><span data-i18n="tl.1926">Hans Busch shows that a short coil acts on electrons like a convex lens on light.</span></li>
+      <li><b data-i18n="tly.1929">1929</b><span data-i18n="tl.1929">In his student project Ruska records the first electron-optical images, of a 0.3 mm anode aperture, and wraps the coil in iron.</span></li>
+      <li><b data-i18n="tly.1931">7 April 1931</b><span data-i18n="tl.1931">Two coils in series: a platinum grid imaged in two stages, 3.6 × 4.8 ≈ 17.4× at 50 kV. Today this tube is regarded as the first electron microscope.</span></li>
+      <li><b data-i18n="tly.1932">1932</b><span data-i18n="tl.1932">Knoll and Ruska predict a resolution limit of 2.2 Å. Ruska and Bodo von Borries apply for a patent on the pole-piece lens.</span></li>
+      <li><b data-i18n="tly.1933">Nov 1933</b><span data-i18n="tl.1933">Ruska completes a two-stage microscope with condenser, objective and projector coils: 12,000×, and 50 nm resolved on a carbonized cotton fibre, beyond the light microscope.</span></li>
+      <li><b data-i18n="tly.1935">1935–37</b><span data-i18n="tl.1935">Students working at the 1933 instrument record a house-fly wing (60 kV, 2,200×) and the diatom <i>Amphipleura pellucida</i> (53 kV, 3,500×, 130 nm).</span></li>
+      <li><b data-i18n="tly.1939">1939</b><span data-i18n="tl.1939">Ruska and von Borries at Siemens deliver the first series-produced electron microscope, to Hoechst. Prototypes in 1938 reached 30,000×.</span></li>
+      <li><b data-i18n="tly.1986">1986</b><span data-i18n="tl.1986">Ruska receives the Nobel Prize in Physics for his fundamental work in electron optics and the design of the first electron microscope.</span></li>
+    </ol>
+  </div></section>
+
+  <section id="museum"><div class="wrap split">
+    <div>
+      <h2 data-i18n="mus.h2">See it <em>in Nuremberg</em></h2>
+      <p class="intro" data-i18n="mus.intro">A brass model of Ruska’s 1933 instrument, labelled <i>Erstes Elektronen-Übermikroskop von E. Ruska, 1933</i>, stands in the DemoSpace of the Electron Microscopy Museum Nuremberg. The museum keeps the microscopes of the following decades in working order, among them a Siemens ÜM 100 laboratory column derived from Ruska’s prototype.</p>
+      <div class="row"><a class="btn solid" href="http://www.worldwidemicroscope.com/TEMs_SEMs/" data-i18n="mus.btn1">TEMs and SEMs at the DemoSpace</a><a class="btn" href="../" data-i18n="mus.btn2">Drive a modern microscope</a></div>
+    </div>
+    <dl class="specs">
+      <dt data-i18n="spec.col">Column</dt><dd data-i18n="spec.colv">Cathode to plate cassette 1.20 m; condenser, objective and projector coils with iron pole pieces</dd>
+      <dt data-i18n="spec.src">Source</dt><dd data-i18n="spec.srcv">Gas-discharge tube with a cold aluminium or iron cathode, water-cooled, about 1 mA</dd>
+      <dt data-i18n="spec.hv">Voltage</dt><dd data-i18n="spec.hvv">Up to about 75 kV, full-wave rectified and smoothed by a capacitor</dd>
+      <dt data-i18n="spec.mag">Magnification</dt><dd data-i18n="spec.magv">About 85× on the intermediate screen, up to 12,200× on the final screen</dd>
+      <dt data-i18n="spec.res">Resolution</dt><dd data-i18n="spec.resv">50 nm (edge of a carbonized cotton fibre, 8,000×)</dd>
+      <dt data-i18n="spec.rec">Recording</dt><dd data-i18n="spec.recv">Photographic plates in a cassette inside the vacuum; lead-glass windows 6–10 mm thick against X-rays</dd>
+      <dt data-i18n="spec.vac">Vacuum</dt><dd data-i18n="spec.vacv">Fore pump and mercury diffusion pump</dd>
+    </dl>
+  </div></section>
+</main>
+
+<footer><div class="wrap">
+  <p data-i18n="foot.1">Sources: E. Ruska, “Über Fortschritte im Bau und in der Leistung des magnetischen Elektronenmikroskops”, <i>Z. Physik</i> 87, 580–602 (1934); E. Ruska, <a href="https://www.nobelprize.org/uploads/2018/06/ruska-lecture.pdf">Nobel lecture</a>, 8 December 1986. The column is a simulation: its geometry and the 1931 tube are schematic, and the physics is simplified so that it runs live in a browser.</p>
+  <p data-i18n="foot.2">Part of <a href="../">Seeing with Electrons</a> · Advanced-EM.</p>
+</div></footer>
+
+<dialog id="result" aria-labelledby="rTitle">
+  <form method="dialog" class="rwrap">
+    <button class="close" aria-label="Close">×</button>
+    <p class="eyebrow" id="rEyebrow"></p>
+    <h2 id="rTitle"></h2>
+    <div class="rgrid">
+      <img id="rPlate" alt="Your developed plate">
+      <div>
+        <p id="rText"></p>
+        <div class="scale" id="rScale" aria-label="Resolution compared on a logarithmic scale"></div>
+      </div>
+    </div>
+    <div class="row"><button class="btn solid" id="rNext" value="next" data-i18n="r.next">Next mission</button><button class="btn" value="stay" data-i18n="r.stay">Keep exploring</button></div>
+  </form>
+</dialog>
+
+<dialog id="consoleDlg" aria-labelledby="cTitle">
+  <form method="dialog" class="rwrap">
+    <button class="close" aria-label="Close">×</button>
+    <div id="consoleBody"></div>
+  </form>
+</dialog>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module" src="main.js"></script>
+</body>
+</html>
