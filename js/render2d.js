@@ -340,7 +340,7 @@ function drawSTEM(sim, S, m, s) {
 }
 
 function detectorDiagram(q, S, r, dpr, type) {
-  const [x0, y0, w, h] = r, cx = x0 + w / 2, cy = y0 + h / 2 + 6 * dpr, R = Math.min(w, h) * 0.44;
+  const [x0, y0, w, h] = r, cx = x0 + w / 2, cy = y0 + h / 2 + 6 * dpr, R = Math.max(1, Math.min(w, h) * 0.44); // a collapsed window has no size
   const maxM = 240, sc = R / maxM;
   q.fillStyle = 'rgba(255,255,255,0.03)';
   q.beginPath(); q.arc(cx, cy, R, 0, 7); q.fill();

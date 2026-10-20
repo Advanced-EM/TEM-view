@@ -1,0 +1,30 @@
+name: tests
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: JavaScript syntax
+        run: for f in js/*.js; do node --check "$f"; done
+      - name: Python package (headless simulator)
+        run: |
+          pip install -e "tools/temview-py[test,plot]"
+          pytest -q tools/temview-py/tests
+      - name: Example automation runs
+        run: python tools/temview-py/examples/quickstart.py
+        env:
+          MPLBACKEND: Agg
+      - name: MCP server
+        run: cd tools/temview-mcp && npm ci && node test.mjs
+      - name: Collector Worker
+        run: cd hf/worker && node test.mjs

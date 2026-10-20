@@ -7,3 +7,8 @@ node_modules/
 
 # mailing-list exports (personal data)
 subscribers*.csv
+
+# Python build files
+*.egg-info/
+__pycache__/
+.pytest_cache/

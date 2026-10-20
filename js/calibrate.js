@@ -119,10 +119,48 @@ export function fitCTF(img, w, h, { pixA, kV, CsA }) {
   cand.sort((p, q) => q[0] - p[0]);
   const starts = [];
   for (const [, df] of cand) { if (starts.length >= 3) break; if (starts.every((s) => Math.abs(s - df) > 0.15 * Math.abs(s) + 30)) starts.push(df); }
-  // 2) refine defocus and astigmatism together (pattern search on df, A1·cos2φ, A1·sin2φ)
+  // 1b) astigmatism starting point: fit the defocus in angular sectors; with two-fold astigmatism it varies as
+  //     C1 + A1·cos 2(φ − φa), so a least-squares sinusoid gives (C1, A1·cos2φa, A1·sin2φa). Large astigmatism
+  //     smears the rotational average and traps a search that starts from zero astigmatism.
+  const NS = 18, sec = Array.from({ length: NS }, () => ({ s: new Float64Array(R + 1), n: new Float64Array(R + 1) }));
+  for (let y = 0; y < B; y++) for (let x = 0; x < B; x++) {
+    const r = Math.round(Math.hypot(x - c, y - c));
+    if (r < rmin || r > rmax) continue;
+    const phi = (Math.atan2(y - c, x - c) + 2 * Math.PI) % Math.PI, j = Math.min(NS - 1, Math.floor((phi / Math.PI) * NS));
+    sec[j].s[r] += L[y * B + x] - bg[r]; sec[j].n[r]++;
+  }
+  const sectorStart = (df0) => {
+    const rows = [];
+    for (let j = 0; j < NS; j++) {
+      const prof1 = [], ks = [];
+      for (let r = rmin; r <= rmax; r++) if (sec[j].n[r]) { prof1.push(sec[j].s[r] / sec[j].n[r]); ks.push(r * dk); }
+      if (prof1.length < 8) continue;
+      const pn = normalize(Float64Array.from(prof1));
+      const sc1 = (df) => { let s = 0, m2 = 0, sm = 0; ks.forEach((k, i) => { const m = -Math.cos(2 * P.chi(k * k, lam, df, CsA)); s += pn[i] * m; m2 += m * m; sm += m; }); return s / Math.sqrt(Math.max(1e-12, m2 - (sm * sm) / ks.length) * ks.length); };
+      let bd = df0, bs = -Infinity;
+      const span = 0.6 * Math.abs(df0) + 300;
+      for (let i = 0; i <= 240; i++) { const df = df0 - span + (2 * span * i) / 240, v = sc1(df); if (v > bs) { bs = v; bd = df; } }
+      rows.push([((j + 0.5) / NS) * Math.PI, bd]);
+    }
+    if (rows.length < 6) return null;
+    // least squares: df(φ) = C1 + a·cos2φ + b·sin2φ
+    let S0 = 0, Sc = 0, Ss = 0, Scc = 0, Sss = 0, Scs = 0, Y = 0, Yc = 0, Ys = 0;
+    for (const [phi, d] of rows) { const cc = Math.cos(2 * phi), ss = Math.sin(2 * phi); S0++; Sc += cc; Ss += ss; Scc += cc * cc; Sss += ss * ss; Scs += cc * ss; Y += d; Yc += d * cc; Ys += d * ss; }
+    const M = [[S0, Sc, Ss], [Sc, Scc, Scs], [Ss, Scs, Sss]], v = [Y, Yc, Ys];
+    const det = (m) => m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+    const D0 = det(M); if (Math.abs(D0) < 1e-9) return null;
+    const sol = [0, 1, 2].map((i) => det(M.map((row, r) => row.map((x, cI) => (cI === i ? v[r] : x)))) / D0);
+    return sol;
+  };
+  // 2) refine defocus and astigmatism together (pattern search on df, A1·cos2φ, A1·sin2φ), from each defocus
+  //    candidate with zero astigmatism and from the sector estimate
+  const inits = starts.map((df0) => [df0, 0, 0]);
+  const ss0 = sectorStart(starts[0]);
+  if (ss0) inits.unshift(ss0);
   let best = null;
-  for (const df0 of starts) {
-    let p = [df0, 0, 0], f = score2D(...p), st = [0.04 * Math.abs(df0) + 20, 0.04 * Math.abs(df0) + 20, 0.04 * Math.abs(df0) + 20];
+  for (const p0 of inits) {
+    const df0 = p0[0];
+    let p = [...p0], f = score2D(...p), st = [0.04 * Math.abs(df0) + 20, 0.04 * Math.abs(df0) + 20, 0.04 * Math.abs(df0) + 20];
     for (let it = 0; it < 160 && st[0] > 0.5; it++) {
       let moved = false;
       for (let d = 0; d < 3; d++) for (const sg of [1, -1]) {

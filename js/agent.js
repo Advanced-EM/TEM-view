@@ -36,6 +36,8 @@ export class AgentBridge {
   async handle(method, p) {
     if (method === 'state') return this.api.state();
     if (method === 'say') { this.api.say(String(p.text ?? '').slice(0, 600)); return { said: true }; }
+    // scripts check for themselves whether a training task allows the call (js/scripting.js)
+    if (method === 'script') return this.api.script(String(p.call ?? ''), p.args ?? {});
     const busy = this.api.busy();
     if (busy) throw new Error(busy);
     if (method === 'run') {
