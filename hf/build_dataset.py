@@ -43,7 +43,7 @@ def card(repo, sess_rows, n_steps, rejected):
     by_e = Counter(r["experience"] for r in sess_rows)
     ok = sum(bool(r["success"]) for r in sess_rows)
     return f"""---
-license: cc-by-4.0
+license: other
 pretty_name: TEM-view alignment behavior
 language: [en]
 tags: [electron-microscopy, tem, stem, aberration-correction, human-behavior, digital-twin, imitation-learning]

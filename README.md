@@ -124,3 +124,7 @@ Drag the column to orbit and scroll to zoom. Keys `1`–`9` and `0` switch modes
 | `js/narration.js` | Narration scripts and audio playback |
 | `tools/narrate.mjs` | Generates the narration clips with ElevenLabs |
 | `js/main.js` | State, controls, interaction, render loop |
+
+## License
+
+All rights reserved while the licenses for the software, documentation, hardware and firmware are decided. See [LICENSE](LICENSE).

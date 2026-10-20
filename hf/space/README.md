@@ -6,7 +6,7 @@ colorTo: blue
 sdk: docker
 app_port: 7860
 pinned: false
-license: mit
+license: other
 short_description: Receives opt-in TEM-view training sessions for a dataset
 ---
 

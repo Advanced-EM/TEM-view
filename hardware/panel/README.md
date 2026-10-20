@@ -98,4 +98,4 @@ The exhibit's **on-screen panel** (key `V`, or the panel dialog) has the same kn
 
 ## Licensing
 
-The hardware and firmware are meant to be open. A license (for example CERN-OHL-S for the hardware) is still to be chosen.
+The licenses for the hardware and the firmware are still to be decided; until then, see [LICENSE](../../LICENSE).

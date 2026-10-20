@@ -66,12 +66,9 @@ steps = load_dataset("rmsreis/tem-view-alignment", "steps", split="train")      
 sessions = load_dataset("rmsreis/tem-view-alignment", "sessions", split="train")  # outcome, rating vs truth
 ```
 
-- **Imitation:** learn `state → next actions` from successful sessions, by experience level.
-- **Reward / judgment models:** predict the true `score` from what the user saw, and model when people stop (`rating` vs `final_score`).
-- **Strategy mining:** the order of operations (stigmate → focus, C1/A1 → B2/A2 → C3/A3) and time to success.
-
-The models can then be published as model repos linked to the dataset. Note that `state`, `metrics` and the action
-values are stored as JSON text, so every column keeps one type across scenarios; decode them with `json.loads`.
+Models trained on this dataset are kept private and are not published. Note that `state`, `metrics` and the
+action values are stored as JSON text, so every column keeps one type across scenarios; decode them with
+`json.loads`.
 
 ## Local test
 
