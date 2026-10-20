@@ -19,6 +19,9 @@ import { AGENT, SUPPORT } from './config.js';
 import { toNpz as npzBytes } from './export.js';
 import { collectData, toNpz } from './export.js';
 import { openCalibration } from './calibui.js';
+import { ScriptCore, b64 } from './scripting.js';
+import { PythonIDE } from './ide.js';
+import { specState, modeState, setState, chipState, resetVdet as resetVdetState, optimalDefocus, dfLimits as dfLimitsOf } from './ops.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -161,6 +164,9 @@ const CONTROLS = [
   { sec: 'Voice and agent' },
   { p: 'Turn on AI mode with the brain button at the top of the controls (or <kbd>/</kbd>) and type a command, or hold <kbd>M</kbd> and say it: "switch to STEM", "defocus minus fifty", "load graphene", "acquire", "fit the CTF", "index the rings". Close misses are confirmed before they run. Connect an AI agent (temview-mcp, for example with emskills) to answer questions and run the microscope with you.' },
   { buttons: [['voiceHelp', 'What can I say?'], ['agent', 'Connect agent']] },
+  { sec: 'Python scripting' },
+  { p: 'Script the microscope in Python: set the optics, acquire NumPy data, run analyses, and test automation against a hidden misalignment (challenges). The IDE runs Python in this browser; the same scripts run on a desktop with <code>tools/temview-py</code>, headless or driving this exhibit. Shortcut <kbd>P</kbd>.' },
+  { buttons: [['ide', 'Open the Python IDE']] },
   { sec: 'Digital twin' },
   { p: 'The instrument profile holds what belongs to one particular microscope (energy spread, Cc, Cs, illumination). Calibrate it from your own data, save the whole session, and export what the detectors record.' },
   { chips: 'profile', label: 'Instrument profile', get: () => S.profile.preset, dynOpts: () => Object.entries(PRESETS).map(([k, v]) => [k, v.name.split(',')[0]]) },
@@ -337,108 +343,24 @@ function refreshControls() {
 
 // ------------------------------------------------------------------ state changes
 function set(key, v, inv = key) {
-  if (S[key] === v) return;
-  const prevT = S.tempSet;
-  S[key] = v;
-  if (key === 'df') S.dfFam[fam(S.mode)] = v;
-  if (key === 'detIn' || key === 'detOut') { if (S.detOut < S.detIn + 5) S.detOut = S.detIn + 5; S.detPreset = null; }
-  if (key === 'eelsWin' || key === 'eelsWidth') inv = 'eelsWin';
-  // a new dispersion or offset: keep the energy window on the spectrum
-  if (key === 'eelsDisp' || key === 'eelsOffset') { const [a, b] = sim.eelsRangeBounds(); if (S.eelsWin < a || S.eelsWin > b) S.eelsWin = +((a + b) / 2).toFixed(1); }
-  if (key === 'alpha4d') resetVdet();
-  // a temperature step makes the holder drift until it settles (MEMS heaters settle fastest)
-  if (key === 'tempSet') sim.kickDrift(Math.min(4, Math.abs(v - prevT) * (S.holder === 'heat' ? 0.0015 : 0.02)));
-  if (!['speed', 'showLabels', 'showElectrons', 'showGlass', 'autoRotate', 'paused'].includes(key)) sim.invalidate(inv);
+  inv = setState(S, sim, key, v, inv);
+  if (inv === null) return;
   refreshControls();
   explainChange(inv === 'cs' ? 'cs' : ['tiltX', 'tiltY'].includes(key) ? 'tilt' : ['detIn', 'detOut'].includes(key) ? 'det' : ['alpha', 'alpha4d'].includes(key) ? 'alpha' : ['eelsWin', 'eelsWidth'].includes(key) ? 'eelsWin' : key);
 }
 
 function chip(key, v) {
   if (key === 'spec') return setSpec(v);
-  if (key === 'holder') {
-    S.holder = v;
-    S.tempSet = { room: 293, ln2: 90, lhe: 4.2, heat: 293 }[v];
-    sim.kickDrift(HOLDERS[v].kick, true);
-    sim.invalidate('temp');
-    refreshControls();
-    return explainChange('holder');
-  }
   if (key === 'profile') return setProfile(newProfile(v), 'profile');
-  if (key === 'corrector') {
-    S.corrector = v;
-    const lim = v ? CORR_RANGE.df : 150;
-    S.df = clamp(S.df, -lim, lim);
-    if (!v && fam(S.mode) === 'tem') S.df = +(P.scherzerDefocus(sim.CsA(), sim.lam) / 10).toFixed(1);
-    S.dfFam[fam(S.mode)] = S.df;
-    if (!v && fam(S.mode) !== 'tem') { S.alpha = Math.min(S.alpha, 10); S.df = S.dfFam.probe = +(P.probeDefocus(sim.CsA(), sim.lam) / 10).toFixed(1); }
-    if (v) { S.alpha = 22; S.dfFam.probe = 0; if (fam(S.mode) === 'probe') S.df = 0; }
-    sim.invalidate('corrector');
-    refreshControls();
-    return explainChange('corrector');
-  }
-  if (key === 'detPreset') {
-    const a = S.alpha;
-    const p = { bf: [0, Math.round(a * 0.6)], abf: [Math.round(a * 0.5), Math.round(a)], adf: [Math.round(a * 1.1), Math.round(a * 3)], haadf: [Math.round(Math.max(3 * a, 60)), 200] }[v];
-    S.detPreset = v; S.detIn = p[0]; S.detOut = p[1];
-    sim.invalidate('det'); refreshControls();
-    return explainChange('det');
-  }
-  if (key === 'vdet') { S.vdet = v; resetVdet(); sim.invalidate('vdet'); refreshControls(); return explainChange('vdet'); }
-  if (key === 'eelsRange') {
-    S.eelsRange = v;
-    const core0 = S.spec === 'sto' ? 462 : S.spec === 'si' ? 102 : S.spec === 'gr' ? 287 : S.spec === 'mof' ? 200 : S.spec === 'bio' ? 405 : 100;
-    // each preset is a dispersion and an offset, as a microscopist would set them
-    [S.eelsDisp, S.eelsOffset, S.eelsExp] = { zlp: [0.01, -5, 0.001], low: [0.05, -5, 0.001], core: [0.25, Math.max(50, core0 - 200), 0.5], high: [1, 1300, 2] }[v];
-    const [a, b] = sim.eelsRangeBounds();
-    const def = { zlp: [0, 3], low: [22, 12], core: [S.spec === 'sto' ? 462 : S.spec === 'si' ? 102 : S.spec === 'gr' ? 287 : S.spec === 'mof' ? 200 : S.spec === 'bio' ? 405 : 100, S.spec === 'si' ? 5 : S.spec === 'gr' ? 6 : S.spec === 'mof' ? 30 : S.spec === 'bio' ? 20 : 16], high: [S.spec === 'au' ? 2260 : S.spec === 'si' ? 1860 : 1960, 60] }[v];
-    S.eelsWin = clamp(def[0], a, b); S.eelsWidth = def[1];
-    sim.invalidate('eelsRange'); refreshControls();
-    return explainChange('eelsRange');
-  }
+  const why = chipState(S, sim, key, v);
+  if (why) { refreshControls(); return explainChange(why); }
   set(key, v, key === 'kV' ? 'kV' : key);
 }
 
-function resetVdet() {
-  const a = S.alpha4d, mp = sim.fd?.mradPx ?? (P.wavelength(S.kV) * 1000) / (64 * 0.18);
-  const edge = 30 * mp;
-  if (S.vdet === 'bf') { S.vdIn = 0; S.vdOut = a; }
-  if (S.vdet === 'abf') { S.vdIn = a / 2; S.vdOut = a; }
-  if (S.vdet === 'adf') { S.vdIn = Math.min(a * 1.15, edge * 0.6); S.vdOut = edge; }
-  if (S.vdet === 'disk') {
-    const g = sim.spec.grains[0], [m, n] = S.spec === 'sto' || S.spec === 'gr' ? [1, 0] : [1, 1];
-    const gx = m * g.b[0][0] + n * g.b[1][0], gy = m * g.b[0][1] + n * g.b[1][1], gm = Math.hypot(gx, gy) * sim.lam * 1000;
-    const r = a + gm * 0.5;
-    S.vdX = (gx / Math.hypot(gx, gy)) * r; S.vdY = (gy / Math.hypot(gx, gy)) * r; S.vdR = Math.max(1.5, gm * 0.4);
-  }
-}
+const resetVdet = () => resetVdetState(S, sim);
 
 function setSpec(v) {
-  const prevSpec = S.spec;
-  S.spec = v;
-  const sp = P.SPECIMENS[v];
-  S.fov = sp.fov; S.cx = sp.center[0]; S.cy = sp.center[1]; S.tiltX = 0; S.tiltY = 0;
-  S.edsSel = 'all';
-  S.eelsRange = 'core';
-  S.eelsDisp = 0.25; S.eelsOffset = Math.max(50, (v === 'sto' ? 462 : v === 'si' ? 102 : v === 'gr' ? 287 : v === 'mof' ? 200 : v === 'bio' ? 405 : 100) - 200);
-  S.eelsWin = v === 'sto' ? 462 : v === 'si' ? 102 : v === 'gr' ? 287 : v === 'mof' ? 200 : v === 'bio' ? 405 : 100;
-  S.eelsWidth = v === 'si' ? 5 : v === 'au' ? 24 : v === 'gr' ? 6 : v === 'mof' ? 30 : v === 'bio' ? 20 : 16;
-  // a MOF needs low-dose conditions; other specimens go back to a normal dose
-  if (v === 'mof') { S.dose = 2; S.kV = 300; S.thick = 20; S.camL = 4000; }
-  else if (v === 'bio') {
-    // single-particle cryo-EM conditions: frozen grid, 300 kV, no corrector, ~1.5 µm underfocus, ~30 e⁻/Å²
-    Object.assign(S, { holder: 'ln2', tempSet: 90, kV: 300, dose: 30, thick: 30, corrector: false, csUnc: S.profile.CsUnc, objAp: 'none', camL: 2000 });
-    S.dfFam.tem = -1500; S.dfFam.probe = +(P.probeDefocus(S.profile.CsUnc * 1e7, P.wavelength(300)) / 10).toFixed(1);
-    S.alpha = Math.min(S.alpha, 10);
-    S.df = S.dfFam[fam(S.mode)];
-    sim.newGrid(); // fresh vitreous ice; a freshly inserted cryo holder drifts at first
-  } else if (S.dose < 20) S.dose = 400;
-  if (v !== 'bio' && prevSpec === 'bio') {
-    S.corrector = S.profile.corrector; S.dfFam = { tem: -4, probe: 0 }; S.df = S.dfFam[fam(S.mode)];
-    if (S.corrector) S.alpha = 22;
-  }
-  sim.freshArea();
-  resetVdet();
-  sim.invalidate('spec');
+  specState(S, sim, v);
   refreshControls();
   explainChange('spec');
 }
@@ -446,18 +368,12 @@ function setSpec(v) {
 function setMode(m) {
   if (m === S.mode) return;
   if (scn?.recorder.active) scn.recorder.event('mode', { from: S.mode, to: m });
-  S.mode = m;
+  modeState(S, sim, m);
   infoOpen = false;
-  S.df = S.dfFam[fam(m)];
-  S.fdSel = -1;
-  if (m === 'eds' || m === 'eels' || m === 'ilh') { if (sim.single) sim.startSingle(false); }
-  sim.invalidate('mode');
-  sim.stale.probe = 1;
   refreshControls();
   renderInfo();
   explainChange(null);
   updateDetectorHeader();
-  if (sim.single) sim.startSingle(true);
   if (autoNarrate) N.speak('mode-' + m);
   else if (N.playing()?.startsWith('mode-')) N.stop();
 }
@@ -465,18 +381,14 @@ function setMode(m) {
 function action(id, el) {
   if (id.startsWith('scn:')) return scn.start(id.slice(4));
   if (id === 'voiceHelp') { setAI(true); return voice.handle('help'); }
+  if (id === 'ide') return ide.toggle();
   if (id === 'agent') return agent.connected || agent.status === 'connecting' ? agent.disconnect() : agent.connect();
   if (id === 'replayFile') return $('#fileReplay').click();
   if (id === 'lastSession') { if (scn.lastSession) scn.downloadSession(scn.lastSession); else { $('#change').hidden = false; $('#change').innerHTML = '<small>No recorded session yet</small><p>Run a training scenario with recording on, then download it here.</p>'; } return; }
   if (scn.blocked(id)) { scn.recorder.event('blocked', { id }); $('#change').hidden = false; $('#change').innerHTML = '<small>Not in this task</small><p>Automatic tuning is disabled in this scenario: the point is to see how people do it by hand.</p>'; return; }
   if (scn.recorder.active) scn.recorder.event('button', { id });
   if (id === 'zone') { S.tiltX = 0; S.tiltY = 0; sim.invalidate('tilt'); refreshControls(); explainChange('tilt'); }
-  if (id === 'optfocus') {
-    const Cs = sim.CsA(), lam = sim.lam;
-    let df;
-    df = (fam(S.mode) === 'tem' ? P.scherzerDefocus(Cs, lam) : P.probeDefocus(Cs, lam)) / 10;
-    set('df', +df.toFixed(1), 'df');
-  }
+  if (id === 'optfocus') set('df', optimalDefocus(S, sim), 'df');
   if (id === 'pause') { S.paused = !S.paused; refreshControls(); }
   if (id === 'alignZLP') { sim.alignZLP(); explainChange('alignZLP'); }
   if (id === 'refocus') { sim.invalidate('series'); explainChange('series'); }
@@ -667,7 +579,7 @@ function acquireNow() { redraw = true; R2.draw(sim, S, mainCv, secCv); acq.acqui
 // ------------------------------------------------------------------ voice commands and the agent bridge
 let setAI = () => {}; // AI mode (command bar) on/off, wired up with the controls
 // one executor for both: the same operations a visitor can speak, an agent can send
-const dfLimits = () => (S.corrector ? [-CORR_RANGE.df, CORR_RANGE.df] : S.spec === 'bio' ? [-4000, 500] : [-150, 150]);
+const dfLimits = () => dfLimitsOf(S);
 function runOp(op) {
   switch (op.op) {
     case 'mode': if (KEYS[op.v]) setMode(op.v); break;
@@ -743,6 +655,8 @@ const agent = new AgentBridge({
   busy: () => (scn?.active ? 'A training task is running in the exhibit; the agent cannot change settings until it ends.' : scn?.replay ? 'A session replay is playing.' : null),
   run: (ops) => ops.filter((op) => op.op !== 'export').map((op) => { runOp(op); return op.op === 'analyze' ? (op.result ?? { error: op.error }) : describe(op); }),
   analyze: (name) => { for (let i = 0; i < 3; i++) sim.update(0.05); return analyze(sim, S, name ?? undefined); },
+  // desktop Python (tools/temview-py, connect("live")): the same calls as the IDE; bytes travel as base64
+  script: (call, args) => { const enc = (v) => (v instanceof Uint8Array ? { $bytes: b64(v) } : Array.isArray(v) ? v.map(enc) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, enc(x)])) : v); return enc(scriptCore.call(call, args)); },
   command: (text) => {
     const r = parseCommand(text, { paused: S.paused, mode: S.mode });
     if (!r.ops) return { understood: false, text };
@@ -780,6 +694,17 @@ const scn = new Scenarios({
   restoreState: (st) => { const m = st.mode; Object.assign(S, structuredClone(st)); S.mode = ''; setMode(m); sim.invalidate('all'); refreshControls(); },
 });
 window.addEventListener('pagehide', () => scn.flushOnExit());
+
+// ------------------------------------------------------------------ Python scripting (js/scripting.js, js/ide.js)
+const scriptCore = new ScriptCore({
+  name: 'exhibit', S, sim,
+  run: (op) => { runOp(op); return op.op === 'analyze' ? (op.result ?? { error: op.error }) : describe(op); },
+  busy: () => (scn?.active ? 'A training task is running in the exhibit; scripts cannot change settings until it ends.' : scn?.replay ? 'A session replay is playing.' : null),
+  refresh: () => { refreshControls(); renderInfo(); updateDetectorHeader(); },
+  get scenarioApi() { return scn.api; },
+});
+const ide = new PythonIDE({ core: scriptCore, onRun: () => { refreshControls(); renderInfo(); updateDetectorHeader(); } });
+$('#btnScript')?.addEventListener('click', () => ide.toggle());
 // which input caused each change
 window.addEventListener('pointerdown', (e) => scn.recorder.noteSource(e.pointerType === 'touch' ? 'touch' : e.pointerType === 'pen' ? 'pen' : 'mouse'), true);
 window.addEventListener('wheel', () => scn.recorder.noteSource('mouse'), true);
@@ -1129,6 +1054,7 @@ function wire() {
     else if (e.key === 'v' || e.key === 'V') vPanel.openDock();
     else if (e.key === 'i' || e.key === 'I') acquireNow();
     else if ((e.key === 't' || e.key === 'T') && !e.metaKey && !e.ctrlKey) openTraining();
+    else if ((e.key === 'p' || e.key === 'P') && !e.metaKey && !e.ctrlKey) ide.toggle();
     else if ((e.key === 'm' || e.key === 'M') && !e.repeat && !e.metaKey && !e.ctrlKey) voice.start();
     else if (e.key === '/' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); setAI(true); }
     else if (e.key === '[') fold('L');
