@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SOP-04 Python Scripting · Seeing with Electrons</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Sans:wght@400;600&display=block" rel="stylesheet">
+<link rel="stylesheet" href="guide.css?v=7">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+</head>
+<body>
+
+<!-- 1 · cover -->
+<section class="page cover">
+  <div class="top">
+    <div class="brandline"><span>Standard operating procedure SOP-04</span><span>Automation for electron microscopy</span></div>
+    <h1>Python<br><em>scripting</em></h1>
+    <p class="sub" style="max-width:5.6in">Script the TEM-view microscope from Python: in the exhibit's IDE, headless on a desktop, or driving an open exhibit. Record NumPy data, run analyses, and test automation algorithms against a hidden misalignment.</p>
+  </div>
+  <div class="shot"><img src="fig/sop4_ide_auto.jpg" alt=""></div>
+  <div class="bottom">
+    <div class="doc"><b>SOP-04</b>, version 1.0, October 2026<br>For users who script, and developers of alignment automation<br>Simulation only: nothing here controls a real microscope</div>
+    <div class="logo">Seeing with Electrons<small>TEM-view · Advanced-EM</small></div>
+  </div>
+</section>
+
+<!-- 2 · scope -->
+<section class="page">
+  <div class="run"><span>SOP-04 Python scripting</span><span>Scope and overview</span></div>
+  <h2>Scope and overview</h2>
+  <p class="lede">The <code>temview</code> Python package controls the simulated microscope: it changes settings, records detector data as NumPy arrays with calibrations, runs analyses that report the simulator's true values, and sets hidden misalignments (challenges) that score an algorithm against the truth. The same script runs in three places.</p>
+  <table class="t" style="margin-top:8pt">
+    <tr><th>Where</th><th>Open with</th><th>Needs</th><th>Best for</th></tr>
+    <tr><td><b>Python IDE in the exhibit</b></td><td><code>tv.connect()</code></td><td>A browser; Python runs in it (Pyodide)</td><td>Teaching, quick experiments, watching the exhibit respond</td></tr>
+    <tr><td><b>Desktop, headless</b></td><td><code>tv.connect()</code> or <code>tv.connect("headless")</code></td><td>Python 3.9+, NumPy, Node.js 20+</td><td>Long runs, batch data, algorithm benchmarks, CI tests</td></tr>
+    <tr><td><b>Desktop, live</b></td><td><code>tv.connect("live")</code></td><td>The above, <code>websockets</code>, an open exhibit</td><td>Desktop tools driving the exhibit on screen</td></tr>
+  </table>
+  <div class="cols">
+    <div>
+      <h3>Steps</h3>
+      <table class="t">
+        <tr><td class="n">1</td><td>Run a first script in the exhibit's IDE</td></tr>
+        <tr><td class="n">2</td><td>Install the package on a desktop</td></tr>
+        <tr><td class="n">3</td><td>Learn the calls</td></tr>
+        <tr><td class="n">4</td><td>Test an automation algorithm with challenges</td></tr>
+        <tr><td class="n">5</td><td>Batch data and regression tests</td></tr>
+      </table>
+      <h3>Terms used</h3>
+      <p>A <b>challenge</b> is a training task's hidden misalignment, set up for a script instead of a person. The <b>knob</b> is the setting a script reads and changes; the <b>truth</b> is the optics the simulator actually applies. During a challenge the two differ by the hidden amount, as on a misaligned instrument.</p>
+    </div>
+    <div>
+      <h3>Rules</h3>
+      <ul class="plain">
+        <li>While a person is doing a training task in the exhibit, scripts cannot change settings. The exhibit refuses, so recorded practice stays human.</li>
+        <li>Challenge runs are never recorded or shared with the research dataset.</li>
+        <li>Ending a challenge restores the instrument as it was before the challenge.</li>
+        <li>In the IDE, the exhibit pauses while a script runs and redraws when it ends. Keep long loops on a desktop.</li>
+        <li>Live mode listens on 127.0.0.1 only, on the port temview-mcp uses (8790). Run one or the other, or choose another port.</li>
+      </ul>
+      <div class="note"><b>Note.</b> An algorithm that reads the score or the hidden values while it runs is not tested by the challenge. Use <code>score()</code> and <code>reveal()</code> only after the algorithm has finished.</div>
+    </div>
+  </div>
+  <div class="foot"><span>Seeing with Electrons · TEM-view</span><span>2</span></div>
+</section>
+
+<!-- 3 · step 1 IDE -->
+<section class="page">
+  <div class="run"><span>SOP-04 Python scripting</span><span>Step 1 of 5</span></div>
+  <div class="step">Step 1</div>
+  <h2>Run a first script in the exhibit</h2>
+  <div class="side" style="grid-template-columns:1fr 2.7in">
+    <div>
+      <ol class="proc">
+        <li>Open the exhibit in a current browser and select the terminal button at the top of the controls (Fig. 12a), or <b>Controls → Python scripting → Open the Python IDE</b> (Fig. 12b), or press <kbd>P</kbd>.</li>
+        <li>Wait for the status line to show the Python version. The first time, about 15 MB downloads; later it opens in a few seconds.</li>
+        <li>Select <b>Examples → Quick start</b>, then <b>Run</b> (or <kbd>Ctrl</kbd>+<kbd>Enter</kbd>, <kbd>⌘</kbd>+<kbd>Enter</kbd> on a Mac).</li>
+        <li>The exhibit switches to HAADF STEM on SrTiO₃. The output shows the recorded image, its pixel size, and the probe profile (Fig. 12c).</li>
+        <li>Edit the script and run it again. <b>Save</b> writes it as a <code>.py</code> file; <b>Open</b> loads one. <b>Help</b> lists the calls.</li>
+      </ol>
+      <p class="result"><b>Result.</b> The script changes the exhibit, and its output appears below the editor.</p>
+      <pre><code>import temview as tv
+
+tem = tv.connect()
+tem.set(mode="stem", specimen="sto", kV=300, corrector=True, detector="haadf")
+img = tem.acquire()
+print(img, img.calibration)
+tv.show(img, "HAADF, SrTiO3")</code></pre>
+      <div class="note"><b>Note.</b> The editor keeps your script in this browser between visits. Python runs on your computer; no code is sent anywhere.</div>
+    </div>
+    <div class="stack">
+      <figure class="fig ui"><img src="fig/sop4_buttons.jpg" alt=""><figcaption><b>Fig. 12a.</b> The scripting button, third from the left, at the top of the controls.</figcaption></figure>
+      <figure class="fig ui"><img src="fig/sop4_controls_sec.jpg" alt=""><figcaption><b>Fig. 12b.</b> Controls → Python scripting.</figcaption></figure>
+    </div>
+  </div>
+  <figure class="fig ui" style="margin-top:6pt"><img src="fig/sop4_ide_quickstart.jpg" alt="" style="max-height:2.8in;object-fit:cover;object-position:50% 100%"><figcaption><b>Fig. 12c.</b> The output of the Quick start example (lower part of the IDE): the recorded image, the probe width and the probe profile.</figcaption></figure>
+  <div class="foot"><span>Seeing with Electrons · TEM-view</span><span>3</span></div>
+</section>
+
+<!-- 4 · step 2 desktop -->
+<section class="page">
+  <div class="run"><span>SOP-04 Python scripting</span><span>Step 2 of 5</span></div>
+  <div class="step">Step 2</div>
+  <h2>Install the package on a desktop</h2>
+  <p class="lede">The headless backend runs the simulator's own JavaScript in Node.js, so the package is installed from a copy of the repository and stays linked to it.</p>
+  <pre><code>git clone https://github.com/Advanced-EM/TEM-view
+python -m venv .venv && source .venv/bin/activate          # Windows: .venv\Scripts\activate
+pip install -e "TEM-view/tools/temview-py[live,plot,test]"
+pytest TEM-view/tools/temview-py/tests                        # all tests should pass
+python TEM-view/tools/temview-py/examples/quickstart.py</code></pre>
+  <div class="cols">
+    <div>
+      <h3>Headless</h3>
+      <ol class="proc">
+        <li>Check Node.js: <code>node --version</code> must report 20 or later.</li>
+        <li>In Python, <code>tem = tv.connect()</code> starts the simulator in a background Node process. It stops when the script ends, or with <code>tem.close()</code>.</li>
+        <li>Use it as a context manager to close it reliably: <code>with tv.connect() as tem: …</code></li>
+      </ol>
+      <p class="result"><b>Result.</b> <code>tem.info()["backend"]</code> is <code>"headless"</code>, and a typical acquisition returns in a fraction of a second.</p>
+      <div class="note"><b>Note.</b> To use a copy of the repository somewhere else, set the environment variable <code>TEMVIEW_ROOT</code> to its folder.</div>
+    </div>
+    <div>
+      <h3>Live (driving an open exhibit)</h3>
+      <ol class="proc">
+        <li>Close any AI client that runs temview-mcp, or choose another port.</li>
+        <li>Run the script. <code>tv.connect("live")</code> prints that it is waiting for the exhibit.</li>
+        <li>In the exhibit, select <b>Controls → Voice and agent → Connect agent</b> within the timeout (120 s by default).</li>
+        <li>The script continues, and the exhibit follows each call on screen.</li>
+      </ol>
+      <pre><code>tem = tv.connect("live", port=8790, timeout=120)</code></pre>
+      <p class="result"><b>Result.</b> The script prints “Exhibit connected.”, and the exhibit shows <b>Agent connected</b>.</p>
+      <div class="note caution"><b>Caution.</b> Live mode listens on 127.0.0.1 only and accepts the exhibit's own site and localhost. Do not forward the port to a network.</div>
+    </div>
+  </div>
+  <div class="foot"><span>Seeing with Electrons · TEM-view</span><span>4</span></div>
+</section>
+
+<!-- 5 · step 3 calls -->
+<section class="page">
+  <div class="run"><span>SOP-04 Python scripting</span><span>Step 3 of 5</span></div>
+  <div class="step">Step 3</div>
+  <h2>The calls</h2>
+  <p class="lede">Every call is the same on the three backends. <code>tem</code> is the object <code>tv.connect()</code> returns.</p>
+      <h3>Microscope</h3>
+      <table class="t">
+        <tr><th>Call</th><th>Returns, or does</th></tr>
+        <tr><td><code>tem.set(**settings)</code></td><td>Changes settings (next page); returns what was done</td></tr>
+        <tr><td><code>tem.state()</code></td><td>Settings and optics: Cs, aberrations, wavelength, Scherzer defocus, temperature</td></tr>
+        <tr><td><code>tem.command(text)</code></td><td>Runs a plain-language command: <code>"defocus minus 50"</code></td></tr>
+        <tr><td><code>tem.aberrations(A1=(nm, deg), …)</code></td><td>Sets A1, B2, A2 (nm) and A3 (µm) as (magnitude, angle); <code>Cs_um</code> with the corrector on</td></tr>
+        <tr><td><code>tem.acquire(steps=None)</code></td><td>An <code>Acquisition</code> (below), after advancing the simulation so it reflects the settings</td></tr>
+        <tr><td><code>tem.analyze(name)</code></td><td><code>fit_ctf</code>, <code>fit_lattice</code>, <code>identify_edges</code>, <code>fit_eds</code>, <code>fit_zlp</code>, <code>fit_hologram</code>; the summary includes the true values</td></tr>
+        <tr><td><code>tem.step(n)</code></td><td>Advances n frames of 50 ms: drift, dose and temperature evolve</td></tr>
+        <tr><td><code>tem.info()</code></td><td>Modes, specimens, settings, analyses and challenges available</td></tr>
+        <tr><td><code>tem.challenge(id, seed)</code></td><td>Starts <code>tem-focus-stig</code> or <code>corrector-ronch</code></td></tr>
+        <tr><td><code>tem.score()</code> · <code>tem.reveal()</code></td><td>The challenge's score from the true optics · the hidden values</td></tr>
+        <tr><td><code>tem.end_challenge()</code></td><td>Restores the instrument as it was</td></tr>
+        <tr><td><code>tv.show(x, title)</code></td><td>Draws a 2D image or a 1D profile (IDE output, or matplotlib)</td></tr>
+      </table>
+  <div class="foot"><span>Seeing with Electrons · TEM-view</span><span>5</span></div>
+</section>
+
+<!-- 5b · settings and data -->
+<section class="page">
+  <div class="run"><span>SOP-04 Python scripting</span><span>Step 3 of 5, continued</span></div>
+  <h2>Settings and data</h2>
+  <div class="cols">
+    <div>
+      <h3>Settings</h3>
+      <table class="t">
+        <tr><th>Name</th><th>Values</th></tr>
+        <tr><td><code>mode</code></td><td>tem, stem, 4d, diff, cbed, eds, eels, ronch, oah, ilh</td></tr>
+        <tr><td><code>specimen</code></td><td>au, si, sto, gr, mof, bio</td></tr>
+        <tr><td><code>kV</code></td><td>80, 200, 300</td></tr>
+        <tr><td><code>defocus_nm</code></td><td>C1 in nm, negative is underfocus: ±150 without the corrector, ±300 with it, −4000 to +500 for the cryo specimen</td></tr>
+        <tr><td><code>fov_nm</code></td><td>Field of view, 1.5 to 120 nm</td></tr>
+        <tr><td><code>dose</code></td><td>Electrons per Å²</td></tr>
+        <tr><td><code>thickness_nm</code></td><td>Specimen thickness</td></tr>
+        <tr><td><code>corrector</code></td><td>True or False</td></tr>
+        <tr><td><code>holder</code>, <code>temperature_K</code></td><td>room, ln2, lhe, heat; specimen temperature</td></tr>
+        <tr><td><code>realistic</code></td><td>Shot noise and real detectors (True) or the clean view</td></tr>
+        <tr><td><code>detector</code></td><td>bf, abf, adf, haadf (STEM)</td></tr>
+        <tr><td><code>convergence_mrad</code></td><td>Probe semi-angle, 3 to 40 mrad</td></tr>
+        <tr><td><code>camera_length_mm</code></td><td>Diffraction camera length, 80 to 6000 mm</td></tr>
+        <tr><td><code>tilt_x_deg</code>, <code>tilt_y_deg</code></td><td>Specimen tilt, ±3°</td></tr>
+        <tr><td><code>eels_range</code></td><td>zlp, low, core, high</td></tr>
+        <tr><td><code>beam</code></td><td>True (on) or False (blanked)</td></tr>
+      </table>
+      <p>Settings apply in a fixed order whatever order you write them: specimen, mode, then the optics. Loading a specimen applies its usual conditions (for example, the cryo specimen sets 300 kV and a cryo holder), so set those values after it or in the same call.</p>
+      <div class="note"><b>Errors.</b> A refused or invalid call raises <code>TemviewError</code> with the reason, for example <i>unknown setting focus</i> or <i>a training task is running</i>.</div>
+    </div>
+    <div>
+      <h3>Acquisition</h3>
+      <table class="t">
+        <tr><td><code>a.image</code></td><td>The main array: image, pattern, spectrum, …</td></tr>
+        <tr><td><code>a["probe"]</code>, <code>a.arrays</code></td><td>Any array by name; all of them</td></tr>
+        <tr><td><code>a.calibration</code></td><td>Pixel size, camera length, energy scale, as recorded</td></tr>
+        <tr><td><code>a.meta</code></td><td>The full metadata, including the instrument state</td></tr>
+        <tr><td><code>a.save("x.npz")</code></td><td>The same .npz file the exhibit's Export button writes</td></tr>
+      </table>
+      <h3>Reading an acquisition</h3>
+      <pre><code>a = tem.acquire()
+a.image.shape             # (224, 224)
+a.calibration["pixel_A"]  # Å per pixel
+a.meta["optics"]          # wavelength, Cs, focal spread
+a.save("run.npz")         # numpy.load() reads it back</code></pre>
+    </div>
+  </div>
+  <div class="foot"><span>Seeing with Electrons · TEM-view</span><span>6</span></div>
+</section>
+
+<!-- 6 · step 4 automation -->
+<section class="page">
+  <div class="run"><span>SOP-04 Python scripting</span><span>Step 4 of 5</span></div>
+  <div class="step">Step 4</div>
+  <h2>Test an automation algorithm with challenges</h2>
+  <p class="lede">A challenge hides a misalignment, so the knob readings no longer show the true optics. The algorithm works only from what a real microscope gives it: images, FFTs and fits. Afterwards, <code>score()</code> grades the result against the truth. A fixed seed repeats the same misalignment, so algorithms are compared on the same cases.</p>
+  <div class="cols">
+    <div>
+      <ol class="proc">
+        <li>Start a challenge with a seed: <code>tem.challenge("tem-focus-stig", seed=1)</code>.</li>
+        <li>Run the algorithm. It may read <code>state()</code> (the knobs), acquire, and analyze, but not <code>score()</code> or <code>reveal()</code>.</li>
+        <li>When it stops, record <code>tem.score()</code>.</li>
+        <li>Repeat for a set of seeds, and report the scores together.</li>
+        <li>Call <code>tem.end_challenge()</code> to restore the instrument.</li>
+      </ol>
+      <h3>The example: automatic focus and stigmation</h3>
+      <p><code>examples/auto_focus_stig.py</code> corrects defocus and two-fold astigmatism from Thon rings only:</p>
+      <ul class="plain">
+        <li>It trusts a CTF fit only if it matches the rings well (correlation ≥ 0.4) and is more than 25 nm from focus, where there are enough rings.</li>
+        <li>Thon rings alone cannot always tell over- from underfocus. A known 20 nm focus step resolves the sign: if the measured defocus moves the other way, the sign was wrong.</li>
+        <li>The knobs are off by unknown amounts, so it moves them by the measured error, never to an absolute value.</li>
+        <li>Astigmatism is subtracted as a vector at twice its angle, with each step capped at 60 nm.</li>
+      </ul>
+    </div>
+    <div>
+      <svg class="diagram" viewBox="0 0 300 250" xmlns="http://www.w3.org/2000/svg" font-family="IBM Plex Sans, sans-serif" font-size="10.5">
+        <defs><marker id="b" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 8 4 0 8z" fill="#5d6773"/></marker></defs>
+        <g fill="#fff" stroke="#1a1f26" stroke-width="0.8">
+          <rect x="40" y="4" width="220" height="30"/><rect x="40" y="56" width="220" height="30"/><rect x="40" y="108" width="220" height="30"/><rect x="40" y="160" width="220" height="30"/><rect x="40" y="212" width="220" height="30"/>
+        </g>
+        <g fill="#1a1f26" text-anchor="middle">
+          <text x="150" y="23">Find trustworthy rings: step focus</text>
+          <text x="150" y="75">Fit with a focus step: signed defocus</text>
+          <text x="150" y="127">Move to 80 nm underfocus</text>
+          <text x="150" y="179">Fit and correct astigmatism (×4)</text>
+          <text x="150" y="231">Move to Scherzer focus; check once</text>
+        </g>
+        <g stroke="#5d6773" stroke-width="1"><line x1="150" y1="34" x2="150" y2="54" marker-end="url(#b)"/><line x1="150" y1="86" x2="150" y2="106" marker-end="url(#b)"/><line x1="150" y1="138" x2="150" y2="158" marker-end="url(#b)"/><line x1="150" y1="190" x2="150" y2="210" marker-end="url(#b)"/></g>
+      </svg>
+      <table class="t">
+        <tr><th>Seed</th><th>Score</th><th>Defocus error</th><th>Astigmatism left</th></tr>
+        <tr><td>1</td><td>93</td><td>1.3 nm</td><td>0.27 nm</td></tr>
+        <tr><td>2</td><td>94</td><td>1.3 nm</td><td>0.11 nm</td></tr>
+        <tr><td>3</td><td>94</td><td>1.3 nm</td><td>0.19 nm</td></tr>
+        <tr><td>4</td><td>94</td><td>1.3 nm</td><td>0.17 nm</td></tr>
+        <tr><td>5</td><td>94</td><td>1.3 nm</td><td>0.09 nm</td></tr>
+        <tr><td>6–8</td><td>93</td><td>1.3 nm</td><td>0.28–0.40 nm</td></tr>
+      </table>
+      <p style="font-size:8pt;color:var(--muted)">Headless, 200 kV. The IDE gives the same scores for the same seeds.</p>
+      <div class="note"><b>Lessons from building it.</b> The first versions failed on half the seeds: fits taken too close to focus were trusted, the defocus sign was taken from a single fit, and one magnification was used for every case. Benchmarking on several seeds is what exposed each of these.</div>
+    </div>
+  </div>
+  <div class="foot"><span>Seeing with Electrons · TEM-view</span><span>7</span></div>
+</section>
+
+<!-- 7 · step 5 batch and CI -->
+<section class="page">
+  <div class="run"><span>SOP-04 Python scripting</span><span>Step 5 of 5</span></div>
+  <div class="step">Step 5</div>
+  <h2>Batch data and regression tests</h2>
+  <div class="cols">
+    <div>
+      <h3>A labelled dataset</h3>
+      <p>Simulated data comes with exact ground truth, which makes it useful for training and testing analysis models. Run this headless:</p>
+      <pre><code>import json, temview as tv
+
+with tv.connect() as tem:
+    tem.set(mode="tem", specimen="au", corrector=False, fov_nm=20)
+    labels = []
+    for i, df in enumerate(range(-150, -19, 10)):
+        for a1 in (0, 5, 10, 20):
+            tem.set(defocus_nm=df)
+            tem.aberrations(A1=(a1, 30))
+            tem.acquire().save(f"ctf_{i:03d}_{a1:02d}.npz")
+            labels.append({"file": f"ctf_{i:03d}_{a1:02d}.npz",
+                           "defocus_nm": df, "A1_nm": a1, "A1_deg": 30})
+    json.dump(labels, open("labels.json", "w"), indent=1)</code></pre>
+      <p>Each <code>.npz</code> carries the full instrument state in its metadata, so a label file is a convenience rather than the only record.</p>
+      <h3>Reproducibility</h3>
+      <ul class="plain">
+        <li>Record <code>tem.state()</code> and <code>tem.info()</code> with every result.</li>
+        <li>Fix challenge seeds. Use realistic mode (<code>realistic=True</code>) when shot noise matters to the algorithm.</li>
+        <li>Note the repository commit (<code>git rev-parse HEAD</code>); the simulator improves between versions.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>An algorithm as a regression test</h3>
+      <p>Put the benchmark in a test so that changes to the algorithm or the simulator cannot silently make it worse:</p>
+      <pre><code># tests/test_autofocus.py
+import pytest, temview as tv
+from my_autofocus import run
+
+@pytest.fixture(scope="module")
+def tem():
+    with tv.connect() as m:
+        yield m
+
+@pytest.mark.parametrize("seed", range(1, 9))
+def test_autofocus(tem, seed):
+    tem.challenge("tem-focus-stig", seed=seed)
+    run(tem)
+    assert tem.score()["score"] &gt;= 85
+    tem.end_challenge()</code></pre>
+      <p>The TEM-view repository runs its own tests this way on every pull request (<code>.github/workflows/tests.yml</code>), with Node.js 20 and Python set up in the workflow.</p>
+      <div class="note"><b>Through-focus example.</b> <code>examples/through_focus.py</code> steps the defocus from −120 to +40 nm and tabulates image contrast. On gold at 200 kV, contrast peaks near −60 nm, close to the Scherzer defocus of −65.8 nm.</div>
+      <h3>Speed</h3>
+      <p>A TEM or STEM acquisition takes tens of milliseconds, and a CTF fit about half a second. The simulator computes on the CPU in JavaScript. The calls do not depend on how it computes, so a future WebGPU backend could speed up the same scripts without changes; the IDE's status line shows whether the browser offers WebGPU.</p>
+    </div>
+  </div>
+  <div class="foot"><span>Seeing with Electrons · TEM-view</span><span>8</span></div>
+</section>
+
+<!-- 8 · troubleshooting and record -->
+<section class="page">
+  <div class="run"><span>SOP-04 Python scripting</span><span>Troubleshooting and record</span></div>
+  <h2>Troubleshooting</h2>
+  <table class="t">
+    <tr><th>Observation</th><th>Likely cause</th><th>Action</th></tr>
+    <tr><td>The IDE says “Python could not load”</td><td>No network on first use, or the CDN is blocked</td><td>Connect once; later opens use the browser cache</td></tr>
+    <tr><td>The exhibit freezes while a script runs</td><td>Expected: IDE scripts run on the page's thread</td><td>Wait; move long loops to a desktop</td></tr>
+    <tr><td><code>TemviewError: A training task is running</code></td><td>A person is doing a training task</td><td>Finish or give up the task first</td></tr>
+    <tr><td><code>Node.js 20 or later is needed</code></td><td>Node is missing or old</td><td>Install Node.js 20+; check <code>node --version</code></td></tr>
+    <tr><td><code>TEM-view not found at …</code></td><td>The package is not linked to a copy of the repository</td><td>Install with <code>pip install -e</code> from a clone, or set <code>TEMVIEW_ROOT</code></td></tr>
+    <tr><td><code>port 8790 is in use</code></td><td>An AI client runs temview-mcp</td><td>Close it, or <code>connect("live", port=8791)</code></td></tr>
+    <tr><td>No exhibit connected within the timeout</td><td>Connect agent not selected, or the exhibit joined another server</td><td>Select Connect agent again; close other temview servers</td></tr>
+    <tr><td>STEM images look blurred</td><td>The corrector is off with a wide probe</td><td>Set <code>corrector=True</code>, or <code>convergence_mrad</code> ≤ 10 without it</td></tr>
+    <tr><td>Results differ between runs</td><td>Unseeded challenge, drift, or realistic shot noise</td><td>Fix the seed; reduce <code>step()</code> calls; average or use the clean view</td></tr>
+  </table>
+  <h2 style="margin-top:16pt">Record</h2>
+  <table class="t">
+    <tr><th></th><th>Item</th><th>Value or criterion</th><th>Initials</th></tr>
+    <tr><td class="box"></td><td>IDE runs the Quick start example</td><td>Image and probe profile shown</td><td class="line"></td></tr>
+    <tr><td class="box"></td><td>Desktop package installed, tests pass</td><td>All passed</td><td class="line"></td></tr>
+    <tr><td class="box"></td><td>Live mode connects</td><td>“Exhibit connected.”; port ______</td><td class="line"></td></tr>
+    <tr><td class="box"></td><td>Algorithm benchmarked on challenges</td><td>Seeds ______ ; mean score ______</td><td class="line"></td></tr>
+    <tr><td class="box"></td><td>Repository commit and settings recorded</td><td>Commit ____________</td><td class="line"></td></tr>
+  </table>
+  <div class="foot"><span>Seeing with Electrons · TEM-view</span><span>9</span></div>
+</section>
+
+<!-- 9 · back cover -->
+<section class="page back">
+  <h2 style="font-size:32pt;margin-bottom:12pt">Open the IDE</h2>
+  <p class="lede" style="color:#c3d3e1">The link opens TEM-view with the Python IDE and the Quick start example loaded. Select Run.</p>
+  <div style="display:flex;gap:22pt;align-items:center;margin:22pt 0 28pt">
+    <div class="qr" id="qr"></div>
+    <div>
+      <p style="margin:0 0 4pt;color:#9fb4c6">Python IDE with the Quick start example</p>
+      <p style="font-size:11pt;margin:0 0 10pt"><a id="link" href=""></a></p>
+      <p style="color:#9fb4c6;margin:0">Use a computer: the IDE needs a keyboard and a larger screen.</p>
+    </div>
+  </div>
+  <div class="cols3">
+    <div><h3>The package</h3><p>github.com/Advanced-EM/TEM-view<br>tools/temview-py</p></div>
+    <div><h3>Related procedures</h3><p>SOP-01 TEM and SOP-02 STEM alignment: the tasks the challenges come from. SOP-03: AI agents and MCP.</p></div>
+    <div><h3>Pyodide</h3><p>Python in the browser: pyodide.org</p></div>
+  </div>
+  <div class="fine">
+    <div>SOP-04 Python scripting, version 1.0, October 2026<br>Simulation only. Nothing here controls a real microscope.<br>Results from the simulator are not measurements of a real specimen.</div>
+    <div class="logo">Seeing with Electrons<small>TEM-view · Advanced-EM</small></div>
+  </div>
+</section>
+
+<script>
+  const url = 'https://advanced-em.github.io/TEM-view/?script=quickstart';
+  const a = document.getElementById('link'); a.href = url; a.textContent = url.replace('https://', '');
+  try { const q = qrcode(0, 'M'); q.addData(url); q.make(); document.getElementById('qr').innerHTML = q.createSvgTag({ cellSize: 4, margin: 0, scalable: true }); } catch { /* offline: link only */ }
+</script>
+</body>
+</html>
