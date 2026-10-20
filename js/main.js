@@ -1229,3 +1229,5 @@ requestAnimationFrame(() => { resize(); requestAnimationFrame(frame); });
 window.__tem = { S, sim, scene, panel: hwPanel, vpanel: vPanel, scn, voice, agent, runOp };
 // deep link from the printed guides: ?train=<scenario id> opens that training task's intro
 { const id = new URLSearchParams(location.search).get('train'); if (id && /^[a-z0-9-]+$/.test(id)) setTimeout(() => { try { scn.start(id); } catch { /* unknown id */ } }, 600); }
+// ?script=<example> opens the Python IDE with that example (tools/temview-py/examples/<example>.py); ?script alone opens it
+{ const q = new URLSearchParams(location.search); if (q.has('script')) { const ex = q.get('script'); setTimeout(() => { ide.toggle(true); if (ex && /^[a-z0-9_]+$/.test(ex)) ide.loadExample(`${ex}.py`); }, 800); } }
