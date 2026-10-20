@@ -62,7 +62,10 @@ function crack(len = 0.35, gain = 0.9) {
   g.gain.linearRampToValueAtTime(0, t + len + 0.05); src.connect(hp).connect(g).connect(Snd.out); src.start(t, Math.random()); src.stop(t + len + 0.1);
 }
 function click() { const ctx = audio(); if (!ctx) return; const o = ctx.createOscillator(), g = ctx.createGain(); o.frequency.value = 180; const t = ctx.currentTime; g.gain.setValueAtTime(0.4, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.08); o.connect(g).connect(Snd.out); o.start(t); o.stop(t + 0.1); }
-addEventListener('pointerdown', () => { audio(); Snd.ctx?.resume?.(); }, { passive: true });
+addEventListener('pointerdown', () => { if (!document.hidden) { audio(); Snd.ctx?.resume?.(); } }, { passive: true });
+// a hidden tab stops the frame loop but not the audio: the pump and hum would hold their last level forever
+document.addEventListener('visibilitychange', () => { if (document.hidden) Snd.ctx?.suspend?.(); else if (Snd.on) Snd.ctx?.resume?.(); });
+addEventListener('pagehide', () => Snd.ctx?.suspend?.());
 
 // ------------------------------------------------------------------ the control panel
 const panel = $('panel');
