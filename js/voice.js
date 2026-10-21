@@ -5,6 +5,7 @@
 // understand goes to a connected agent (agent.js) when there is one, so questions get answered out loud.
 //
 // parseCommand() is pure and runs in Node too, so the grammar is tested without a browser.
+import { nativeRecognition, isApp } from './nativespeech.js';
 
 const MODES = [
   ['4d', /\b(4\s*-?\s*d|four\s*-?\s*d(imensional)?)(\s*-?\s*stem)?\b/],
@@ -250,7 +251,7 @@ export function interpret(raw, ctx = {}) {
 // describe what an op did, for the caption under the microphone
 export function describe(op) {
   switch (op.op) {
-    case 'mode': return `Mode: ${MODE_NAMES[op.v]}`;
+    case 'mode': return op.unavailable ? `${MODE_NAMES[op.v]} is in the full version on the web` : `Mode: ${MODE_NAMES[op.v]}`;
     case 'spec': return `Specimen: ${SPEC_NAMES[op.v]}`;
     case 'set': return op.k === 'df' ? `Defocus ${op.v > 0 ? '+' : ''}${op.v} nm` : op.k === 'fov' ? `Field of view ${op.v} nm` : op.k === 'dose' ? `Dose ${op.v} e⁻/Å²` : op.k === 'clarity' ? (op.v === 'real' ? 'Physically realistic view' : 'Educational view')
       : op.k === 'camL' ? `Camera length ${op.v} mm` : op.k === 'alpha' ? `Convergence ${op.v} mrad` : op.k === 'tiltX' || op.k === 'tiltY' ? `Tilt ${op.k.slice(-1)} ${op.v}°` : op.k === 'showLabels' ? (op.v ? 'Labels on' : 'Labels off') : `${op.k} ${op.v}`;
@@ -281,7 +282,8 @@ export class Voice {
   // api: { ctx(), run(op), agent: { connected, utterance(text) }, onEvent(kind, data) }
   constructor(api) {
     this.api = api; this.rec = null; this.listening = false; this.text = ''; this.final = '';
-    const R = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition);
+    // in the phone apps, the phone's own speech recognition (js/nativespeech.js); on the web, the browser's
+    const R = nativeRecognition() || (typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition));
     this.Recognition = R || null;
   }
   get supported() { return !!this.Recognition; }
@@ -290,7 +292,7 @@ export class Voice {
   consent() {
     if (store('tem-voice-ok') === '1') return Promise.resolve(true);
     return new Promise((resolve) => {
-      const m = this.bubble(`<b>Voice commands</b><p>Hold <kbd>M</kbd> (or the Talk key) and speak; release to send. Your browser's speech recognition turns it into text. In Chrome and Edge the audio is sent to Google's or Microsoft's speech service; Safari may process it on the device. Nothing is recorded by this exhibit, and the microphone is only on while you hold the key.</p>
+      const m = this.bubble(`<b>Voice commands</b><p>Hold <kbd>M</kbd> (or the Talk key) and speak; release to send. ${isApp() ? "The phone's speech recognition (Apple's or Google's) turns it into text; it may process the audio on the device or on their servers." : "Your browser's speech recognition turns it into text. In Chrome and Edge the audio is sent to Google's or Microsoft's speech service; Safari may process it on the device."} Nothing is recorded by this exhibit, and the microphone is only on while you hold the key.</p>
         <div class="vrow"><button class="btn primary" id="vOk">Turn on voice</button><button class="btn" id="vNo">Not now</button></div>`, true);
       m.querySelector('#vOk').onclick = () => { store('tem-voice-ok', '1'); this.hide(); resolve(true); };
       m.querySelector('#vNo').onclick = () => { this.hide(); resolve(false); };

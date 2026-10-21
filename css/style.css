@@ -582,3 +582,6 @@ body.stacked .support { margin: 8px 16px 0; }
 .idehelp table { border-collapse: collapse; width: 100%; } .idehelp td { border-bottom: 1px solid var(--line); padding: 5px 6px; vertical-align: top; } .idehelp td:first-child { white-space: nowrap; }
 .idehelp code { font: 12px var(--mono); color: var(--accent); }
 @media (max-width: 640px) { .ide { left: 6px; top: 6px; width: calc(100vw - 12px); height: calc(100vh - 12px); min-width: 0; } }
+
+/* lite edition (the phone apps): no scripting button */
+.lite #btnScript { display: none; }

@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy · TEM-view</title>
+<meta name="theme-color" content="#05070b">
+<link rel="icon" href="icons/icon-32.png">
+<style>
+  :root { --bg: #05070b; --text: #e6eef5; --muted: #93a6b8; --accent: #6fd6ff; --line: #1f2a37; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 400 15px/1.6 'IBM Plex Sans', system-ui, -apple-system, sans-serif; }
+  main { max-width: 720px; margin: 0 auto; padding: 40px 16px 64px; }
+  h1 { font: 400 38px/1.1 'Instrument Serif', Georgia, serif; margin: 0 0 6px; }
+  h2 { font-size: 17px; margin: 28px 0 6px; }
+  p, li { color: #cfdbe6; }
+  .muted { color: var(--muted); }
+  a { color: var(--accent); }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; margin: 8px 0; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; }
+</style>
+</head>
+<body>
+<main>
+  <p><a href="./">← TEM-view</a></p>
+  <h1>Privacy</h1>
+  <p class="muted">TEM-view: the Seeing with Electrons exhibit, its website and the TEM-view apps. Last updated 21 October 2026.</p>
+
+  <p>TEM-view is a simulator of a transmission electron microscope. It has no accounts and shows no ads. It does not
+  track you across sites or apps, and it does not sell or share personal data. Most of what you do stays on your
+  device. This page lists the exceptions: what leaves your device, when, and why.</p>
+
+  <h2>What leaves your device, and only when you choose</h2>
+  <table>
+    <tr><th>When</th><th>What is sent</th><th>Where, and why</th></tr>
+    <tr><td>You finish a training task and chose <b>Record and share</b> on its consent screen</td>
+      <td>An anonymous session record: a random id, the experience level you selected, the settings you changed and when, which input you used (mouse, touch, keyboard, controller, voice), the simulator's true alignment quality, your own rating of the result, the cues you ticked, and an optional note of up to 140 characters. The start time is kept to the hour and the screen size is rounded. It holds no name, email, location, audio or images of you.</td>
+      <td>A collector service (Cloudflare) adds it to a private research dataset (Hugging Face). It is used to study how people align microscopes and to build tools that assist alignment on real microscopes. Anonymous sessions may be included in published research data. <b>Record only</b> keeps the session on your device.</td></tr>
+    <tr><td>You subscribe for news</td>
+      <td>Your name, email address, institution (optional) and role (student, staff, faculty or hobbyist)</td>
+      <td>Stored in a private list (Cloudflare) and used only to send TEM-view news, a few times a year. Reply to any email to unsubscribe, or ask us to delete your entry (contact below).</td></tr>
+    <tr><td>You use voice commands</td>
+      <td>Your speech, while you hold the talk button</td>
+      <td>Your browser's or phone's speech recognition (for example Google, Microsoft or Apple) turns it into text, on the device or on their servers under their own privacy terms. TEM-view does not record or store audio. If a training session is being recorded, it stores what a command did (for example "Mode: STEM"), not what you said.</td></tr>
+  </table>
+
+  <h2>What stays on your device</h2>
+  <ul>
+    <li>Your preferences (narration voice, layout, the code in the Python editor, whether you allowed voice), in the browser's local storage or the app's own storage.</li>
+    <li>Sessions you record without sharing, until you download or delete them.</li>
+    <li>Python scripts run in your browser (website only). Connections to an AI agent or a script on your computer stay on your computer (127.0.0.1).</li>
+  </ul>
+
+  <h2>Services the website loads from</h2>
+  <p>The website is hosted on GitHub Pages and loads fonts from Google Fonts and code (three.js, and Python for the
+  scripting editor) from public content-delivery networks (jsDelivr, cdnjs). Like any website, these services
+  receive your IP address and browser details when they deliver files. The apps carry these files with them, so they
+  load nothing from these services.</p>
+
+  <h2>Children</h2>
+  <p>TEM-view is educational and suitable for all ages. It does not knowingly collect personal data from children
+  under 13. The news form asks for an email address and is meant for adults; please do not use it on behalf of a child.</p>
+
+  <h2>Your choices and requests</h2>
+  <ul>
+    <li>You can use everything in TEM-view without sending anything: choose <b>Start without recording</b> or <b>Record only</b>, and leave voice off.</li>
+    <li>Shared sessions are anonymous and not linked to you, so we cannot find a particular person's sessions. If you kept the session file (or its id), we can delete that session on request.</li>
+    <li>To have your news subscription deleted, or for any question about this page, contact us (below).</li>
+  </ul>
+
+  <h2>Contact</h2>
+  <p>Open an issue at <a href="https://github.com/Advanced-EM/TEM-view/issues">github.com/Advanced-EM/TEM-view/issues</a>.</p>
+  <p class="muted">If this policy changes, the date at the top changes, and significant changes are announced in the news.</p>
+</main>
+</body>
+</html>

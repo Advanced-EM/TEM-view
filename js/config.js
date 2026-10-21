@@ -8,6 +8,14 @@
 // support: the "Buy me a coffee" and "Subscribe for news" buttons at the top left. coffee is a full
 // https://buymeacoffee.com/<name> address (the button stays hidden while it is empty); newsletter is an optional
 // email-signup page (Buttondown, Substack, …). GitHub release notifications are always offered.
+// edition: 'full' (the website) or 'lite' (the phone apps: TEM, STEM and the Ronchigram, with voice and the
+// training tasks). The app build sets window.TEMVIEW_EDITION; ?edition=lite previews the lite edition on the web.
+const ED = typeof window !== 'undefined' ? (window.TEMVIEW_EDITION || new URLSearchParams(window.location?.search ?? '').get('edition')) : null;
+export const EDITION = ED === 'lite' ? 'lite' : 'full';
+export const LITE_MODES = ['tem', 'stem', 'ronch'];
+// where the full version lives (the app links there for everything it leaves out)
+export const SITE = 'https://advanced-em.github.io/TEM-view/';
+
 export const SUPPORT = {
   coffee: 'https://buymeacoffee.com/rmsreis',
   newsletter: '',

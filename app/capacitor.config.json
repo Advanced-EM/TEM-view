@@ -1,0 +1,9 @@
+{
+  "appId": "org.advancedem.temview",
+  "appName": "TEM-view",
+  "webDir": "www",
+  "backgroundColor": "#05070b",
+  "ios": { "contentInset": "never", "backgroundColor": "#05070b" },
+  "android": { "backgroundColor": "#05070b" },
+  "plugins": { "StatusBar": { "style": "DARK", "backgroundColor": "#05070b", "overlaysWebView": false } }
+}

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">TEM-view</string>
+    <string name="title_activity_main">TEM-view</string>
+    <string name="package_name">org.advancedem.temview</string>
+    <string name="custom_url_scheme">org.advancedem.temview</string>
+</resources>
