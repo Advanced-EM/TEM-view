@@ -1,10 +1,10 @@
 PODS:
-  - Capacitor (7.6.9):
+  - Capacitor (8.5.3):
     - CapacitorCordova
   - CapacitorCommunitySpeechRecognition (7.0.1):
     - Capacitor
-  - CapacitorCordova (7.6.9)
-  - CapacitorStatusBar (7.0.6):
+  - CapacitorCordova (8.5.3)
+  - CapacitorStatusBar (8.0.4):
     - Capacitor
 
 DEPENDENCIES:
@@ -24,11 +24,11 @@ EXTERNAL SOURCES:
     :path: "../../node_modules/@capacitor/status-bar"
 
 SPEC CHECKSUMS:
-  Capacitor: 46067d1c8df89760dbed78780d436327d588c726
+  Capacitor: 2f67eaeb8ed79909cd35b5e7439a5c2a9ca58e0f
   CapacitorCommunitySpeechRecognition: 3e03566c44c2bb3b52391a33d4518b1adbdeb38f
-  CapacitorCordova: 2080fc0d6bfbc9dcc0e6d88e77fa624190d343ca
-  CapacitorStatusBar: 416e9e53fd6397e668d4a181cd2131617d949bd6
+  CapacitorCordova: 0b7326439c7a09fc5d20eced5e0dab986327a493
+  CapacitorStatusBar: ff844df1f126da6c4fbc4028272425fa3a91e7e3
 
-PODFILE CHECKSUM: 312bca8e3114fe3fc2ca5fde8cb254641781abd6
+PODFILE CHECKSUM: 6f59868ba621a571616b3aa5623391a3fa5f217d
 
 COCOAPODS: 1.17.0

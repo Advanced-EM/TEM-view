@@ -7,14 +7,15 @@ A free app version of the exhibit with:
 - all six specimens
 
 It is the website's own code in the lite edition (`window.TEMVIEW_EDITION = 'lite'`, see `js/config.js`), wrapped
-with [Capacitor](https://capacitorjs.com) 7. Every physics fix on the website reaches the apps on the next build.
+with [Capacitor](https://capacitorjs.com) 8. Every physics fix on the website reaches the apps on the next build.
 
 | Folder or file | What it is |
 | --- | --- |
 | `build.mjs` | Builds `www/` from the website: lite edition, with three.js, fonts and narration bundled, so the app works offline and loads no code from the network |
 | `capacitor.config.json` | App id, name and colors |
-| `android/` | The Android Studio project (generated, then customized: icons, splash) |
-| `ios/` | The Xcode project, created once Xcode and CocoaPods are installed (below) |
+| `native.mjs` | Reapplies the customizations to the generated projects: icons, splash screens, iOS permission texts, iOS 15 minimum (`npm run native`) |
+| `android/` | The Android Studio project |
+| `ios/` | The Xcode project (CocoaPods, because the speech plugin has no Swift package) |
 
 To preview the lite edition on the web: `https://advanced-em.github.io/TEM-view/?edition=lite`, or locally
 `npm run build` and serve `www/`.
@@ -32,13 +33,17 @@ To preview the lite edition on the web: `https://advanced-em.github.io/TEM-view/
    ```
 3. **Android Studio:** from developer.android.com/studio. It brings the Android SDK and Java. Open it once and let it
    install the SDK.
-4. **The iOS project:**
+4. **First Xcode run:** `sudo xcodebuild -runFirstLaunch`, then `xcodebuild -downloadPlatform iOS` for the
+   simulator.
+5. **Regenerating a native project** (only if it is deleted or Capacitor is upgraded):
    ```bash
-   cd app && npm install && npm run build && npx cap add ios
+   cd app && npm install && npm run build
+   npx cap add ios --packagemanager CocoaPods && npx cap add android
+   npm run native && (cd ios/App && LANG=en_US.UTF-8 pod install)
    ```
-5. **iOS permissions:** in Xcode, open `ios/App/App/Info.plist` and add:
-   - `NSMicrophoneUsageDescription`: *"TEM-view listens only while you hold the talk button, to run voice commands."*
-   - `NSSpeechRecognitionUsageDescription`: *"Your spoken commands are turned into text to control the simulated microscope."*
+   The `native` step reapplies the icons, splash screens, microphone and speech permission texts, and the iOS 15
+   minimum (Xcode 27 builds for iOS 15 and later). Capacitor 8's template uses the scene life cycle, which apps
+   built with the iOS 27 SDK require.
 
 ## Everyday use
 
