@@ -1,3 +1,5 @@
+<p align="center"><img src="icons/icon-512.png" width="128" alt="TEM-view logo: an electron beam focused through two lens pairs onto a specimen"></p>
+
 # Seeing with Electrons
 
 **Live exhibit: https://advanced-em.github.io/TEM-view/**
