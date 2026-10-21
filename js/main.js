@@ -15,7 +15,7 @@ import { Scenarios } from './scenarios.js';
 import { Voice, parseCommand, describe, EXAMPLES } from './voice.js';
 import { analyze } from './analyze.js';
 import { AgentBridge } from './agent.js';
-import { AGENT, SUPPORT } from './config.js';
+import { AGENT, SUPPORT, EDITION, LITE_MODES, SITE } from './config.js';
 import { toNpz as npzBytes } from './export.js';
 import { collectData, toNpz } from './export.js';
 import { openCalibration } from './calibui.js';
@@ -48,6 +48,14 @@ const MODES = [
 ];
 // keyboard shortcuts (Ronchigram keeps 8; the holography modes were added later as 9 and 0)
 const KEYS = { tem: '1', stem: '2', '4d': '3', diff: '4', cbed: '5', eds: '6', eels: '7', ronch: '8', oah: '9', ilh: '0' };
+// the lite edition (the phone apps): TEM, STEM and the Ronchigram only, on keys 1–3
+const LITE = EDITION === 'lite';
+if (LITE) {
+  for (let i = MODES.length - 1; i >= 0; i--) if (!LITE_MODES.includes(MODES[i][0])) MODES.splice(i, 1);
+  for (const k of Object.keys(KEYS)) delete KEYS[k];
+  LITE_MODES.forEach((m, i) => (KEYS[m] = String(i + 1)));
+  document.documentElement.classList.add('lite');
+}
 const logMap = (min, max) => ({ to: (v) => (Math.log(v / min) / Math.log(max / min)) * 1000, from: (t) => min * Math.pow(max / min, t / 1000) });
 
 const NOT_RONCH = 'tem stem 4d diff eds eels cbed oah ilh';
@@ -177,6 +185,22 @@ const CONTROLS = [
   { sec: 'Instrument readout' },
   { table: true },
 ];
+
+// the lite edition leaves out scripting, agents, session files and data export (they are in the full version)
+if (LITE) {
+  const drop = new Set(['agent', 'ide', 'replayFile', 'lastSession', 'calib', 'saveSession', 'loadSession', 'exportData', 'exportProfile']);
+  let skip = false;
+  for (let i = 0; i < CONTROLS.length; i++) {
+    const c = CONTROLS[i];
+    if (c.sec) skip = c.sec === 'Python scripting';
+    if (skip) { CONTROLS.splice(i--, 1); continue; }
+    if (c.buttons) { c.buttons = c.buttons.filter(([id]) => !drop.has(id)); if (!c.buttons.length) CONTROLS.splice(i--, 1); continue; }
+    if (c.sec === 'Voice and agent') c.sec = 'Voice';
+    if (c.sec === 'Digital twin') c.sec = 'Instrument';
+    if (c.p?.startsWith('Turn on AI mode')) c.p = 'Turn on AI mode with the brain button at the top of the controls and type a command, or hold the microphone button and say it: "switch to STEM", "defocus minus fifty", "load graphene", "acquire", "fit the CTF". Close misses are confirmed before they run.';
+    if (c.p?.startsWith('The instrument profile holds')) c.p = `The instrument profile holds what belongs to one particular microscope (energy spread, Cc, Cs, illumination). Calibrating from your own data, Python scripting, AI agents and more modes are in the <a href="${SITE}" target="_blank" rel="noopener">full version on the web</a>.`;
+  }
+}
 
 const ICONS = {
   dots: '<svg viewBox="0 0 32 32"><g fill="currentColor"><circle cx="8" cy="10" r="1.6"/><circle cx="15" cy="7" r="1.2"/><circle cx="22" cy="12" r="1.8"/><circle cx="11" cy="18" r="1.3"/><circle cx="19" cy="21" r="1.6"/><circle cx="25" cy="24" r="1.1"/><circle cx="7" cy="25" r="1"/><circle cx="16" cy="14" r="2.3" opacity=".9"/></g></svg>',
@@ -582,7 +606,7 @@ let setAI = () => {}; // AI mode (command bar) on/off, wired up with the control
 const dfLimits = () => dfLimitsOf(S);
 function runOp(op) {
   switch (op.op) {
-    case 'mode': if (KEYS[op.v]) setMode(op.v); break;
+    case 'mode': if (KEYS[op.v]) setMode(op.v); else op.unavailable = true; break;
     case 'spec': if (P.SPECIMENS[op.v]) setSpec(op.v); break;
     case 'set':
       if (op.k === 'df') { set('df', +clamp(op.v, ...dfLimits()).toFixed(1), 'df'); op.v = S.df; }
@@ -887,7 +911,8 @@ function wire() {
   { const hero = $('.hero'), fit = () => document.documentElement.style.setProperty('--heroB', `${Math.round(hero.getBoundingClientRect().bottom)}px`);
     new ResizeObserver(fit).observe(hero); addEventListener('resize', fit); fit(); }
   // support and news (top left)
-  if (SUPPORT.coffee) { $('#btnCoffee').href = SUPPORT.coffee; $('#btnCoffee').hidden = false; }
+  // not in the apps: store rules do not allow tipping links there
+  if (SUPPORT.coffee && !LITE) { $('#btnCoffee').href = SUPPORT.coffee; $('#btnCoffee').hidden = false; }
   $('#btnNews').addEventListener('click', () => {
     $('#newsBody').innerHTML = `<p>New modes, training tasks, guides and the TEM-view Console: get an email when they ship.</p>
       ${SUPPORT.subscribe ? `<form id="newsForm" class="newsform" novalidate>
@@ -1054,7 +1079,7 @@ function wire() {
     else if (e.key === 'v' || e.key === 'V') vPanel.openDock();
     else if (e.key === 'i' || e.key === 'I') acquireNow();
     else if ((e.key === 't' || e.key === 'T') && !e.metaKey && !e.ctrlKey) openTraining();
-    else if ((e.key === 'p' || e.key === 'P') && !e.metaKey && !e.ctrlKey) ide.toggle();
+    else if ((e.key === 'p' || e.key === 'P') && !e.metaKey && !e.ctrlKey && !LITE) ide.toggle();
     else if ((e.key === 'm' || e.key === 'M') && !e.repeat && !e.metaKey && !e.ctrlKey) voice.start();
     else if (e.key === '/' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); setAI(true); }
     else if (e.key === '[') fold('L');
@@ -1230,4 +1255,16 @@ window.__tem = { S, sim, scene, panel: hwPanel, vpanel: vPanel, scn, voice, agen
 // deep link from the printed guides: ?train=<scenario id> opens that training task's intro
 { const id = new URLSearchParams(location.search).get('train'); if (id && /^[a-z0-9-]+$/.test(id)) setTimeout(() => { try { scn.start(id); } catch { /* unknown id */ } }, 600); }
 // ?script=<example> opens the Python IDE with that example (tools/temview-py/examples/<example>.py); ?script alone opens it
-{ const q = new URLSearchParams(location.search); if (q.has('script')) { const ex = q.get('script'); setTimeout(() => { ide.toggle(true); if (ex && /^[a-z0-9_]+$/.test(ex)) ide.loadExample(`${ex}.py`); }, 800); } }
+{ const q = new URLSearchParams(location.search); if (q.has('script') && !LITE) { const ex = q.get('script'); setTimeout(() => { ide.toggle(true); if (ex && /^[a-z0-9_]+$/.test(ex)) ide.loadExample(`${ex}.py`); }, 800); } }
+
+// the lite edition (an app) does not carry the guides, the Console page or Ruska 1933: open them on the website
+if (LITE) document.addEventListener('click', (e) => {
+  const a = e.target.closest('a[href]');
+  const href = a?.getAttribute('href') ?? '';
+  if (!/^(docs\/|ruska\/|console\/)/.test(href)) return;
+  e.preventDefault();
+  window.open(new URL(href, SITE).href, '_blank', 'noopener');
+}, true);
+
+// installable web app: offline support on the website (sw.js); the phone apps carry their files with them
+if ('serviceWorker' in navigator && location.protocol === 'https:' && !window.Capacitor) navigator.serviceWorker.register('sw.js').catch(() => {});

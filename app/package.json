@@ -1,0 +1,27 @@
+{
+  "name": "tem-view-app",
+  "private": true,
+  "description": "TEM-view Lite for iOS and Android: the exhibit's TEM, STEM and Ronchigram, with voice and the training tasks, wrapped with Capacitor.",
+  "license": "SEE LICENSE IN ../LICENSE",
+  "scripts": {
+    "build": "node build.mjs",
+    "sync": "node build.mjs && cap sync",
+    "ios": "node build.mjs && cap sync ios && cap open ios",
+    "android": "node build.mjs && cap sync android && cap open android",
+    "native": "node native.mjs"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/core": "^8.5.0",
+    "@capacitor/ios": "^8.5.0",
+    "@capacitor/status-bar": "^8.0.0",
+    "@capacitor-community/speech-recognition": "^7.0.1"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.0",
+    "@fontsource/ibm-plex-mono": "^5.0.0",
+    "@fontsource/ibm-plex-sans": "^5.0.0",
+    "@fontsource/instrument-serif": "^5.0.0",
+    "three": "0.160.0"
+  }
+}
