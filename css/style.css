@@ -582,3 +582,9 @@ body.stacked .support { margin: 8px 16px 0; }
 .idehelp table { border-collapse: collapse; width: 100%; } .idehelp td { border-bottom: 1px solid var(--line); padding: 5px 6px; vertical-align: top; } .idehelp td:first-child { white-space: nowrap; }
 .idehelp code { font: 12px var(--mono); color: var(--accent); }
 @media (max-width: 640px) { .ide { left: 6px; top: 6px; width: calc(100vw - 12px); height: calc(100vh - 12px); min-width: 0; } }
+
+/* the line shared by the exhibits: Seeing with Electrons and links to the other two */
+.sitefoot { margin: 22px 0 0; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.08); color: var(--muted, #8a93a6); font-size: 12px; line-height: 1.6; }
+.sitefoot b { color: var(--text); font-weight: 500; }
+.sitefoot a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+.sitefoot a:hover { color: var(--text); }

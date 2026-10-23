@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Electron Explorer</title>
+<meta name="description" content="Drive a cartoon electron microscope: zoom from pollen to viruses to real atoms, focus, snap pictures for your sticker book and complete missions. For K-12 students, with the TEM-view Console.">
+<meta property="og:title" content="Electron Explorer: a microscope that sees atoms">
+<meta property="og:description" content="Zoom from pollen to viruses to atoms. Focus, snap, and fill your sticker book.">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#2b2d6e">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@500;700;800&display=swap">
+<link rel="stylesheet" href="kids.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%22-30 -30 60 60%22%3E%3Ccircle r=%2226%22 fill=%22%234ade80%22 stroke=%22%231d2340%22 stroke-width=%224%22/%3E%3Ccircle cx=%22-9%22 cy=%22-5%22 r=%225%22 fill=%22%231d2340%22/%3E%3Ccircle cx=%229%22 cy=%22-5%22 r=%225%22 fill=%22%231d2340%22/%3E%3Cpath d=%22M-10 9 Q0 18 10 9%22 fill=%22none%22 stroke=%22%231d2340%22 stroke-width=%224%22/%3E%3C/svg%3E">
+</head>
+<body>
+
+<header class="top">
+  <a class="brand" href="#" aria-label="Electron Explorer">
+    <svg class="zipmini" viewBox="-30 -30 60 60" aria-hidden="true"><circle r="24" fill="#4ade80" stroke="#1d2340" stroke-width="4"/><circle cx="-8" cy="-5" r="5" fill="#fff" stroke="#1d2340" stroke-width="2.5"/><circle cx="8" cy="-5" r="5" fill="#fff" stroke="#1d2340" stroke-width="2.5"/><circle cx="-7" cy="-4" r="2.3" fill="#1d2340"/><circle cx="9" cy="-4" r="2.3" fill="#1d2340"/><path d="M-9 8 Q0 16 9 8" fill="none" stroke="#1d2340" stroke-width="3" stroke-linecap="round"/></svg>
+    <span data-i18n="brand">Electron <b>Explorer</b></span>
+  </a>
+  <nav class="tools" aria-label="Tools">
+    <button class="chip" id="bookBtn" aria-haspopup="dialog">📒 <span data-i18n="book">Sticker book</span> <b id="bookCount">0</b></button>
+    <button class="chip" id="consoleBtn" aria-haspopup="dialog">🎮 <span data-i18n="console">Console</span><i class="dot" id="consoleDot" hidden></i></button>
+    <button class="chip" id="readBtn" aria-pressed="false" title="Zip reads everything out loud" data-i18n-title="readT">🗣️ <span data-i18n="read">Read aloud</span></button>
+    <button class="chip" id="voiceBtn" title="Zip's voice" data-i18n-title="voiceT"><span id="voiceIcon">👧</span> <span id="voiceTxt">Girl voice</span></button>
+    <button class="chip" id="soundBtn" aria-pressed="true">🔊 <span data-i18n="sound">Sound</span></button>
+    <div class="seg lang" role="group" aria-label="Language / Idioma"><button data-lang="en" aria-pressed="true">EN</button><button data-lang="es" aria-pressed="false">ES</button></div>
+    <a class="chip out" href="../" data-i18n="grown">Grown-up version ↗</a>
+  </nav>
+</header>
+
+<main>
+  <section class="lab" aria-label="The microscope" data-i18n-aria="labA">
+    <!-- the cartoon column: click a part to learn about it -->
+    <aside class="col-scope card" aria-label="The microscope, from the inside" data-i18n-aria="scopeA">
+      <h2 class="ctitle" data-i18n="inside">Inside the microscope</h2>
+      <svg id="column" viewBox="0 0 250 640" role="group" aria-label="A cutaway of the electron microscope. Click a part to learn what it does." data-i18n-aria="colA">
+        <defs>
+          <linearGradient id="tube" x1="0" x2="1"><stop offset="0" stop-color="#c9d2e8"/><stop offset=".5" stop-color="#f4f7ff"/><stop offset="1" stop-color="#aeb9d6"/></linearGradient>
+          <radialGradient id="glowG"><stop offset="0" stop-color="#b9ffb0"/><stop offset="1" stop-color="#2fd36b"/></radialGradient>
+          <filter id="soft"><feGaussianBlur stdDeviation="3"/></filter>
+        </defs>
+        <rect x="88" y="70" width="64" height="520" rx="18" fill="url(#tube)" stroke="#1d2340" stroke-width="4"/>
+        <path id="beam" d="" fill="#4ade80" opacity=".55"/>
+        <g id="electrons"></g>
+        <g class="part" data-part="gun" tabindex="0" role="button" aria-label="Electron gun" data-i18n-aria="gunA">
+          <rect x="70" y="12" width="100" height="74" rx="22" fill="#8b5cf6" stroke="#1d2340" stroke-width="4"/>
+          <path d="M126 24 L108 52 H121 L113 76 L134 44 H121 Z" fill="#ffd23f" stroke="#1d2340" stroke-width="3" stroke-linejoin="round"/>
+        </g>
+        <g class="part lens" id="lensBright" data-part="condenser" tabindex="0" role="button" aria-label="Brightness lens" data-i18n-aria="condA">
+          <rect class="glow" x="40" y="150" width="160" height="34" rx="17" fill="#ffd23f" filter="url(#soft)"/>
+          <rect x="52" y="152" width="34" height="30" rx="12" fill="#ffd23f" stroke="#1d2340" stroke-width="4"/>
+          <rect x="154" y="152" width="34" height="30" rx="12" fill="#ffd23f" stroke="#1d2340" stroke-width="4"/>
+        </g>
+        <g class="part" data-part="sample" tabindex="0" role="button" aria-label="Sample holder" data-i18n-aria="holderA">
+          <rect x="150" y="300" width="92" height="14" rx="7" fill="#9aa6c4" stroke="#1d2340" stroke-width="3.5"/>
+          <circle cx="236" cy="307" r="11" fill="#ff6b9a" stroke="#1d2340" stroke-width="3.5"/>
+          <circle cx="120" cy="307" r="13" fill="#fff" stroke="#1d2340" stroke-width="3.5"/>
+          <text id="sampleIcon" x="120" y="313" text-anchor="middle" font-size="15">🌼</text>
+        </g>
+        <g class="part lens" id="lensFocus" data-part="objective" tabindex="0" role="button" aria-label="Focus lens" data-i18n-aria="objA">
+          <rect class="glow" x="40" y="330" width="160" height="40" rx="20" fill="#3b82f6" filter="url(#soft)"/>
+          <rect x="48" y="332" width="40" height="36" rx="14" fill="#3b82f6" stroke="#1d2340" stroke-width="4"/>
+          <rect x="152" y="332" width="40" height="36" rx="14" fill="#3b82f6" stroke="#1d2340" stroke-width="4"/>
+        </g>
+        <g class="part lens" id="lensZoom" data-part="projector" tabindex="0" role="button" aria-label="Zoom lens" data-i18n-aria="projA">
+          <rect class="glow" x="40" y="450" width="160" height="34" rx="17" fill="#ff8a1f" filter="url(#soft)"/>
+          <rect x="52" y="452" width="34" height="30" rx="12" fill="#ff8a1f" stroke="#1d2340" stroke-width="4"/>
+          <rect x="154" y="452" width="34" height="30" rx="12" fill="#ff8a1f" stroke="#1d2340" stroke-width="4"/>
+        </g>
+        <g class="part" data-part="screen" tabindex="0" role="button" aria-label="Glowing screen and camera" data-i18n-aria="screenA">
+          <rect x="44" y="572" width="152" height="40" rx="14" fill="#1d2340" stroke="#1d2340" stroke-width="4"/>
+          <ellipse id="screenGlow" cx="120" cy="590" rx="58" ry="10" fill="url(#glowG)" opacity=".15"/>
+        </g>
+        <g class="part" data-part="vacuum" tabindex="0" role="button" aria-label="Vacuum pump" data-i18n-aria="vacA">
+          <rect x="6" y="230" width="56" height="40" rx="12" fill="#cbd5e1" stroke="#1d2340" stroke-width="3.5"/>
+          <path d="M62 250 H90" stroke="#1d2340" stroke-width="5"/>
+          <text x="34" y="256" text-anchor="middle" font-size="16">🌀</text>
+        </g>
+        <g class="tags" id="tags" aria-hidden="true">
+          <text x="175" y="54" class="tag" data-i18n="tGun">Gun</text>
+          <text x="196" y="146" class="tag" data-i18n="tBright">Bright</text>
+          <text x="34" y="226" class="tag" data-i18n="tAir">No air</text>
+          <text x="140" y="294" class="tag" data-i18n="tSample">Sample</text>
+          <text x="196" y="326" class="tag" data-i18n="tFocus">Focus</text>
+          <text x="196" y="446" class="tag" data-i18n="tZoom">Zoom</text>
+          <text x="198" y="600" class="tag" data-i18n="tScreen">Screen</text>
+        </g>
+      </svg>
+      <p class="tiny" data-i18n="tap">Tap a part to find out what it does.</p>
+    </aside>
+
+    <!-- the viewing screen and the console -->
+    <div class="col-main">
+      <div class="samples" role="radiogroup" aria-label="Pick a sample" data-i18n-aria="pickA" id="samples"></div>
+
+      <div class="viewer">
+        <div class="porthole" id="porthole">
+          <canvas id="screen" width="720" height="720" tabindex="0" aria-label="The microscope's screen. Drag to move the sample, scroll or pinch to zoom." data-i18n-aria="screenCanvasA"></canvas>
+          <div class="ring" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+          <div class="sleep" id="sleep"><b>Zzz…</b><span data-i18n="sleep">The beam is off.<br>Press <em>BEAM</em> to wake it up!</span></div>
+          <div class="target" id="target" hidden></div>
+          <div class="arrow" id="arrow" hidden><span>➜</span></div>
+          <div class="flash" id="flash"></div>
+        </div>
+        <div class="readouts">
+          <div class="mag"><small data-i18n="zoomL">Zoom</small><b id="magNum">×1,000</b><span id="magWords">times bigger</span></div>
+          <div class="scale"><div class="bar"><i id="scaleBar"></i></div><span id="scaleTxt">10 µm</span><small id="fitTxt"></small></div>
+        </div>
+        <div class="palette seg" role="group" aria-label="Picture colors" data-i18n-aria="palA">
+          <button data-pal="color" aria-pressed="true" data-i18n="palC">🎨 Cartoon colors</button>
+          <button data-pal="mono" aria-pressed="false" data-i18n="palM">⚫ Real (grey)</button>
+          <button data-pal="green" aria-pressed="false" data-i18n="palG">🟢 Glowing screen</button>
+        </div>
+      </div>
+
+      <div class="console" id="console" aria-label="TEM-view Console, on screen" data-i18n-aria="conA">
+        <div class="chead"><b>TEM-view Console</b><span class="cstat" id="cstat">On screen · <button class="link" id="plugBtn">plug in a real one</button></span></div>
+        <div class="cbody">
+          <div class="knobs" id="knobs"></div>
+          <div class="joywrap"><div class="joy" id="joy" tabindex="0" role="application" aria-label="Joystick: drag to move the sample, or use the arrow keys" data-i18n-aria="joyA"><b></b></div><span class="klabel" data-i18n="move">MOVE</span></div>
+          <div class="cbtns">
+            <button class="cb beam" id="beamBtn" aria-pressed="false"><i></i><span data-i18n="beam">BEAM</span></button>
+            <button class="cb snap" id="snapBtn" aria-label="Snap a picture" data-i18n-aria="snapA">📸<span data-i18n="snap">SNAP</span></button>
+            <div class="pair"><button class="cb sm" id="prevBtn" aria-label="Previous sample" data-i18n-aria="prevA">◀</button><button class="cb sm" id="nextBtn" aria-label="Next sample" data-i18n-aria="nextA">▶</button></div>
+            <button class="cb sm wide" id="whatBtn" data-i18n="what">What's this?</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Zip, the missions, the meters -->
+    <aside class="col-side">
+      <div class="zip card" id="zipCard">
+        <svg id="zip" class="happy" viewBox="-60 -60 120 120" aria-hidden="true">
+          <g class="zipbody">
+            <path class="trail" d="M-52 18 h-6 M-54 4 h-8 M-50 30 h-4" stroke="#4ade80" stroke-width="5" stroke-linecap="round"/>
+            <circle r="40" fill="#4ade80" stroke="#1d2340" stroke-width="5"/>
+            <ellipse cx="-14" cy="-20" rx="10" ry="6" fill="#fff" opacity=".55" transform="rotate(-30 -14 -20)"/>
+            <g class="eyes"><circle cx="-14" cy="-6" r="9" fill="#fff" stroke="#1d2340" stroke-width="3.5"/><circle cx="14" cy="-6" r="9" fill="#fff" stroke="#1d2340" stroke-width="3.5"/>
+              <circle class="pupil" cx="-12" cy="-5" r="4.2" fill="#1d2340"/><circle class="pupil" cx="16" cy="-5" r="4.2" fill="#1d2340"/></g>
+            <path class="m happy" d="M-14 12 Q0 26 14 12" fill="none" stroke="#1d2340" stroke-width="4.5" stroke-linecap="round"/>
+            <path class="m wow" d="M-6 14 a6 7 0 1 0 12 0 a6 7 0 1 0 -12 0" fill="#1d2340"/>
+            <path class="m worry" d="M-12 19 Q0 10 12 19" fill="none" stroke="#1d2340" stroke-width="4.5" stroke-linecap="round"/>
+            <text x="0" y="-26" text-anchor="middle" font-size="18" font-weight="800" fill="#1d2340" font-family="Fredoka, sans-serif">−</text>
+          </g>
+        </svg>
+        <div class="bubble" id="bubble" aria-live="polite"></div>
+      </div>
+
+      <div class="quest card" id="quest">
+        <div class="qhead"><h2 data-i18n="missions">Missions</h2><div class="badges" id="badges"></div></div>
+        <h3 id="qTitle"></h3>
+        <p id="qText"></p>
+        <div class="qrow"><button class="chip" id="hintBtn" data-i18n="hint">💡 Show me how</button><button class="chip" id="loadBtn" hidden></button></div>
+      </div>
+
+      <div class="meter card">
+        <h3 data-i18n="sharpo">Sharp-o-meter</h3>
+        <div class="sharp"><i id="sharpBar"></i></div>
+        <p class="sface"><span data-i18n="blurry">😵‍💫 blurry</span><span id="sharpFace">😐</span><span data-i18n="sharp">sharp 😎</span></p>
+        <h3 data-i18n="brightness">Brightness</h3>
+        <div class="lite"><i id="liteBar"></i><em class="ok"></em></div>
+        <p class="sface"><span data-i18n="darkL">🌑 dark</span><span id="liteWord">just right</span><span data-i18n="tooBright">too bright 🔥</span></p>
+      </div>
+
+      <div class="ladder card">
+        <h3 data-i18n="howSmall">How small is it?</h3>
+        <div class="lad" id="ladder"></div>
+      </div>
+    </aside>
+  </section>
+
+  <section class="how" id="how">
+    <h2 data-i18n="how">How does it work?</h2>
+    <div class="cards3">
+      <article class="card"><span class="big">🔦</span><h3 data-i18n="h1t">Electrons instead of light</h3><p data-i18n="h1p">A normal microscope uses light. Light waves are too big to show atoms. Electrons behave like waves that are about 100,000 times shorter, so they can show much smaller things.</p></article>
+      <article class="card"><span class="big">🧲</span><h3 data-i18n="h2t">Magnets are the lenses</h3><p data-i18n="h2p">Glass can't bend electrons, but magnets can. The microscope has coils of wire that make magnetic lenses: one for brightness, one for focus and one for zoom.</p></article>
+      <article class="card"><span class="big">🫧</span><h3 data-i18n="h3t">Thinner than a bubble</h3><p data-i18n="h3p">Electrons have to shoot straight through the sample, so it must be super thin. Thick parts stop more electrons and look dark. Real pictures are grey: scientists add colors to make them easier to see.</p></article>
+      <article class="card"><span class="big">🔥</span><h3 data-i18n="h4t">Don't cook it!</h3><p data-i18n="h4p">A very bright beam can damage soft samples like pollen and bacteria. Scientists use as little beam as they can. Try it: turn BRIGHT all the way up and watch.</p></article>
+    </div>
+  </section>
+
+  <section class="teach" id="teachers">
+    <div class="card">
+      <h2 data-i18n="teach">For teachers and parents</h2>
+      <p data-i18n="teach1">Electron Explorer is the K-12 companion of <a href="../">Seeing with Electrons</a>, a physics-based electron microscope simulator. It keeps three controls (focus, zoom, brightness), a joystick and a camera, and adds missions and a sticker book. Real microscopists use the same steps: turn on the beam, find the sample, focus, then take a picture without damaging it.</p>
+      <ul>
+        <li data-i18n="g1"><b>Grades K-2:</b> turn on <em>Read aloud</em>; play the first three missions together; compare the sticker colors with "real" grey.</li>
+        <li data-i18n="g2"><b>Grades 3-5:</b> use the <em>How small is it?</em> ladder to put a hair, a cell, a virus and an atom in order. Links to <i>5-PS1-1</i> (matter is made of particles too small to be seen).</li>
+        <li data-i18n="g3"><b>Grades 6-8:</b> cells and viruses (<i>MS-LS1-1</i>); graphene as a structure built from atoms (<i>MS-PS1-1</i>); the crosscutting concept <i>Scale, proportion and quantity</i>.</li>
+        <li data-i18n="g4"><b>Grades 9-12:</b> why focus is harder at high zoom, why brightness costs damage, and why the "real" picture is grey. Then move on to the <a href="../">full simulator</a>.</li>
+      </ul>
+      <p class="muted" data-i18n="teach2">At a booth or in a museum, add <code>?kiosk</code> to the address: the exhibit starts over after three minutes without anyone touching it. It runs with a mouse, a touch screen, a keyboard, a game controller or the <a href="../console/">TEM-view Console</a>. The samples are drawn to scale from simple shapes. They are not real recorded images.</p>
+    </div>
+  </section>
+</main>
+
+<footer class="sitefoot" data-i18n="foot">Part of <b>Seeing with Electrons</b> · <a href="../">TEM-view</a> · <a href="../ruska/">Ruska 1933</a></footer>
+
+<dialog id="bookDlg" aria-labelledby="bTitle">
+  <form method="dialog" class="dwrap">
+    <button class="close" aria-label="Close" data-i18n-aria="close">×</button>
+    <p class="eyebrow" data-i18n="yourPics">Your pictures</p>
+    <h2 id="bTitle" data-i18n="book">Sticker book</h2>
+    <p class="muted" id="bookEmpty" data-i18n="noStickers">No stickers yet. Press <b>SNAP</b> to take a picture!</p>
+    <div class="stickers" id="stickers"></div>
+  </form>
+</dialog>
+
+<dialog id="winDlg" aria-labelledby="wTitle">
+  <form method="dialog" class="dwrap win">
+    <div class="confetti" id="confetti" aria-hidden="true"></div>
+    <p class="eyebrow" data-i18n="done">Mission complete!</p>
+    <h2 id="wTitle"></h2>
+    <img id="wImg" alt="">
+    <p class="stars" id="wStars"></p>
+    <p id="wText"></p>
+    <button class="cb snap go" value="ok">Next mission ▶</button>
+  </form>
+</dialog>
+
+<dialog id="consoleDlg" aria-labelledby="cTitle">
+  <form method="dialog" class="dwrap">
+    <button class="close" aria-label="Close" data-i18n-aria="close">×</button>
+    <div id="consoleBody"></div>
+  </form>
+</dialog>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>
