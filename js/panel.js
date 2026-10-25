@@ -198,8 +198,9 @@ export class Panel {
       this.api.moveStage(dx * f, dy * f);
       this.say('Image shift');
     } else {
-      this.api.set('tiltX', +clamp(S.tiltX + dx * 0.02, -3, 3).toFixed(2), 'tilt');
-      this.api.set('tiltY', +clamp(S.tiltY + dy * 0.02, -3, 3).toFixed(2), 'tilt');
+      const L = S.mode === 'ltem' || S.mode === 'lstem' ? 30 : 3, st = L > 3 ? 0.25 : 0.02;
+      this.api.set('tiltX', +clamp(S.tiltX + dx * st, -L, L).toFixed(2), 'tilt');
+      this.api.set('tiltY', +clamp(S.tiltY + dy * st, -L, L).toFixed(2), 'tilt');
       this.say(`Tilt ${S.tiltX.toFixed(2)}°, ${S.tiltY.toFixed(2)}°`);
     }
   }

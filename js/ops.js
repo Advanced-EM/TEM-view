@@ -10,6 +10,8 @@ import { analyze } from './analyze.js';
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 export const MODES = ['tem', 'stem', '4d', 'diff', 'cbed', 'eds', 'eels', 'ronch', 'oah', 'ilh', 'ltem', 'lstem'];
 export const fam = (m) => (['tem', 'diff', 'oah', 'ilh', 'ltem'].includes(m) ? 'tem' : 'probe');
+// Lorentz holders tilt far (domains with out-of-plane magnetization, in-plane fields); atomic work stays near the zone axis
+export const tiltLimit = (S) => (S.mode === 'ltem' || S.mode === 'lstem' ? 30 : 3);
 const coreEdge = (spec) => (spec === 'sto' ? 462 : spec === 'si' ? 102 : spec === 'gr' ? 287 : spec === 'mof' ? 200 : spec === 'bio' ? 405 : 100);
 
 export function resetVdet(S, sim) {
@@ -60,6 +62,8 @@ export function modeState(S, sim, m) {
   if (m === S.mode) return false;
   S.mode = m;
   S.df = S.dfFam[fam(m)];
+  const L = tiltLimit(S);
+  if (Math.abs(S.tiltX) > L || Math.abs(S.tiltY) > L) { S.tiltX = clamp(S.tiltX, -L, L); S.tiltY = clamp(S.tiltY, -L, L); sim.invalidate('tilt'); }
   S.fdSel = -1;
   if (m === 'eds' || m === 'eels' || m === 'ilh') { if (sim.single) sim.startSingle(false); }
   sim.invalidate('mode');
@@ -163,7 +167,7 @@ export function runOpState(S, sim, op) {
       else if (op.k === 'clarity' && ['edu', 'real'].includes(op.v)) { S.clarity = op.v; sim.invalidate('clarity'); }
       else if (op.k === 'camL') { set('camL', Math.round(clamp(op.v, 80, 6000)), 'camL'); op.v = S.camL; }
       else if (op.k === 'alpha') { const k = S.mode === '4d' ? 'alpha4d' : 'alpha'; set(k, +clamp(op.v, 3, 40).toFixed(1), 'alpha'); op.v = S[k]; }
-      else if (op.k === 'tiltX' || op.k === 'tiltY') { set(op.k, +clamp(op.v, -3, 3).toFixed(2), 'tilt'); op.v = S[op.k]; }
+      else if (op.k === 'tiltX' || op.k === 'tiltY') { set(op.k, +clamp(op.v, -tiltLimit(S), tiltLimit(S)).toFixed(2), 'tilt'); op.v = S[op.k]; }
       else if (op.k === 'thick') { set('thick', +clamp(op.v, 1, 500).toFixed(1), 'thick'); op.v = S.thick; }
       else lorSet(S, set, op);
       return true;

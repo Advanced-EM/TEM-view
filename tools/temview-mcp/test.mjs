@@ -20,6 +20,9 @@ let r = await client.callTool({ name: 'simulate', arguments: { mode: 'tem', spec
 const sim = JSON.parse(body(r));
 ok(!r.isError && existsSync(sim.file), `simulate wrote ${sim.file.split('/').pop()} (${Object.keys(sim.arrays).join(', ')})`);
 ok(Math.abs(sim.wavelength_pm - 1.9687) < 0.001, `300 kV wavelength ${sim.wavelength_pm} pm`);
+r = await client.callTool({ name: 'simulate', arguments: { mode: 'ltem', magnetic_specimen: 'landau', lorentz_view: 'tie' } });
+const lor = JSON.parse(body(r));
+ok(!r.isError && lor.arrays.induction_x && lor.calibration.magnetic_state === 'Landau flux closure', `simulate Lorentz TEM (${Object.keys(lor.arrays).join(', ')})`);
 r = await client.callTool({ name: 'exhibit_set', arguments: { mode: 'stem' } });
 ok(r.isError && /No exhibit is connected/.test(body(r)), 'exhibit_set without an exhibit explains how to connect');
 

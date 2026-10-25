@@ -132,6 +132,17 @@ def test_lorentz_fege_phase_diagram(tem):
     tem.set(holder="room", field_mT=0)
 
 
+def test_lorentz_tilt_in_field_expels_the_vortex(tem):
+    tem.set(mode="ltem", kV=200, magnetic_specimen="vortex", lorentz_view="phase", field_mT=0, tilt_x_deg=0)
+    assert tem.acquire().calibration["magnetic_state"] == "vortex"
+    tem.set(field_mT=300, tilt_x_deg=25)  # Lorentz holders tilt to ±30°; ~127 mT now lies in the plane
+    assert tem.state()["tilt_deg"][0] == 25
+    assert "single domain" in tem.acquire().calibration["magnetic_state"]
+    tem.set(mode="tem")  # leaving the Lorentz modes brings the tilt back within ±3°
+    assert abs(tem.state()["tilt_deg"][0]) <= 3
+    tem.set(field_mT=0)
+
+
 def test_lorentz_stem_dpc_saturates_with_a_small_probe_angle(tem):
     tem.set(mode="lstem", kV=200, magnetic_specimen="vortex", probe_urad=300)
     weak = tem.acquire()

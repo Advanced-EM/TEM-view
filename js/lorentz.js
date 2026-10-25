@@ -31,6 +31,12 @@ export const MAGSPECS = {
     about: 'A chiral magnet: below Tc ≈ 278 K the spins twist into 70 nm helices; a field along the beam turns them into a hexagonal lattice of Bloch skyrmions, and a stronger field aligns them all.' },
 };
 
+// Lorentz deflection angle (rad) of the saturated film: β = λ |∇φ| / 2π = λ Bs(T) t / 2Φ0
+export function deflection(S, T, kV) {
+  const sp = MAGSPECS[S.magSpec], f = S.magSpec === 'fege' ? fegeState(T, S.lorField).f : 1;
+  return (P.wavelength(kV) * 1e-10 * sp.Bs * f * S.lorThick * 1e-9) / (2 * PHI0);
+}
+
 // FeGe magnetic state from temperature and the field along the beam (a simplified thin-plate phase diagram)
 export function fegeState(T, BmT) {
   const sp = MAGSPECS.fege;
@@ -174,7 +180,7 @@ export class Lorentz {
       amp[i] = Math.exp(-tt / (2 * sp.L * 10));
     }
     // largest deflection anywhere (rad) and the saturation one, β = λ |∇φ| / 2π
-    const lam = sim.lam, betaS = (lam * kG * S.lorThick * 10 * (sp.Bs ? 1 : 0)) / TAU * (S.magSpec === 'fege' ? (M.info.f ?? 0) : 1);
+    const betaS = deflection(S, sim.temp(), S.kV);
     return { n, dx, ph, phM, amp, M, betaS, BsT: sp.Bs * (S.magSpec === 'fege' ? (M.info.f ?? 0) : 1) * S.lorThick };
   }
 

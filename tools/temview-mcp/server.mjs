@@ -20,6 +20,7 @@ import { defaultState } from '../../js/state.js';
 import * as P from '../../js/physics.js';
 import { collectData, toNpz } from '../../js/export.js';
 import { analyze, ANALYSES } from '../../js/analyze.js';
+import { MAGSPECS } from '../../js/lorentz.js';
 
 const PORT = +(process.env.TEMVIEW_PORT ?? 8790);
 const ORIGINS = (process.env.TEMVIEW_ORIGINS ?? 'https://advanced-em.github.io').split(',').map((s) => s.trim()).filter(Boolean);
@@ -63,10 +64,10 @@ const fail = (e) => ({ isError: true, content: [{ type: 'text', text: e.message 
 const safe = (fn) => async (args) => { try { return await fn(args); } catch (e) { return fail(e); } };
 
 // ------------------------------------------------------------------ settings → exhibit operations (same ops as voice commands)
-const MODES = ['tem', 'stem', '4d', 'diff', 'cbed', 'eds', 'eels', 'ronch', 'oah', 'ilh'];
+const MODES = ['tem', 'stem', '4d', 'diff', 'cbed', 'eds', 'eels', 'ronch', 'oah', 'ilh', 'ltem', 'lstem'];
 const SPECS = ['au', 'si', 'sto', 'gr', 'mof', 'bio'];
 const settings = {
-  mode: z.enum(MODES).optional().describe('tem, stem, 4d (4D-STEM), diff (SAED), cbed, eds, eels, ronch (Ronchigram), oah (off-axis holography), ilh (in-line holography)'),
+  mode: z.enum(MODES).optional().describe('tem, stem, 4d (4D-STEM), diff (SAED), cbed, eds, eels, ronch (Ronchigram), oah (off-axis holography), ilh (in-line holography), ltem (Lorentz TEM: magnetic domains), lstem (Lorentz STEM: DPC induction maps)'),
   specimen: z.enum(SPECS).optional().describe('au gold on carbon, si silicon, sto SrTiO3 grain boundary, gr graphene, mof UiO-66, bio proteins in vitreous ice'),
   kV: z.union([z.literal(80), z.literal(200), z.literal(300)]).optional(),
   defocus_nm: z.number().min(-5000).max(5000).optional().describe('C1; negative is underfocus'),
@@ -76,6 +77,12 @@ const settings = {
   holder: z.enum(['room', 'ln2', 'lhe', 'heat']).optional(),
   temperature_K: z.number().min(4).max(1500).optional(),
   realistic: z.boolean().optional().describe('shot noise and real detectors instead of the clean educational view'),
+  // Lorentz modes (ltem, lstem)
+  magnetic_specimen: z.enum(['vortex', 'landau', 'fege']).optional().describe('Lorentz modes: vortex permalloy disc, landau permalloy rectangle, fege FeGe lamella (cool below 278 K; field along the beam makes skyrmions)'),
+  lorentz_view: z.enum(['fresnel', 'foucault', 'tie', 'phase']).optional().describe('ltem display'),
+  lorentz_defocus_um: z.number().min(-3000).max(3000).optional().describe('Lorentz-lens defocus, µm'),
+  field_mT: z.number().min(0).max(600).optional().describe('objective-lens field along the beam, mT (Lorentz modes)'),
+  probe_urad: z.number().min(20).max(3000).optional().describe('Lorentz-STEM probe semi-angle, µrad'),
 };
 function toOps(a) {
   const ops = [];
@@ -89,6 +96,11 @@ function toOps(a) {
   if (a.fov_nm !== undefined) ops.push({ op: 'set', k: 'fov', v: a.fov_nm });
   if (a.dose !== undefined) ops.push({ op: 'set', k: 'dose', v: a.dose });
   if (a.realistic !== undefined) ops.push({ op: 'set', k: 'clarity', v: a.realistic ? 'real' : 'edu' });
+  if (a.magnetic_specimen) ops.push({ op: 'chip', k: 'magSpec', v: a.magnetic_specimen });
+  if (a.lorentz_view) ops.push({ op: 'set', k: 'lorView', v: a.lorentz_view });
+  if (a.lorentz_defocus_um !== undefined) ops.push({ op: 'set', k: 'lorDf', v: a.lorentz_defocus_um });
+  if (a.field_mT !== undefined) ops.push({ op: 'set', k: 'lorField', v: a.field_mT });
+  if (a.probe_urad !== undefined) ops.push({ op: 'set', k: 'lorAlpha', v: a.probe_urad });
   return ops;
 }
 
@@ -97,7 +109,7 @@ function simulate(a) {
   const S = defaultState();
   if (a.specimen) { const sp = P.SPECIMENS[a.specimen]; S.spec = a.specimen; S.fov = sp.fov; [S.cx, S.cy] = sp.center; }
   if (a.mode) S.mode = a.mode;
-  const fam = ['tem', 'diff', 'oah', 'ilh'].includes(S.mode) ? 'tem' : 'probe';
+  const fam = ['tem', 'diff', 'oah', 'ilh', 'ltem'].includes(S.mode) ? 'tem' : 'probe';
   if (a.kV) S.kV = a.kV;
   if (a.corrector !== undefined) S.corrector = a.corrector;
   S.df = a.defocus_nm ?? S.dfFam[fam];
@@ -107,6 +119,11 @@ function simulate(a) {
   if (a.holder) { S.holder = a.holder; S.tempSet = { room: 293, ln2: 90, lhe: 4.2, heat: 293 }[a.holder]; }
   if (a.temperature_K !== undefined) S.tempSet = a.temperature_K;
   if (a.realistic) S.clarity = 'real';
+  if (a.magnetic_specimen) { S.magSpec = a.magnetic_specimen; S.lorFov = MAGSPECS[a.magnetic_specimen].fov; S.lorThick = MAGSPECS[a.magnetic_specimen].thick; }
+  if (a.lorentz_view) S.lorView = a.lorentz_view;
+  if (a.lorentz_defocus_um !== undefined) S.lorDf = a.lorentz_defocus_um;
+  if (a.field_mT !== undefined) S.lorField = a.field_mT;
+  if (a.probe_urad !== undefined) S.lorAlpha = a.probe_urad;
   const sim = new Sim(S);
   const steps = a.steps ?? (S.mode === '4d' ? 400 : S.mode === 'ilh' ? 600 : 10);
   for (let i = 0; i < steps; i++) { sim.update(0.05); if (S.mode === 'ilh' && sim.ilh.st?.it >= sim.ilh.st.maxIt) break; }
