@@ -21,7 +21,7 @@ import { collectData, toNpz } from './export.js';
 import { openCalibration } from './calibui.js';
 import { ScriptCore, b64 } from './scripting.js';
 import { PythonIDE } from './ide.js';
-import { specState, modeState, setState, chipState, resetVdet as resetVdetState, optimalDefocus, dfLimits as dfLimitsOf, lorSet } from './ops.js';
+import { specState, modeState, setState, chipState, resetVdet as resetVdetState, optimalDefocus, dfLimits as dfLimitsOf, lorSet, tiltLimit } from './ops.js';
 import { MAGSPECS } from './lorentz.js';
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -77,8 +77,8 @@ const CONTROLS = [
   { slider: 'lorFov', label: 'Field of view', min: 0.3, max: 10, log: true, fmt: (v) => `${v < 1 ? Math.round(v * 1000) + ' nm' : v.toFixed(2) + ' µm'}`, modes: LOR, note: 'Scroll on the image to zoom.' },
   { buttons: [['lorReset', 'Saturate and relax']], modes: LOR, show: () => S.magSpec !== 'fege' },
   { slider: 'fov', label: 'Field of view', min: 1.5, max: 120, log: true, fmt: (v) => `${v.toFixed(1)} nm`, modes: 'tem stem 4d eds eels oah ilh', note: 'Drag the detector image to move the stage; scroll to zoom.' },
-  { slider: 'tiltX', inv: 'tilt', label: 'Tilt α', min: -3, max: 3, step: 0.02, fmt: (v) => `${v.toFixed(2)}°`, modes: TILTABLE },
-  { slider: 'tiltY', inv: 'tilt', label: 'Tilt β', min: -3, max: 3, step: 0.02, fmt: (v) => `${v.toFixed(2)}°`, ends: ['', 'zone axis', ''], modes: TILTABLE },
+  { slider: 'tiltX', inv: 'tilt', label: 'Tilt α', dyn: () => ({ min: -tiltLimit(S), max: tiltLimit(S), step: tiltLimit(S) > 3 ? 0.5 : 0.02 }), fmt: (v) => `${v.toFixed(2)}°`, modes: TILTABLE },
+  { slider: 'tiltY', inv: 'tilt', label: 'Tilt β', dyn: () => ({ min: -tiltLimit(S), max: tiltLimit(S), step: tiltLimit(S) > 3 ? 0.5 : 0.02 }), fmt: (v) => `${v.toFixed(2)}°`, ends: ['', 'zone axis', ''], modes: TILTABLE },
   { buttons: [['zone', 'Return to zone axis']], modes: TILTABLE },
 
   { sec: 'The electron gun' },
@@ -619,7 +619,7 @@ function runOp(op) {
       else if (op.k === 'clarity' && ['edu', 'real'].includes(op.v)) { S.clarity = op.v; sim.invalidate('clarity'); refreshControls(); explainChange('clarity'); }
       else if (op.k === 'camL') { set('camL', Math.round(clamp(op.v, 80, 6000)), 'camL'); op.v = S.camL; }
       else if (op.k === 'alpha') { const k = S.mode === '4d' ? 'alpha4d' : 'alpha'; set(k, +clamp(op.v, 3, 40).toFixed(1), 'alpha'); op.v = S[k]; }
-      else if (op.k === 'tiltX' || op.k === 'tiltY') { set(op.k, +clamp(op.v, -3, 3).toFixed(2), 'tilt'); op.v = S[op.k]; }
+      else if (op.k === 'tiltX' || op.k === 'tiltY') { set(op.k, +clamp(op.v, -tiltLimit(S), tiltLimit(S)).toFixed(2), 'tilt'); op.v = S[op.k]; }
       else if (lorSet(S, set, op)) refreshControls();
       else if (op.k === 'showLabels') set('showLabels', !!op.v);
       break;
@@ -998,7 +998,7 @@ function wire() {
   // detector interactions
   let drag = null;
   const rel = (e, cv) => { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top, r.width, r.height]; };
-  mainCv.addEventListener('pointerdown', (e) => { drag = { x: e.clientX, y: e.clientY, cx: S.cx, cy: S.cy, tx: S.tiltX, ty: S.tiltY }; mainCv.setPointerCapture(e.pointerId); });
+  mainCv.addEventListener('pointerdown', (e) => { if (S.mode === 'ltem' || S.mode === 'lstem') return; drag = { x: e.clientX, y: e.clientY, cx: S.cx, cy: S.cy, tx: S.tiltX, ty: S.tiltY }; mainCv.setPointerCapture(e.pointerId); });
   mainCv.addEventListener('pointermove', (e) => {
     const [x, y, w, h] = rel(e, mainCv);
     if (S.mode === '4d' && sim.fd) {
