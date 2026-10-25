@@ -107,6 +107,12 @@ class Microscope:
         """Advance the simulation n frames of 50 ms (drift, dose, temperature change with time)."""
         return self._t.call("step", {"n": int(n)})
 
+    # -- abTEM: the same state as a reference multislice simulation (tools/abtem-bridge)
+    def abtem_request(self, preset: str = "quick", algorithm: str = "multislice", seed: int = 0) -> dict:
+        """The current state as a temview-abtem/1 request (TEM, STEM, 4D-STEM, SAED, CBED of au, si, sto, gr).
+        Run it with the bridge: temview_abtem.simulate(request), or `temview-abtem run request.json`."""
+        return self._t.call("abtem_request", {"preset": preset, "algorithm": algorithm, "seed": int(seed)})
+
     # -- challenges: a training task's hidden misalignment, for testing automation
     def challenge(self, id: str, seed: int | None = None) -> dict:
         """Start a training task as a challenge: tem-focus-stig or corrector-ronch. The knob readings no

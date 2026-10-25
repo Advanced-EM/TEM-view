@@ -21,6 +21,9 @@ export const SUPPORT = {
 // It tries each address in turn: 8790 is temview-mcp's default, 8791 a common choice when 8790 is taken.
 export const AGENT = { urls: ['ws://127.0.0.1:8790', 'ws://127.0.0.1:8791'] };
 
+// the local abTEM bridge (tools/abtem-bridge: `temview-abtem serve`), tried in order
+export const ABTEM = { urls: ['http://127.0.0.1:8797', 'http://127.0.0.1:8798'] };
+
 export const SHARE = {
   url: 'https://tem-view-collector.tem-view.workers.dev/submit',
   dataset: 'rmsreis/tem-view-alignment',

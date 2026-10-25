@@ -114,6 +114,7 @@ Drag the column to orbit and scroll to zoom. Keys `1`–`9` and `0` switch modes
 | `js/techniques.js` | Ronchigram & corrector, CBED/LACBED |
 | `js/holography.js` | Off-axis and in-line (focal-series) electron holography |
 | `js/lorentz.js` | Lorentz TEM (Fresnel, Foucault, TIE) and Lorentz STEM (DPC) of magnetic specimens |
+| `js/abtem.js`, `tools/abtem-bridge/` | Bridge to abTEM: the current state as a reference multislice simulation (TEM, STEM, 4D-STEM, SAED, CBED) |
 | `js/profile.js` | Instrument profile, presets, focal spread |
 | `js/state.js` | Default state and the keys a session stores |
 | `js/calibrate.js`, `js/calibui.js` | Thon-ring and zero-loss fits, file readers (.mrc, .npy, images), calibration dialog |
