@@ -20,11 +20,15 @@ const SPECS = ['au', 'si', 'sto', 'gr', 'mof', 'bio'];
 // training tasks a script can run as a challenge (the direct-alignment task needs its on-screen controls)
 const CHALLENGES = ['tem-focus-stig', 'corrector-ronch'];
 const SETTINGS = {
-  mode: 'tem, stem, 4d, diff, cbed, eds, eels, ronch, oah, ilh', specimen: 'au, si, sto, gr, mof, bio', kV: '80, 200 or 300',
+  mode: 'tem, stem, 4d, diff, cbed, eds, eels, ronch, oah, ilh, ltem, lstem', specimen: 'au, si, sto, gr, mof, bio', kV: '80, 200 or 300',
   defocus_nm: 'C1 in nm, negative is underfocus', fov_nm: 'field of view in nm', dose: 'electrons per Å²', thickness_nm: 'specimen thickness',
   corrector: 'True or False', holder: 'room, ln2, lhe, heat', temperature_K: 'specimen temperature', realistic: 'shot noise and real detectors',
   detector: 'bf, abf, adf, haadf (STEM)', convergence_mrad: 'probe semi-angle', camera_length_mm: 'diffraction camera length',
   tilt_x_deg: 'specimen tilt α', tilt_y_deg: 'specimen tilt β', eels_range: 'zlp, low, core, high', beam: 'True (on) or False (blanked)',
+  magnetic_specimen: 'vortex, landau, fege (Lorentz modes)', lorentz_view: 'fresnel, foucault, tie, phase (ltem)', lorentz_defocus_um: 'Lorentz-lens defocus in µm',
+  lorentz_fov_um: 'field of view in µm (Lorentz modes)', film_thickness_nm: 'magnetic film thickness', field_mT: 'objective-lens field along the beam',
+  divergence_urad: 'illumination divergence (ltem)', foucault: '+x, -x, +y, -y: the deflection the Foucault aperture passes', dpc_view: 'color, x, y, sum (lstem)',
+  probe_urad: 'Lorentz-STEM probe semi-angle',
 };
 
 export function settingsToOps(a) {
@@ -49,6 +53,16 @@ export function settingsToOps(a) {
   if (a.tilt_y_deg !== undefined) ops.push({ op: 'set', k: 'tiltY', v: +a.tilt_y_deg });
   if (a.defocus_nm !== undefined) ops.push({ op: 'set', k: 'df', v: +a.defocus_nm });
   if (a.beam !== undefined) ops.push({ op: 'beam', v: !a.beam });
+  if (a.magnetic_specimen !== undefined) { if (!['vortex', 'landau', 'fege'].includes(a.magnetic_specimen)) throw new Error('magnetic_specimen must be vortex, landau or fege'); ops.push({ op: 'chip', k: 'magSpec', v: a.magnetic_specimen }); }
+  if (a.lorentz_view !== undefined) { if (!['fresnel', 'foucault', 'tie', 'phase'].includes(a.lorentz_view)) throw new Error('lorentz_view must be fresnel, foucault, tie or phase'); ops.push({ op: 'set', k: 'lorView', v: a.lorentz_view }); }
+  if (a.dpc_view !== undefined) { if (!['color', 'x', 'y', 'sum'].includes(a.dpc_view)) throw new Error('dpc_view must be color, x, y or sum'); ops.push({ op: 'set', k: 'lstemView', v: a.dpc_view }); }
+  if (a.foucault !== undefined) { if (!['+x', '-x', '+y', '-y'].includes(a.foucault)) throw new Error('foucault must be +x, -x, +y or -y'); ops.push({ op: 'set', k: 'lorFouc', v: a.foucault }); }
+  if (a.lorentz_defocus_um !== undefined) ops.push({ op: 'set', k: 'lorDf', v: +a.lorentz_defocus_um });
+  if (a.lorentz_fov_um !== undefined) ops.push({ op: 'set', k: 'lorFov', v: +a.lorentz_fov_um });
+  if (a.film_thickness_nm !== undefined) ops.push({ op: 'set', k: 'lorThick', v: +a.film_thickness_nm });
+  if (a.field_mT !== undefined) ops.push({ op: 'set', k: 'lorField', v: +a.field_mT });
+  if (a.divergence_urad !== undefined) ops.push({ op: 'set', k: 'lorDiv', v: +a.divergence_urad });
+  if (a.probe_urad !== undefined) ops.push({ op: 'set', k: 'lorAlpha', v: +a.probe_urad });
   return ops;
 }
 

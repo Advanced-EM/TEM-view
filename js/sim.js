@@ -2,6 +2,7 @@
 import * as P from './physics.js';
 import { Ronch, CBED } from './techniques.js';
 import { OffAxis, FocalSeries } from './holography.js';
+import { Lorentz } from './lorentz.js';
 import { focalSpread } from './profile.js';
 import { HOLDERS, specimenT, u2Ratio, thermalStrain, radiolysisFactor, iceSublimation, DEVITRIFY_K } from './holder.js';
 
@@ -96,6 +97,7 @@ export class Sim {
     this.cbed = new CBED(this);
     this.oah = new OffAxis(this);
     this.ilh = new FocalSeries(this);
+    this.lor = new Lorentz(this);
   }
 
   get spec() { return SP[this.S.spec]; }
@@ -160,6 +162,8 @@ export class Sim {
     if (!view.includes(key)) { this.ronch.stale = true; this.cbed.stale = true; this.oah.stale = true; }
     // a focal series takes a while to record, so only restart it when the physics changes
     if (!view.includes(key) && !['damage', 'drift', 'speed', 'biprism', 'sbR', 'numCorr'].includes(key)) this.ilh.stale = true;
+    // Lorentz images depend on their own view too; holder drift and beam damage of the other specimens do not matter
+    if (!['damage', 'drift', 'speed', 'holoView', 'ilhView', 'vdet', 'edsSel', 'camera', 'beamStop'].includes(key)) this.lor.stale = true;
     if (!['vdet', 'edsSel', 'mode', 'camera', 'holoView', 'ilhView'].includes(key)) this.resetSingle();
     this.version++;
   }
@@ -1155,7 +1159,7 @@ export class Sim {
     this.thermalStep(dt);
     this.zlpStep(dt);
     const S = this.S, m = S.mode;
-    if (this.stale.probe && !['tem', 'diff', 'oah', 'ilh'].includes(m)) { this.computeProbe(); this.stale.probe = 0; }
+    if (this.stale.probe && !['tem', 'diff', 'oah', 'ilh', 'ltem', 'lstem'].includes(m)) { this.computeProbe(); this.stale.probe = 0; }
     if (m === 'tem' && this.stale.tem) { this.computeTEM(); this.stale.tem = 0; this.version++; }
     if (m === 'stem' && this.stale.stem) {
       const soft = this._soft; // beam damage: keep scanning, like a live instrument
@@ -1197,6 +1201,8 @@ export class Sim {
       if (this.ilh.step(dt)) this.version++;
       this.main = null;
     }
+    if ((m === 'ltem' || m === 'lstem') && this.lor.stale) { this.lor.compute(); this.version++; }
+    if (m === 'ltem' || m === 'lstem') { const d = this.lor.disp; this.main = d?.I ? { arr: d.I, w: d.n, h: d.n } : null; }
     if (m === 'ronch' && this.ronch.stale) { this.ronch.compute(); this.version++; }
     if (m === 'cbed' && this.cbed.stale) { this.cbed.compute(); this.version++; }
     if (m === 'ronch') this.main = this.ronch.disp ? { arr: this.ronch.disp.arr, w: this.ronch.disp.W, h: this.ronch.disp.W } : null;

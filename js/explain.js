@@ -1,5 +1,6 @@
 // Plain-English explanations of what each mode shows and what each control physically changes.
 import * as P from './physics.js';
+import { MAGSPECS, fegeState } from './lorentz.js';
 import { stemDetType, AP_MRAD } from './sim.js';
 import { biprism } from './holography.js';
 
@@ -122,6 +123,30 @@ export function modeInfo(S, sim) {
         ],
       };
     }
+    case 'ltem': {
+      const d = sim.lor.disp, sp = MAGSPECS[S.magSpec];
+      return {
+        title: 'Seeing <em>magnetic</em> domains',
+        body: `A magnetized film deflects the electrons that cross it: the <b>Lorentz force</b> pushes each one sideways by a few <b>microradians</b>, in a direction set by the magnetization. Equivalently, the induction shifts the electron wave's <b>phase</b> (the Aharonov–Bohm effect). The objective lens is switched off, because its 2 T field would magnetize the specimen completely; a weak <b>Lorentz lens</b> images it instead, at micrometre fields of view. In focus, a magnetic film is a pure phase object and shows nothing. <b>Fresnel</b> imaging defocuses by hundreds of micrometres: where neighbouring domains deflect electrons toward each other, a wall appears <b>bright</b>; where they deflect away, it is <b>dark</b>. Reverse the defocus and every contrast flips. <b>Foucault</b> imaging stays in focus and blocks part of the back focal plane with a small displaced aperture, so only domains deflecting toward it stay bright. The <b>transport-of-intensity equation</b> turns an over- and an underfocused image into the phase, and the phase into a colour map of the induction direction.`,
+        stats: [
+          ['Lorentz deflection', d ? `${(d.betaS * 1e6).toFixed(1)} µrad` : '—', `${sp.short}, ${S.lorThick} nm thick`],
+          ['Magnetic state', d?.info?.state ?? '—', S.magSpec === 'fege' ? `${Math.round(sim.temp())} K, ${S.lorField} mT along the beam` : 'objective lens off'],
+          ['Defocus', `${S.lorDf} µm`, `divergence ${S.lorDiv} µrad`],
+        ],
+      };
+    }
+    case 'lstem': {
+      const d = sim.lor.disp;
+      return {
+        title: 'Mapping the <em>induction</em> with a probe',
+        body: `In Lorentz STEM a fine probe is scanned across the film. At each position the magnetic induction deflects the whole transmitted beam, so the bright-field disc on the detector moves sideways. A detector split into <b>four segments</b> measures that shift: the difference between opposite segments is the deflection along that direction. This is <b>differential phase contrast</b> (DPC), and the two differences together are a map of the in-plane induction, shown here as colour (hue = direction, brightness = strength). The probe's <b>convergence angle</b> is a trade-off. A larger angle gives a finer probe and sharper maps, but the deflection becomes a smaller fraction of the disc, so the signal shrinks against shot noise. A smaller angle gives a strong signal and a coarse probe, and once the deflection approaches the disc radius the segments saturate. Electrostatic phase gradients at film edges deflect the beam too, which is a classic DPC artifact.`,
+        stats: [
+          ['Max deflection β', d ? `${(d.betaS * 1e6).toFixed(1)} µrad` : '—', `${MAGSPECS[S.magSpec].short}`],
+          ['Probe size', d ? (d.fwhm > 1e4 ? `${(d.fwhm / 1e4).toFixed(2)} µm` : `${(d.fwhm / 10).toFixed(1)} nm`) : '—', `α = ${Math.round(S.lorAlpha)} µrad`],
+          ['β / α', d ? `${(d.sat * 100).toFixed(0)} %` : '—', 'linear while small, saturates near 100 %'],
+        ],
+      };
+    }
     case 'eels': {
       const imfp = P.imfp(S.kV, spec.zeff);
       return {
@@ -161,7 +186,7 @@ export function changeText(key, S, sim) {
   lastKey = key;
   const o = optics(S, sim), spec = sim.spec;
   const probe = sim.probe?.fwhm;
-  const stemLike = !['tem', 'diff', 'oah', 'ilh'].includes(S.mode);
+  const stemLike = !['tem', 'diff', 'oah', 'ilh', 'ltem'].includes(S.mode);
   const a = (S.mode === '4d' ? S.alpha4d : S.alpha) * 1e-3;
   switch (key) {
     case 'kV': return ['Accelerating voltage', `At <b>${S.kV} kV</b> each electron travels at <b>${f2(o.beta)} c</b> and weighs ${o.gam.toFixed(2)}× its rest mass. Its wavelength is <b>${f2(o.lam * 100)} pm</b>. A shorter wavelength means smaller Bragg angles (watch the diffraction spots pull inward) and deeper penetration. The cost: above ~86 kV a head-on hit can knock a carbon atom clean out of graphene, so fragile materials are imaged at 60–80 kV. ${S.kV > 86 ? `<span class="warn">You are above the knock-on threshold for carbon.${spec.twoD ? ' Watch the graphene: in TEM or STEM, atoms are being sputtered and holes grow.' : ''}${spec.beamSensitive ? ` For ${spec.short} the danger is radiolysis, not knock-on: the critical dose is now ${sim.critDose().toFixed(1)} e⁻/Å², and it drops at lower voltage because slower electrons ionize more strongly.` : ''}</span>` : `<span class="ok">Below the knock-on threshold for carbon.${spec.twoD && S.kV > 55 ? ' Only weakly bonded edge atoms can still be displaced.' : ''}</span>${spec.beamSensitive ? ` <span class="warn">But for ${spec.short} lower voltage is worse: radiolysis grows as 1/β², so the critical dose falls to ${sim.critDose().toFixed(1)} e⁻/Å².</span>` : ''}`}`];
@@ -303,6 +328,23 @@ export function changeText(key, S, sim) {
     case 'alphaLA': return ['LACBED angle', `A <b>${S.alphaLA} mrad</b> cone. The wider it is, the more lines and the larger the area of specimen seen in the shadow image.`];
     case 'strain': return ['Lattice strain', `Lattice parameter changed by <b>${S.strain >= 0 ? '+' : ''}${S.strain.toFixed(2)} %</b>. HOLZ lines come from reflections with large g, where the Bragg condition is extremely sensitive to d-spacing, so they shift visibly for 0.1 % strain. That’s how CBED measures local strain in transistors. The same shift results from a change in accelerating voltage, which is why HOLZ lines also calibrate kV.`];
     case 'holz': return ['HOLZ lines', S.holz ? 'Showing higher-order Laue zone lines: fine deficiency lines where a reflection in the next reciprocal-lattice layer is exactly excited.' : 'HOLZ lines hidden: only zero-order (ZOLZ) dynamical contrast remains.'];
+    case 'magSpec': {
+      const sp = MAGSPECS[S.magSpec];
+      return [sp.name, `${sp.about} Saturation induction ${sp.Bs} T, mean inner potential ${sp.V0} V.${S.magSpec === 'fege' ? ` It only orders below ${sp.Tc} K: pick the liquid-nitrogen holder and cool it, then use the objective-lens field to make skyrmions.` : ''}`];
+    }
+    case 'magnet': case 'lorReset': return ['Saturate and relax', 'A strong in-plane field saturates the element; when it is removed, the flux closes again with a random sense of rotation and, for the vortex, a random core direction. Find them from the images: the vortex core is bright or dark in Fresnel depending on the rotation sense and the defocus sign, and TIE shows the rotation directly.'];
+    case 'lorThick': return ['Film thickness', `The deflection grows with the thickness crossed: β = e·B·t·λ/h ≈ ${((1.82e-5 * MAGSPECS[S.magSpec].Bs * S.lorThick) / 30 * 1e6).toFixed(1)} µrad here. Thicker films give stronger contrast but scatter more, and the electrostatic phase at the edges (mean inner potential × thickness) grows too.`];
+    case 'lorFov': return ['Field of view', `${S.lorFov < 1 ? Math.round(S.lorFov * 1000) + ' nm' : S.lorFov.toFixed(2) + ' µm'} across. Lorentz work happens at low magnification because the objective lens is off; domain walls are 10–100 nm wide, so very large fields of view blur them into the pixels.`];
+    case 'lorDf': return ['Lorentz-lens defocus', S.lorDf === 0 ? 'In focus a magnetic film is a pure phase object: no contrast at all. Defocus to see the walls.' : `${Math.abs(S.lorDf)} µm ${S.lorDf < 0 ? 'under' : 'over'}focus. The image contrast is proportional to the defocus times the curvature of the phase: walls where the deflections converge are ${S.lorDf < 0 ? 'bright' : 'dark'}, and every contrast reverses on the other side of focus. More defocus means stronger contrast but broader walls.`];
+    case 'lorDiv': return ['Illumination divergence', `${S.lorDiv} µrad. Fresnel contrast needs a coherent beam: at large defocus, a divergent illumination blurs the fringes by about divergence × defocus = ${((S.lorDiv * 1e-6 * Math.abs(S.lorDf) * 1e-6) * 1e9).toFixed(0)} nm here. A field-emission gun and a small condenser aperture keep it to a few µrad.`];
+    case 'lorView': return ['Display', { fresnel: 'Fresnel: a defocused image; domain walls and vortex cores appear as bright or dark lines and dots.', foucault: 'Foucault: in focus, with a small aperture in the back focal plane that passes only the beams deflected one way; those domains stay bright.', tie: 'Induction map: the phase from images at ± the defocus (transport of intensity), then the direction of the in-plane induction as colour.', phase: 'Phase: what the electron wave picks up, magnetic plus electrostatic (the edges of the film).' }[S.lorView]];
+    case 'lorFouc': case 'lorApR': return ['Foucault aperture', `A ${S.lorApR} µrad aperture displaced to pass the beams deflected ${{ '+x': 'right', '-x': 'left', '+y': 'up', '-y': 'down' }[S.lorFouc]}. The deflections are only a few µrad, so the aperture must be small, and it sits in the back focal plane, shown on the right.`];
+    case 'lorField': {
+      const st = fegeState(sim.temp(), S.lorField);
+      return ['Objective-lens field', `${S.lorField} mT along the beam. ${S.magSpec === 'fege' ? `At ${Math.round(sim.temp())} K the FeGe is ${st.phase}${st.Bc2 ? ` (skyrmions between ${Math.round(st.Bc1)} and ${Math.round(st.Bc2)} mT)` : ''}.` : 'A field along the beam does little to an in-plane film; tilt the specimen and part of it lies in the plane, pushing the vortex core sideways until it is expelled.'}`];
+    }
+    case 'lstemView': return ['Display', { color: 'Induction map: the two segment differences as colour (hue = direction, brightness = strength).', x: 'Right minus left segments: the deflection along x.', y: 'Top minus bottom segments: the deflection along y.', sum: 'The sum of all four segments: a bright-field image, insensitive to the deflection; it shows the film and its edges.' }[S.lstemView]];
+    case 'lorAlpha': return ['Convergence semi-angle', `${Math.round(S.lorAlpha)} µrad gives a ${((0.51 * 2.508e-2) / (S.lorAlpha * 1e-6) / 10).toFixed(0)} nm probe (at 200 kV). The deflection is ${sim.lor.disp ? Math.round(sim.lor.disp.sat * 100) : '—'} % of the disc radius: below a few per cent the signal drowns in noise, near 100 % the segments saturate.`];
     case 'biprism': {
       const bp = biprism(S.biprism, S.profile), d = sim.oah.disp;
       return ['Biprism voltage', `<b>${S.biprism} V</b> on the wire. A higher voltage deflects the two waves more steeply, so they overlap over a wider region (<b>${f1(bp.W)} nm</b>) with finer fringes (<b>${f2(bp.s)} Å</b>). Finer fringes allow a larger sideband aperture and so better resolution, but the two waves must stay coherent across the whole overlap, so <b>fringe contrast drops</b> (now ${Math.round(bp.mu * 100)} %) and the phase gets noisier.${d?.under ? ' <span class="warn">The fringes are now finer than the detector can sample; reduce the field of view (raise the magnification).</span>' : ''}`];

@@ -66,6 +66,8 @@ function summary(S, sim) {
   if (m === 'diff') return `${base}, camera length ${S.camL} mm, area ${S.sa} nm`;
   if (m === 'cbed') return `${base}, ${S.cbedKind}, α ${S.cbedKind === 'cbed' ? S.alphaCB : S.alphaLA} mrad`;
   if (m === 'eels') return `${base}, ${S.eelsDisp} eV/ch from ${S.eelsOffset} eV, window ${S.eelsWin}±${S.eelsWidth / 2} eV`;
+  if (m === 'ltem') return `${base}, ${S.magSpec}, ${S.lorView}, Lorentz defocus ${S.lorDf} µm, field ${S.lorFov} µm, ${S.lorField} mT`;
+  if (m === 'lstem') return `${base}, ${S.magSpec}, DPC, α ${Math.round(S.lorAlpha)} µrad, field ${S.lorFov} µm, ${S.lorField} mT`;
   if (m === 'eds') return `${base}, ${sim.acc ? Math.round(sim.acc.total).toLocaleString() : 0} X-rays`;
   return base;
 }

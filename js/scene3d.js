@@ -501,7 +501,8 @@ export class Scene3D {
       ['Zernike phase plate', [-0.5, Y.bfp, 0], (S) => S.mode === 'tem' && S.objAp === 'zpp', 'left'],
       ['Cryo holder', [3.9, Y.spec + 0.75, 0], (S) => S.holder === 'ln2' || S.holder === 'lhe'],
       ['Heating holder', [3.1, Y.spec + 0.35, 0], (S) => S.holder === 'heat'],
-      ['Back focal plane', [-0.5, Y.bfp, 0], ['diff', 'stem', '4d', 'eds', 'eels', 'ronch', 'cbed', 'oah', 'ilh'], 'left'],
+      ['Back focal plane', [-0.5, Y.bfp, 0], ['diff', 'stem', '4d', 'eds', 'eels', 'ronch', 'cbed', 'oah', 'ilh', 'ltem', 'lstem'], 'left'],
+      ['Lorentz lens · objective off', [-1.25, Y.spec - 0.42, 0], ['ltem', 'lstem'], 'left'],
       ['Selected-area aperture', [0.5, Y.sa, 0], ['diff']],
       ['Electron biprism', [0.5, Y.sa + 0.06, 0], ['oah']],
       ['Intermediate lens', [1.12, Y.int, 0], null],
@@ -509,7 +510,8 @@ export class Scene3D {
       ['Fluorescent screen', [1.2, Y.screen, 0], ['tem:screen', 'diff:screen']],
       ['Annular dark-field detector', [1.0, Y.adf, 0], ['stem', 'eds', 'eels']],
       ['Bright-field detector', [-0.35, Y.bfdet, 0], ['stem', 'eds'], 'left'],
-      ['Direct electron detector', [0.7, Y.cam, 0], ['4d', 'tem:ded', 'diff:ded', 'ronch', 'cbed', 'oah', 'ilh']],
+      ['Segmented (DPC) detector', [-0.35, Y.bfdet, 0], ['lstem'], 'left'],
+      ['Direct electron detector', [0.7, Y.cam, 0], ['4d', 'tem:ded', 'diff:ded', 'ronch', 'cbed', 'oah', 'ilh', 'ltem']],
       ['Magnetic prism', [1.2, Y.prism, 0.2], ['eels']],
       ['Energy-loss spectrum', [2.6, Y.prism - 1.0, 0], ['eels']],
     ];
@@ -558,7 +560,7 @@ export class Scene3D {
     const cyan = 0x3dff7a, pale = 0xb4ffc8, warm = 0xffb45e, violet = 0x9dffb0;
     const V = (keys, off = () => [0, 0]) => keys.map(([y, r]) => { const [x, z] = off(y); return [x, y, z, r]; });
     const upperTEM = [[Y.gun, 0], [Y.anode, 0.09], [Y.c1, 0.26], [3.35, 0], [Y.c2, -0.2], [Y.cap, -0.18], [Y.objTop, -0.18], [Y.spec, -0.18]];
-    const holo = m === 'oah' || m === 'ilh', cam = holo ? 'ded' : S.camera;
+    const holo = m === 'oah' || m === 'ilh' || m === 'ltem', cam = holo ? 'ded' : S.camera;
     if (m === 'oah') {
       // object wave through the specimen, reference wave through vacuum beside it; the charged wire
       // deflects both toward the axis so they overlap and interfere on the detector
@@ -572,10 +574,10 @@ export class Scene3D {
       const keys = [[Y.spec, -0.08], [Y.bfp, 0], [yW, 0.07], [Y.int, 0.22], [-1.95, 0], [Y.proj, -0.2], [Y.cam, -0.52]];
       B.push({ id: 'obj', keys: V(keys, side(-1)), color: cyan, I: 0.8, kids: [] });
       B.push({ id: 'ref', keys: V(keys, side(1)), color: pale, I: 0.8, kids: [] });
-    } else if (m === 'tem' || m === 'diff' || m === 'ilh') {
+    } else if (m === 'tem' || m === 'diff' || m === 'ilh' || m === 'ltem') {
       const yEnd = cam === 'ded' ? Y.cam : Y.screen;
       B.push({ id: 'up', keys: V(upperTEM), color: cyan, I: 1, kids: [] });
-      const gs = this.gvecs(S);
+      const gs = m === 'ltem' ? [] : this.gvecs(S); // Lorentz deflections are microradians: no visible beams
       const apMrad = AP_MRAD[S.objAp];
       const apR = m === 'tem' && isFinite(apMrad) ? (0.36 * apMrad * 1e-3) / LAM200 : 9; // a phase plate passes every beam
       let apC = [0, 0];
@@ -585,7 +587,7 @@ export class Scene3D {
       const saR = m === 'diff' ? clamp(S.sa * 0.028, 0.06, 0.34) : 0.34;
       this.anim.saT = m === 'diff' ? saR : null;
       const mainBlocked = m === 'tem' && S.objAp === 'df';
-      if (m === 'tem' || m === 'ilh') {
+      if (m === 'tem' || m === 'ilh' || m === 'ltem') {
         const lowA = V([[Y.spec, -0.18], [Y.bfp, 0], [Y.sa, 0.3]]);
         B.push({ id: 'lowA', keys: mainBlocked ? V([[Y.spec, -0.18], [Y.bfp, 0]]) : lowA, color: cyan, I: 1, kids: mainBlocked ? [] : ['tail'] });
         B.push({ id: 'tail', keys: V([[Y.sa, 0.3], [Y.int, 0.42], [-1.95, 0], [Y.proj, -0.22], cam === 'ded' ? [Y.cam, -0.55] : [Y.screen, -1.05]]), color: cyan, I: 0.9, kids: [] });
@@ -737,8 +739,8 @@ export class Scene3D {
       this.beamGroups[slot].visible = w > 0.01;
     });
     // mechanical parts
-    const stemLike = !['tem', 'diff', 'oah', 'ilh'].includes(m);
-    const ded = ['4d', 'ronch', 'cbed', 'oah', 'ilh'].includes(m) || (!stemLike && S.camera === 'ded');
+    const stemLike = !['tem', 'diff', 'oah', 'ilh', 'ltem'].includes(m);
+    const ded = ['4d', 'ronch', 'cbed', 'oah', 'ilh', 'ltem'].includes(m) || (!stemLike && S.camera === 'ded');
     A.screenLift = lerp(A.screenLift, stemLike || ded ? 1 : 0, k);
     this.screenPivot.rotation.x = -A.screenLift * 1.35;
     A.adf = lerp(A.adf, ['stem', 'eds', 'eels'].includes(m) ? 1 : 0, k);

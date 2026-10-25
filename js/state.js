@@ -18,6 +18,11 @@ export const defaultState = () => ({
   cbedKind: 'cbed', alphaCB: 3, alphaLA: 40, strain: 0, holz: true,
   biprism: 100, sbR: 0.33, numCorr: true, holoView: 'holo', nFocal: 10, focalStep: 5, ilhView: 'phase',
   holder: 'room', tempSet: 293, profile: newProfile('generic200'),
+  // Lorentz microscopy (lorentz.js): magnetic specimen, film thickness (nm), field of view (µm), Lorentz-lens defocus
+  // (µm), illumination divergence (µrad), Foucault aperture, field of the objective lens along the beam (mT), the
+  // vortex's chirality and core polarity, and the Lorentz-STEM view and probe semi-angle (µrad)
+  magSpec: 'vortex', lorThick: 30, lorFov: 2.5, lorDf: -400, lorDiv: 2, lorView: 'fresnel', lorFouc: '+x', lorApR: 8,
+  lorField: 0, lorChir: 1, lorPol: 1, lstemView: 'color', lorAlpha: 300,
   // hidden misalignment added to the knob settings (training scenarios); never shown in the controls
   mis: null,
 });
@@ -28,4 +33,5 @@ export const SESSION_KEYS = [
   'objAp', 'alpha', 'alpha4d', 'detIn', 'detOut', 'detPreset', 'camL', 'sa', 'beamStop', 'camera', 'vdet', 'vdIn', 'vdOut', 'vdX', 'vdY', 'vdR',
   'edsSel', 'eelsRange', 'eelsWin', 'eelsWidth', 'bgsub', 'eelsDisp', 'eelsOffset', 'eelsExp', 'eelsExpLow', 'eelsCurrent', 'dualEels', 'ab', 'ronchAp', 'cbedKind', 'alphaCB', 'alphaLA', 'strain', 'holz',
   'biprism', 'sbR', 'numCorr', 'holoView', 'nFocal', 'focalStep', 'ilhView', 'holder', 'tempSet', 'profile', 'mis',
+  'magSpec', 'lorThick', 'lorFov', 'lorDf', 'lorDiv', 'lorView', 'lorFouc', 'lorApR', 'lorField', 'lorChir', 'lorPol', 'lstemView', 'lorAlpha',
 ];
