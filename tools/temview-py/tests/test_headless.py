@@ -86,3 +86,64 @@ def test_end_challenge_restores_the_instrument(tem):
     tem.set(defocus_nm=-100)
     tem.end_challenge()
     assert {k: tem.state()[k] for k in before} == before
+
+
+# ------------------------------------------------------------------ Lorentz microscopy (js/lorentz.js)
+def _vortex_core(img):
+    n = img.shape[0]
+    c = img[n // 2 - 2:n // 2 + 3, n // 2 - 2:n // 2 + 3].mean()
+    return c / img.mean()
+
+
+def test_lorentz_deflection_and_fresnel_reversal(tem):
+    tem.set(mode="ltem", kV=200, magnetic_specimen="vortex", film_thickness_nm=30, lorentz_view="fresnel", lorentz_defocus_um=-400)
+    a = tem.acquire()
+    # β = e·B·t·λ/h ≈ 18 µrad for 30 nm of permalloy (1 T) at 200 kV
+    assert a.calibration["lorentz_deflection_urad"] == pytest.approx(18.2, rel=0.03)
+    under = _vortex_core(a["image"])
+    tem.set(lorentz_defocus_um=400)
+    over = _vortex_core(tem.acquire()["image"])
+    assert (under - 1) * (over - 1) < 0, "the vortex core must reverse contrast through focus"
+
+
+def test_lorentz_tie_recovers_the_vortex_rotation(tem):
+    tem.set(mode="ltem", magnetic_specimen="vortex", lorentz_view="tie", lorentz_defocus_um=-400)
+    a = tem.acquire()
+    bx, by = a["induction_x"], a["induction_y"]
+    n = bx.shape[0]
+    y, x = np.mgrid[0:n, 0:n] - n / 2 + 0.5
+    r = np.hypot(x, y)
+    ring = (r > n * 0.08) & (r < n * 0.22)
+    # curl sense of the recovered induction: positive = counter-clockwise (the default chirality +1)
+    curl = np.mean((x * by - y * bx)[ring] / r[ring])
+    assert curl > 0
+
+
+def test_lorentz_fege_phase_diagram(tem):
+    tem.set(mode="ltem", magnetic_specimen="fege", holder="room", lorentz_view="phase")
+    assert tem.acquire().calibration["magnetic_state"] == "paramagnetic"  # 293 K > Tc = 278 K
+    tem.set(holder="ln2", temperature_K=250)
+    tem.step(400)  # let the holder reach the setpoint
+    states = {}
+    for B in (0, 60, 400):
+        tem.set(field_mT=B)
+        states[B] = tem.acquire().calibration["magnetic_state"]
+    assert states == {0: "helical", 60: "skyrmion lattice", 400: "field-polarized"}
+    tem.set(holder="room", field_mT=0)
+
+
+def test_lorentz_stem_dpc_saturates_with_a_small_probe_angle(tem):
+    tem.set(mode="lstem", kV=200, magnetic_specimen="vortex", probe_urad=300)
+    weak = tem.acquire()
+    tem.set(probe_urad=20)
+    strong = tem.acquire()
+    # inside the disc (away from the edge, where the electrostatic phase gradient deflects strongly too):
+    # 20 µrad, the 18 µrad deflection fills the bright-field disc (signal near ±1); 300 µrad, a few per cent
+    n = weak["dpc_x"].shape[0]
+    y, x = np.mgrid[0:n, 0:n] - n / 2 + 0.5
+    r = np.hypot(x, y)
+    inside = (r > n * 0.08) & (r < n * 0.22)
+    mag = lambda a: np.median(np.hypot(a["dpc_x"], a["dpc_y"])[inside])
+    assert mag(strong) > 0.9 and mag(weak) < 0.15
+    assert strong.calibration["probe_fwhm_A"] > weak.calibration["probe_fwhm_A"]
+    tem.set(mode="tem")

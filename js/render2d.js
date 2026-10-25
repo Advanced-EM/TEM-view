@@ -3,6 +3,7 @@ import * as P from './physics.js';
 import { stemDetType, AP_MRAD, ZPP_CUTON, zlpStats, EELS_FULL_WELL } from './sim.js';
 import { drawRonch, drawCBED } from './techniques.js';
 import { drawOAH, drawILH } from './holography.js';
+import { drawLTEM, drawLSTEM } from './lorentz.js';
 
 const C = {
   accent: '#6fd6ff', warm: '#ffb45e', text: '#e9edf2', muted: '#8a94a3', dim: '#566070',
@@ -175,14 +176,14 @@ export function draw(sim, S, mainCv, secCv, hover) {
   const m = fit(mainCv), s = fit(secCv);
   m.ctx.fillStyle = C.bg; m.ctx.fillRect(0, 0, m.W, m.H);
   s.ctx.fillStyle = C.bg; s.ctx.fillRect(0, 0, s.W, s.H);
-  const fn = { tem: drawTEM, stem: drawSTEM, diff: drawDiff, '4d': draw4D, eds: drawEDS, eels: drawEELS, ronch: drawRonch, cbed: drawCBED, oah: drawOAH, ilh: drawILH }[S.mode];
+  const fn = { tem: drawTEM, stem: drawSTEM, diff: drawDiff, '4d': draw4D, eds: drawEDS, eels: drawEELS, ronch: drawRonch, cbed: drawCBED, oah: drawOAH, ilh: drawILH, ltem: drawLTEM, lstem: drawLSTEM }[S.mode];
   fn(sim, S, m, s, performance.now() / 1000);
   cryoLabel(m.ctx, sim, S, m.W, m.H, m.dpr);
-  if (sim.single?.hits && sim.single.count && !['4d', 'eds', 'eels', 'ilh'].includes(S.mode)) {
+  if (sim.single?.hits && sim.single.count && !['4d', 'eds', 'eels', 'ilh', 'ltem', 'lstem'].includes(S.mode)) {
     m.ctx.fillStyle = C.bg; m.ctx.fillRect(0, 0, m.W, m.H);
     drawHits(m.ctx, sim.single, [0, 0, m.W, m.H], m.dpr);
   }
-  if (sim.spec.beamSensitive && S.mode !== 'ronch') {
+  if (sim.spec.beamSensitive && !['ronch', 'ltem', 'lstem'].includes(S.mode)) {
     const D = sim.doseAcc || 0, c = Math.exp(-D / sim.critDose());
     label(m.ctx, `dose ${D < 10 ? D.toFixed(1) : Math.round(D)} e⁻/Å² · ${sim.spec.bio ? 'high-resolution detail' : 'crystallinity'} ${Math.round(100 * c)} %`, 10 * m.dpr, m.H - 34 * m.dpr, m.dpr, { color: c < 0.5 ? C.warm : C.accent, size: 9 });
   }
@@ -195,7 +196,7 @@ function cryoLabel(ctx, sim, S, W, H, dpr) {
   if (S.holder !== 'room') { const T = sim.temp(); label(ctx, `${T < 20 ? T.toFixed(1) : Math.round(T)} K`, W - 10 * dpr, H - 34 * dpr, dpr, { color: T < 170 ? C.accent : T > 400 ? C.warm : C.muted, size: 9, align: 'right' }); }
   if (sim.spec.bio && sim.ice().t <= 0) label(ctx, 'the ice has sublimed: proteins dried out', W / 2, H / 2, dpr, { color: C.warm, align: 'center' });
   else if (sim.spec.bio && sim.devitrified) label(ctx, 'crystalline ice (warmed above ~140 K)', 10 * dpr, H - 74 * dpr, dpr, { color: C.warm, size: 9 });
-  if (sim.driftSpeed() > 0.4) label(ctx, `holder settling · drift ${sim.driftSpeed().toFixed(1)} Å/s`, 10 * dpr, H - 54 * dpr, dpr, { color: C.warm, size: 9 });
+  if (sim.driftSpeed() > 0.4 && !['ltem', 'lstem'].includes(S.mode)) label(ctx, `holder settling · drift ${sim.driftSpeed().toFixed(1)} Å/s`, 10 * dpr, H - 54 * dpr, dpr, { color: C.warm, size: 9 });
 }
 
 function drawTEM(sim, S, m, s) {

@@ -137,6 +137,7 @@ export class Panel {
     const ctx = m === 'stem' || m === 'eds' || m === 'eels' ? ['Convergence', `${S.alpha} mrad`] : m === '4d' ? ['Convergence', `${S.alpha4d} mrad`]
       : m === 'diff' ? ['Selected area', `${f1(S.sa)} nm`] : m === 'cbed' ? ['Convergence', `${S.cbedKind === 'cbed' ? S.alphaCB : S.alphaLA} mrad`]
       : m === 'ronch' ? ['Ronchigram aperture', `${S.ronchAp} mrad`] : m === 'oah' ? ['Biprism', `${S.biprism} V`] : m === 'ilh' ? ['Focal step', `${f1(S.focalStep)} nm`]
+      : m === 'ltem' ? ['Lorentz defocus', `${S.lorDf} µm`] : m === 'lstem' ? ['Probe semi-angle', `${Math.round(S.lorAlpha)} µrad`]
       : S.holder !== 'room' ? ['Temperature', `${S.tempSet < 20 ? S.tempSet.toFixed(1) : Math.round(S.tempSet)} K`] : ['Fine focus', `${S.df.toFixed(2)} nm`];
     const mf = this.mfNow(), abk = mf === 'stig' ? 'A1' : AB_KNOB[mf] ? mf : null;
     const mfv = abk ? `${abk} ${S.ab[abk].toFixed(abk === 'B2' || abk === 'A2' ? 0 : 1)} ${AB_KNOB[abk][2]}, ${S.ab[abk + 'a']}°` : mf === 'C3' ? `${S.csCor} µm` : this.mf === 'tilt' ? `${S.tiltX.toFixed(2)}°, ${S.tiltY.toFixed(2)}°` : `${(S.cx / 10).toFixed(1)}, ${(S.cy / 10).toFixed(1)} nm`;
@@ -214,6 +215,8 @@ export class Panel {
     else if (m === 'ronch') step('ronchAp', 1, 20, 70, 'Ronchigram aperture', 'mrad', 0);
     else if (m === 'oah') step('biprism', 2, 20, 250, 'Biprism', 'V', 0);
     else if (m === 'ilh') step('focalStep', 0.5, 0.5, 20, 'Focal step', 'nm');
+    else if (m === 'ltem') step('lorDf', 20, -3000, 3000, 'Lorentz defocus', 'µm', 0);
+    else if (m === 'lstem') step('lorAlpha', 10, 20, 3000, 'Probe semi-angle', 'µrad', 0);
     else if (S.holder !== 'room') step('tempSet', S.holder === 'heat' ? 10 : 1, -Infinity, Infinity, 'Temperature setpoint', 'K', 1);
     else { this.fine = true; this.acc.focus = (this.acc.focus ?? 0) + d; this.apply(); }
   }

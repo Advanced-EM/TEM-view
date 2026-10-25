@@ -21,14 +21,15 @@ import { collectData, toNpz } from './export.js';
 import { openCalibration } from './calibui.js';
 import { ScriptCore, b64 } from './scripting.js';
 import { PythonIDE } from './ide.js';
-import { specState, modeState, setState, chipState, resetVdet as resetVdetState, optimalDefocus, dfLimits as dfLimitsOf } from './ops.js';
+import { specState, modeState, setState, chipState, resetVdet as resetVdetState, optimalDefocus, dfLimits as dfLimitsOf, lorSet } from './ops.js';
+import { MAGSPECS } from './lorentz.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 // ------------------------------------------------------------------ state
 const S = defaultState();
-const fam = (m) => (['tem', 'diff', 'oah', 'ilh'].includes(m) ? 'tem' : 'probe');
+const fam = (m) => (['tem', 'diff', 'oah', 'ilh', 'ltem'].includes(m) ? 'tem' : 'probe');
 const stigXY = () => [S.ab.A1 * Math.cos((S.ab.A1a * Math.PI) / 90), S.ab.A1 * Math.sin((S.ab.A1a * Math.PI) / 90)];
 const fmtS = (t) => (t < 1e-3 ? `${+(t * 1e6).toPrecision(3)} µs` : t < 1 ? `${+(t * 1e3).toPrecision(3)} ms` : `${+t.toPrecision(3)} s`);
 const fmtT = (K) => `${K < 20 ? K.toFixed(1) : Math.round(K)} K (${Math.round(K - 273.15)} °C)`;
@@ -45,27 +46,36 @@ const MODES = [
   ['eds', 'EDS', 'X-ray spectra', 'Spectroscopy'], ['eels', 'EELS', 'energy loss', 'Spectroscopy'],
   ['ronch', 'Ronchigram', 'corrector tuning', 'Alignment'],
   ['oah', 'Off-axis', 'biprism holography', 'Holography'], ['ilh', 'In-line', 'focal-series exit wave', 'Holography'],
+  ['ltem', 'Lorentz TEM', 'magnetic domains', 'Magnetism'], ['lstem', 'Lorentz STEM', 'DPC induction maps', 'Magnetism'],
 ];
 // keyboard shortcuts (Ronchigram keeps 8; the holography modes were added later as 9 and 0)
-const KEYS = { tem: '1', stem: '2', '4d': '3', diff: '4', cbed: '5', eds: '6', eels: '7', ronch: '8', oah: '9', ilh: '0' };
+const KEYS = { tem: '1', stem: '2', '4d': '3', diff: '4', cbed: '5', eds: '6', eels: '7', ronch: '8', oah: '9', ilh: '0', ltem: '-', lstem: '=' };
 const logMap = (min, max) => ({ to: (v) => (Math.log(v / min) / Math.log(max / min)) * 1000, from: (t) => min * Math.pow(max / min, t / 1000) });
 
 const NOT_RONCH = 'tem stem 4d diff eds eels cbed oah ilh';
-const TILTABLE = 'tem stem 4d diff eds eels cbed oah ilh';
+const TILTABLE = 'tem stem 4d diff eds eels cbed oah ilh ltem lstem';
+// the atomic-scale specimens and the objective lens: not in the Lorentz modes (objective off, magnetic specimens)
+const NOT_LOR = 'tem stem 4d diff cbed eds eels ronch oah ilh';
+const LOR = 'ltem lstem';
 const CONTROLS = [
   { sec: 'The specimen' },
-  { chips: 'spec', opts: [['au', 'Gold on carbon'], ['si', 'Si / SiO₂'], ['sto', 'SrTiO₃ boundary'], ['gr', 'Graphene'], ['mof', 'UiO-66 (MOF)'], ['bio', 'Proteins in ice']] },
+  { chips: 'spec', modes: NOT_LOR, opts: [['au', 'Gold on carbon'], ['si', 'Si / SiO₂'], ['sto', 'SrTiO₃ boundary'], ['gr', 'Graphene'], ['mof', 'UiO-66 (MOF)'], ['bio', 'Proteins in ice']] },
   { chips: 'holder', label: 'Specimen holder', opts: Object.entries(HOLDERS).map(([k, v]) => [k, v.short]) },
   { slider: 'tempSet', label: 'Temperature setpoint', dyn: () => { const H = HOLDERS[S.holder]; return { min: H.min, max: H.max, step: H.step, log: H.log }; }, fmt: (v) => fmtT(v), show: () => S.holder !== 'room' },
   { pFn: () => `Specimen at ${fmtT(sim.temp())}${S.holder === 'room' ? '' : ` (setpoint ${fmtT(S.tempSet)}; the grid runs ${S.holder === 'heat' ? 'about 1 % hotter than the reading' : 'warmer than the holder tip'} and fluctuates by ±${HOLDERS[S.holder].jitter} K)`}. Drift ${sim.driftSpeed().toFixed(2)} Å/s.` },
-  { buttons: [['newGrid', 'Load a fresh grid']], show: () => S.spec === 'bio' },
-  { p: 'Thickness here is the ice layer. Proteins scatter only slightly more than the ice around them, so they are weak phase objects: use 1–3 µm underfocus in TEM, or the Zernike phase plate near focus.', show: () => S.spec === 'bio' },
-  { pFn: () => (sim.ice().t <= 0 ? 'The vitreous ice has sublimed in the vacuum and the proteins have dried out. Cool the grid below ~140 K and load a fresh grid.' : sim.devitrified ? 'The ice has crystallized (it went above ~140 K): crystallites now diffract and add patchy contrast. Only a fresh grid brings vitreous ice back.' : ''), show: () => S.spec === 'bio' && (sim.ice().t <= 0 || sim.devitrified) },
+  { buttons: [['newGrid', 'Load a fresh grid']], modes: NOT_LOR, show: () => S.spec === 'bio' },
+  { modes: NOT_LOR, p: 'Thickness here is the ice layer. Proteins scatter only slightly more than the ice around them, so they are weak phase objects: use 1–3 µm underfocus in TEM, or the Zernike phase plate near focus.', show: () => S.spec === 'bio' },
+  { modes: NOT_LOR, pFn: () => (sim.ice().t <= 0 ? 'The vitreous ice has sublimed in the vacuum and the proteins have dried out. Cool the grid below ~140 K and load a fresh grid.' : sim.devitrified ? 'The ice has crystallized (it went above ~140 K): crystallites now diffract and add patchy contrast. Only a fresh grid brings vitreous ice back.' : ''), show: () => S.spec === 'bio' && (sim.ice().t <= 0 || sim.devitrified) },
   { slider: 'thick', label: 'Thickness', min: 3, max: 150, step: 1, fmt: (v) => `${v} nm`, ends: ['thin', '', 'thick'], modes: NOT_RONCH, show: () => S.spec !== 'gr' },
   { p: 'Graphene is one atom (0.335 nm) thick, so there is no thickness to set. Above ~86 kV the beam knocks carbon atoms out: watch in TEM or STEM at 200–300 kV, then compare 60–80 kV.', modes: NOT_RONCH, show: () => S.spec === 'gr' },
   { buttons: [['restore', 'Restore pristine graphene']], modes: 'tem stem', show: () => S.spec === 'gr' },
-  { p: 'UiO-66 is destroyed by radiolysis after ~10 e⁻/Å² at 300 kV, and sooner at lower voltage. The dose per image accumulates while the beam is on: watch the high-order diffraction spots fade first.', show: () => S.spec === 'mof' },
-  { buttons: [['fresh', 'Move to a fresh area']], show: () => S.spec === 'mof' },
+  { modes: NOT_LOR, p: 'UiO-66 is destroyed by radiolysis after ~10 e⁻/Å² at 300 kV, and sooner at lower voltage. The dose per image accumulates while the beam is on: watch the high-order diffraction spots fade first.', show: () => S.spec === 'mof' },
+  { buttons: [['fresh', 'Move to a fresh area']], modes: NOT_LOR, show: () => S.spec === 'mof' },
+  { chips: 'magSpec', modes: LOR, opts: Object.entries(MAGSPECS).map(([k, v]) => [k, v.short]) },
+  { modes: LOR, pFn: () => MAGSPECS[S.magSpec].about },
+  { slider: 'lorThick', label: 'Film thickness', min: 10, max: 150, step: 1, fmt: (v) => `${v} nm`, modes: LOR, ends: ['thin', '', 'thick'] },
+  { slider: 'lorFov', label: 'Field of view', min: 0.3, max: 10, log: true, fmt: (v) => `${v < 1 ? Math.round(v * 1000) + ' nm' : v.toFixed(2) + ' µm'}`, modes: LOR, note: 'Scroll on the image to zoom.' },
+  { buttons: [['lorReset', 'Saturate and relax']], modes: LOR, show: () => S.magSpec !== 'fege' },
   { slider: 'fov', label: 'Field of view', min: 1.5, max: 120, log: true, fmt: (v) => `${v.toFixed(1)} nm`, modes: 'tem stem 4d eds eels oah ilh', note: 'Drag the detector image to move the stage; scroll to zoom.' },
   { slider: 'tiltX', inv: 'tilt', label: 'Tilt α', min: -3, max: 3, step: 0.02, fmt: (v) => `${v.toFixed(2)}°`, modes: TILTABLE },
   { slider: 'tiltY', inv: 'tilt', label: 'Tilt β', min: -3, max: 3, step: 0.02, fmt: (v) => `${v.toFixed(2)}°`, ends: ['', 'zone axis', ''], modes: TILTABLE },
@@ -77,8 +87,8 @@ const CONTROLS = [
   { slider: 'dose', label: 'Electron dose', min: 0.5, max: 20000, log: true, fmt: (v) => `${Math.round(v).toLocaleString()} e⁻/Å²`, ends: ['cryo-gentle', '', 'brutal'] },
 
   { sec: 'The lenses' },
-  { chips: 'corrector', opts: [[false, 'Uncorrected'], [true, 'Aberration corrector']] },
-  { slider: 'cs', label: 'Spherical aberration Cₛ', dyn: () => S.corrector ? { key: 'csCor', min: -CORR_RANGE.cs, max: CORR_RANGE.cs, step: 0.5, fmt: (v) => `${v} µm` } : { key: 'csUnc', min: 0.5, max: 2.5, step: 0.05, fmt: (v) => `${v.toFixed(2)} mm` } },
+  { chips: 'corrector', modes: NOT_LOR, opts: [[false, 'Uncorrected'], [true, 'Aberration corrector']] },
+  { slider: 'cs', label: 'Spherical aberration Cₛ', modes: NOT_LOR, dyn: () => S.corrector ? { key: 'csCor', min: -CORR_RANGE.cs, max: CORR_RANGE.cs, step: 0.5, fmt: (v) => `${v} µm` } : { key: 'csUnc', min: 0.5, max: 2.5, step: 0.05, fmt: (v) => `${v.toFixed(2)} mm` } },
   { slider: 'df', label: 'Defocus', dyn: () => (S.corrector ? { min: -CORR_RANGE.df, max: CORR_RANGE.df, step: 0.1 } : S.spec === 'bio' ? { min: -4000, max: 500, step: 10 } : { min: -150, max: 150, step: 1 }), fmt: (v) => `${v > 0 ? '+' : ''}${v.toFixed(1)} nm`, ends: ['under', 'focus', 'over'], modes: 'tem stem 4d eds eels ronch oah ilh' },
   { buttons: [['optfocus', 'Optimal focus']], modes: 'tem stem 4d eds eels ronch oah ilh' },
   { chips: 'objAp', label: 'Objective aperture', modes: 'tem', opts: [['none', 'Open'], ['40', '40 µm'], ['20', '20 µm'], ['10', '10 µm'], ['df', 'Dark field'], ['zpp', 'Zernike phase plate']] },
@@ -99,6 +109,17 @@ const CONTROLS = [
   { slider: 'focalStep', label: 'Focal step', min: 0.5, max: 20, step: 0.5, fmt: (v) => `${v.toFixed(1)} nm`, modes: 'ilh', ends: ['fine', '', 'wide range'] },
   { buttons: [['refocus', 'Record a new series']], modes: 'ilh' },
   { p: 'The series is centered on the defocus set above. The dose is split between the images.', modes: 'ilh' },
+
+  { sec: 'Lorentz microscopy', modes: LOR },
+  { p: 'The objective lens is off, so its field does not magnetize the specimen; a weak Lorentz lens forms the image. Exciting the objective lens applies a field along the beam.', modes: LOR },
+  { slider: 'lorField', label: 'Objective-lens field', min: 0, max: 600, step: 5, fmt: (v) => `${v} mT`, modes: LOR, ends: ['off (field-free)', '', 'strong'] },
+  { chips: 'lorView', label: 'Show', modes: 'ltem', opts: [['fresnel', 'Fresnel'], ['foucault', 'Foucault'], ['tie', 'Induction (TIE)'], ['phase', 'Phase']] },
+  { slider: 'lorDf', label: 'Lorentz-lens defocus', min: -3000, max: 3000, step: 10, fmt: (v) => `${v > 0 ? '+' : ''}${v} µm`, modes: 'ltem', ends: ['under', 'focus', 'over'], show: () => S.lorView !== 'foucault' && S.lorView !== 'phase' },
+  { slider: 'lorDiv', label: 'Illumination divergence', min: 0.5, max: 30, log: true, fmt: (v) => `${v.toFixed(1)} µrad`, modes: 'ltem', ends: ['coherent', '', 'incoherent'] },
+  { chips: 'lorFouc', label: 'Aperture passes the beams deflected', modes: 'ltem', show: () => S.lorView === 'foucault', opts: [['+x', 'right'], ['-x', 'left'], ['+y', 'up'], ['-y', 'down']] },
+  { slider: 'lorApR', label: 'Foucault aperture', min: 2, max: 40, step: 0.5, fmt: (v) => `${v} µrad`, modes: 'ltem', show: () => S.lorView === 'foucault' },
+  { chips: 'lstemView', label: 'Show', modes: 'lstem', opts: [['color', 'Induction map'], ['x', 'Right − left'], ['y', 'Top − bottom'], ['sum', 'Sum (BF)']] },
+  { slider: 'lorAlpha', label: 'Lorentz probe semi-angle', min: 20, max: 3000, log: true, fmt: (v) => `${Math.round(v)} µrad`, modes: 'lstem', ends: ['wide probe, strong signal', '', 'fine probe, weak signal'] },
 
   { sec: 'Aberration corrector', modes: 'ronch' },
   { p: 'Tune on amorphous carbon: make the flat central "sweet spot" of the Ronchigram as large and round as possible. C1 and C3 are the defocus and Cₛ controls above.', modes: 'ronch' },
@@ -335,7 +356,7 @@ function refreshControls() {
   document.querySelectorAll('.exp').forEach((e) => e.classList.toggle('on', (e.dataset.exp === 'single' && !!sim.single) || (e.dataset.exp === 'tour' && !!scene.tour)));
   document.querySelectorAll('.modes button').forEach((b) => b.classList.toggle('on', b.dataset.mode === S.mode));
   document.querySelectorAll('.clarity button').forEach((b) => b.classList.toggle('on', b.dataset.v === S.clarity));
-  const singleOk = !['eds', 'eels', 'ilh'].includes(S.mode);
+  const singleOk = !['eds', 'eels', 'ilh', 'ltem', 'lstem'].includes(S.mode);
   const se = $('.exp[data-exp="single"]');
   if (se) se.classList.toggle('disabled', !singleOk);
   if ($('#infoTitle')) { renderInfo(); updateDetectorHeader(); }
@@ -399,6 +420,11 @@ function action(id, el) {
   if (id === 'exportData') exportData();
   if (id === 'exportProfile') download(new Blob([JSON.stringify(S.profile, null, 1)], { type: 'application/json' }), `instrument-profile-${S.profile.preset}.json`);
   if (id === 'restore') { sim.restoreSpecimen(); explainChange('restore'); }
+  if (id === 'lorReset') {
+    // saturate and relax: the vortex (or the Landau pattern) comes back with a random sense, and a random core
+    S.lorChir = Math.random() < 0.5 ? -1 : 1; S.lorPol = Math.random() < 0.5 ? -1 : 1;
+    sim.invalidate('magnet'); explainChange('lorReset');
+  }
   if (id === 'fresh') { S.cx += 6 * (Math.random() - 0.5); sim.freshArea(); sim.invalidate('stage'); explainChange('fresh'); }
   if (id === 'scramble') {
     const r = () => Math.random();
@@ -412,7 +438,7 @@ function action(id, el) {
   if (id === 'autotune') autoTune();
   if (id === 'resetView') scene.resetView();
   if (id === 'single') {
-    if (['eds', 'eels', 'ilh'].includes(S.mode)) return;
+    if (['eds', 'eels', 'ilh', 'ltem', 'lstem'].includes(S.mode)) return;
     sim.startSingle(!sim.single);
     refreshControls();
     explainChange('single');
@@ -529,6 +555,8 @@ function updateDetectorHeader() {
     oah: [`Off-axis hologram · ${({ holo: 'raw hologram', phase: 'reconstructed phase', amp: 'reconstructed amplitude', contour: 'phase contours' })[S.holoView]}`, 'Sideband selection & phase profile'],
     ilh: [`In-line holography · ${({ phase: 'exit-wave phase', amp: 'exit-wave amplitude', series: 'focal series' })[S.ilhView]}`, 'Focal series & convergence'],
     cbed: [S.cbedKind === 'lacbed' ? 'LACBED pattern' : 'CBED pattern', S.cbedKind === 'lacbed' ? 'HOLZ lines & strain sensitivity' : 'Kossel–Möllenstedt thickness fit'],
+    ltem: [`Lorentz TEM · ${({ fresnel: 'Fresnel image', foucault: 'Foucault image', tie: 'induction map (TIE)', phase: 'phase' })[S.lorView]}`, 'Back focal plane & magnetic state'],
+    lstem: [`Lorentz STEM · ${({ color: 'DPC induction map', x: 'DPC x', y: 'DPC y', sum: 'bright field' })[S.lstemView]}`, 'Segmented detector & probe'],
   }[S.mode];
   $('#detTitle').textContent = names[0];
   $('#secTitle').textContent = names[1];
@@ -592,11 +620,13 @@ function runOp(op) {
       else if (op.k === 'camL') { set('camL', Math.round(clamp(op.v, 80, 6000)), 'camL'); op.v = S.camL; }
       else if (op.k === 'alpha') { const k = S.mode === '4d' ? 'alpha4d' : 'alpha'; set(k, +clamp(op.v, 3, 40).toFixed(1), 'alpha'); op.v = S[k]; }
       else if (op.k === 'tiltX' || op.k === 'tiltY') { set(op.k, +clamp(op.v, -3, 3).toFixed(2), 'tilt'); op.v = S[op.k]; }
+      else if (lorSet(S, set, op)) refreshControls();
       else if (op.k === 'showLabels') set('showLabels', !!op.v);
       break;
     case 'chip':
       if (op.k === 'kV' && [80, 200, 300].includes(op.v)) chip('kV', op.v);
       else if (op.k === 'corrector') chip('corrector', !!op.v);
+      else if (op.k === 'magSpec' && MAGSPECS[op.v]) chip('magSpec', op.v);
       else if (op.k === 'holder' && HOLDERS[op.v]) chip('holder', op.v);
       else if (op.k === 'detPreset' && ['bf', 'abf', 'adf', 'haadf'].includes(op.v)) chip('detPreset', op.v);
       else if (op.k === 'eelsRange' && ['zlp', 'low', 'core', 'high'].includes(op.v)) { if (S.mode !== 'eels') setMode('eels'); chip('eelsRange', op.v); }
@@ -995,6 +1025,7 @@ function wire() {
   mainCv.addEventListener('pointerleave', () => { if (S.mode === '4d' && S.fdSel >= 0) { S.fdSel = -1; sim.version++; } });
   mainCv.addEventListener('wheel', (e) => {
     if (S.mode === 'diff') { e.preventDefault(); set('camL', clamp(S.camL * Math.pow(1.0015, -e.deltaY), 80, 2000), 'camL'); return; }
+    if (S.mode === 'ltem' || S.mode === 'lstem') { e.preventDefault(); set('lorFov', +clamp(S.lorFov * Math.pow(1.0015, e.deltaY), 0.3, 10).toFixed(3), 'lorFov'); return; }
     if (!['tem', 'stem', '4d', 'eds', 'eels'].includes(S.mode)) return;
     e.preventDefault();
     set('fov', clamp(S.fov * Math.pow(1.0015, e.deltaY), 1.5, 120), 'fov');
@@ -1118,7 +1149,7 @@ function frame(now) {
       lastVer = sim.version;
       lastDraw = now;
       if ((S.mode === 'tem' || S.mode === 'diff') && S.camera === 'screen') { scene.screenTex.image = mainCv; scene.screenTex.needsUpdate = true; }
-      if (((S.mode === 'tem' || S.mode === 'diff') && S.camera === 'ded') || ['ronch', 'cbed', 'oah', 'ilh'].includes(S.mode)) { scene.camTex.image = mainCv; scene.camTex.needsUpdate = true; }
+      if (((S.mode === 'tem' || S.mode === 'diff') && S.camera === 'ded') || ['ronch', 'cbed', 'oah', 'ilh', 'ltem', 'lstem'].includes(S.mode)) { scene.camTex.image = mainCv; scene.camTex.needsUpdate = true; }
       if (S.mode === '4d' && R2.layout.cbed) {
         const L = R2.layout.cbed;
         camCv.getContext('2d').drawImage(secCv, 0, 0, L.sz, L.sz, 0, 0, 256, 256);
@@ -1145,7 +1176,7 @@ function frame(now) {
       b.el.hidden = !vis;
       if (vis) b.el.textContent = b.c.pFn();
     }
-    if (['eds', '4d', 'eels', 'stem', 'ronch', 'cbed', 'oah', 'ilh'].includes(S.mode)) renderInfo();
+    if (['eds', '4d', 'eels', 'stem', 'ronch', 'cbed', 'oah', 'ilh', 'ltem', 'lstem'].includes(S.mode)) renderInfo();
     $('#status').textContent = `· ${fps} fps`;
   }
   requestAnimationFrame(frame);

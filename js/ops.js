@@ -2,13 +2,14 @@
 // preset. The exhibit calls these and then refreshes its controls; the headless scripting driver
 // (tools/temview-py) calls them directly, so a Python script sees the same instrument either way.
 import * as P from './physics.js';
+import { MAGSPECS } from './lorentz.js';
 import { CORR_RANGE } from './state.js';
 import { HOLDERS } from './holder.js';
 import { analyze } from './analyze.js';
 
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-export const MODES = ['tem', 'stem', '4d', 'diff', 'cbed', 'eds', 'eels', 'ronch', 'oah', 'ilh'];
-export const fam = (m) => (['tem', 'diff', 'oah', 'ilh'].includes(m) ? 'tem' : 'probe');
+export const MODES = ['tem', 'stem', '4d', 'diff', 'cbed', 'eds', 'eels', 'ronch', 'oah', 'ilh', 'ltem', 'lstem'];
+export const fam = (m) => (['tem', 'diff', 'oah', 'ilh', 'ltem'].includes(m) ? 'tem' : 'probe');
 const coreEdge = (spec) => (spec === 'sto' ? 462 : spec === 'si' ? 102 : spec === 'gr' ? 287 : spec === 'mof' ? 200 : spec === 'bio' ? 405 : 100);
 
 export function resetVdet(S, sim) {
@@ -67,6 +68,17 @@ export function modeState(S, sim, m) {
   return true;
 }
 
+// Lorentz settings (lorentz.js): numeric ranges [min, max, decimals] and the allowed values of the choices
+export const LOR_LIMITS = { lorDf: [-3000, 3000, 0], lorFov: [0.3, 10, 3], lorThick: [10, 150, 0], lorField: [0, 600, 0], lorDiv: [0.5, 30, 1], lorAlpha: [20, 3000, 0], lorApR: [2, 40, 1] };
+export const LOR_CHOICES = { lorView: ['fresnel', 'foucault', 'tie', 'phase'], lstemView: ['color', 'x', 'y', 'sum'], lorFouc: ['+x', '-x', '+y', '-y'] };
+// a Lorentz setting from a command, clamped; true if `op` was one
+export function lorSet(S, set, op) {
+  const L = LOR_LIMITS[op.k];
+  if (L) { set(op.k, +clamp(+op.v, L[0], L[1]).toFixed(L[2]), op.k); op.v = S[op.k]; return true; }
+  if (LOR_CHOICES[op.k]) { if (LOR_CHOICES[op.k].includes(op.v)) set(op.k, op.v, op.k); return true; }
+  return false;
+}
+
 // one setting; returns the invalidation key, or null if nothing changed
 export function setState(S, sim, key, v, inv = key) {
   if (S[key] === v) return null;
@@ -113,6 +125,14 @@ export function chipState(S, sim, key, v) {
     return 'det';
   }
   if (key === 'vdet') { S.vdet = v; resetVdet(S, sim); sim.invalidate('vdet'); return 'vdet'; }
+  // a magnetic specimen (Lorentz modes) comes with its usual field of view and film thickness
+  if (key === 'magSpec') {
+    const sp = MAGSPECS[v];
+    if (!sp) return null;
+    Object.assign(S, { magSpec: v, lorFov: sp.fov, lorThick: sp.thick, tiltX: 0, tiltY: 0 });
+    sim.invalidate('magSpec');
+    return 'magSpec';
+  }
   if (key === 'eelsRange') {
     S.eelsRange = v;
     // each preset is a dispersion and an offset, as a microscopist would set them
@@ -145,10 +165,11 @@ export function runOpState(S, sim, op) {
       else if (op.k === 'alpha') { const k = S.mode === '4d' ? 'alpha4d' : 'alpha'; set(k, +clamp(op.v, 3, 40).toFixed(1), 'alpha'); op.v = S[k]; }
       else if (op.k === 'tiltX' || op.k === 'tiltY') { set(op.k, +clamp(op.v, -3, 3).toFixed(2), 'tilt'); op.v = S[op.k]; }
       else if (op.k === 'thick') { set('thick', +clamp(op.v, 1, 500).toFixed(1), 'thick'); op.v = S.thick; }
+      else lorSet(S, set, op);
       return true;
     case 'chip':
       if (op.k === 'kV' && [80, 200, 300].includes(op.v)) set('kV', op.v, 'kV');
-      else if (['corrector', 'holder', 'detPreset', 'eelsRange', 'vdet'].includes(op.k)) chipState(S, sim, op.k, op.k === 'corrector' ? !!op.v : op.v);
+      else if (['corrector', 'holder', 'detPreset', 'eelsRange', 'vdet', 'magSpec'].includes(op.k)) chipState(S, sim, op.k, op.k === 'corrector' ? !!op.v : op.v);
       return true;
     case 'nudge': { const st = S.corrector ? 2 : S.spec === 'bio' ? 100 : 10; set('df', +clamp(S.df + op.d * st, ...dfLimits(S)).toFixed(1), 'df'); return true; }
     case 'zoom': set('fov', +clamp(S.fov * op.f, 1.5, 120).toFixed(2), 'fov'); return true;

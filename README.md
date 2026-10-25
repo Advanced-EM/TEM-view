@@ -8,7 +8,7 @@ An interactive transmission electron microscope in the browser, built as a small
 
 - **3D cutaway column:** gun, condensers, scan coils, objective, apertures, projector, fluorescent screen, direct electron detector, ADF/BF detectors, EDS detector, EELS prism. The beam path reconfigures for each mode.
 - **Six specimens:** gold nanoparticles on carbon, a Si/SiO₂ interface, a SrTiO₃ Σ5 grain boundary, the metal–organic framework **UiO-66**, and **graphene** (monolayer with a hole, a single Si dopant, a Stone–Wales defect, vacancies and a 5° twisted-bilayer moiré). Above ~86 kV the beam knocks carbon atoms out of graphene in TEM/STEM: watch holes nucleate and grow, then compare 60–80 kV. **UiO-66** (Zr₆ clusters + BDC linkers, Fm3̄m, a = 20.7 Å, viewed along [110], with a missing-cluster defect patch) is destroyed by radiolysis: the dose accumulates while the beam is on, the critical dose (~12 e⁻/Å² at 300 kV) falls as β² at lower voltage, and high-order diffraction spots fade first. It opens with low-dose settings and a *Move to a fresh area* button. **Proteins in ice**: apoferritin and ferritin (with its iron-oxide core) and a lipid vesicle in vitreous ice across a hole in a carbon film, set up as for single-particle cryo-EM (300 kV, no corrector, ~1.5 µm underfocus, ~30 e⁻/Å²). The proteins are weak phase objects, radiolysis destroys their finest detail after ~20 e⁻/Å² when cold, and the ice sublimes if the holder is warmed.
-- **Ten modes:** TEM, STEM, 4D-STEM, SAED, CBED/LACBED, EDS, EELS, Ronchigram/corrector tuning, and off-axis and in-line electron holography. Each detector image is computed from a real atomic model: phase-object wave optics with a full contrast-transfer function, aberrated probes, CBED patterns per probe position, Bragg diffraction with Kikuchi lines, Fano-limited X-ray spectra, and Drude plasmons with core-loss edges.
+- **Twelve modes:** TEM, STEM, 4D-STEM, SAED, CBED/LACBED, EDS, EELS, Ronchigram/corrector tuning, off-axis and in-line electron holography, and Lorentz TEM and Lorentz STEM for magnetic materials. Each detector image is computed from a real atomic model: phase-object wave optics with a full contrast-transfer function, aberrated probes, CBED patterns per probe position, Bragg diffraction with Kikuchi lines, Fano-limited X-ray spectra, and Drude plasmons with core-loss edges.
 - **Direct electron detector:** record images and patterns in counting mode instead of on the phosphor screen, and synthesize virtual BF/ABF/ADF/dark-field, **DPC**, **center-of-mass**, and live **ePIE ptychography** from the 4D dataset. The 4D data are simulated multislice (3 slices with Fresnel propagation), so single-slice ptychography shows thick-specimen artifacts, while **multislice ptychography** (MS-ePIE) fits them and reconstructs each slice in depth.
 - **Aberration correction:** a Ronchigram computed from the aberrated probe on amorphous carbon; tune C1, A1, B2, A2, C3, A3 by hand (with a π/4 flat-phase readout) or run Auto-tune. Residual aberrations propagate to every probe and image.
 - **CBED / LACBED:** two-beam dynamical disks with a live Kossel–Möllenstedt thickness fit, HOLZ lines that shift with lattice strain and voltage, and large-angle patterns whose lines break across the grain boundary.
@@ -22,6 +22,17 @@ An interactive transmission electron microscope in the browser, built as a small
   - *thermal effects*: hydrocarbon contamination desorbs from hot graphene and its vacancies heal; UiO-66 decomposes above ~720 K and proteins above ~315 K;
   - *drift*: each holder's own drift plus settling after insertion, cooling or a temperature step.
 - **Zernike phase plate** (TEM): a π/2 plate in the back focal plane turns −sin χ into cos χ, so weak phase objects show strong contrast in focus, with the characteristic halos below the cut-on frequency.
+- **Lorentz microscopy (magnetic materials):** the objective lens is off and a Lorentz lens images the specimen at micrometre fields of view. Specimens:
+  - a permalloy disc with a magnetic vortex;
+  - a permalloy rectangle with Landau flux-closure domains;
+  - an FeGe lamella whose state follows temperature and the objective-lens field along the beam: helical, skyrmion lattice, field-polarized, or paramagnetic above Tc.
+
+  The magnetic (Aharonov–Bohm) and electrostatic phases are computed from the magnetization and thickness. *Lorentz TEM*:
+  - Fresnel images at a chosen defocus and illumination divergence;
+  - Foucault images through a displaced aperture in the back focal plane, which is shown alongside;
+  - an induction map reconstructed by the transport-of-intensity equation from images at ±defocus.
+
+  *Lorentz STEM*: differential phase contrast on a four-segment detector, with the probe-size versus sensitivity trade-off and segment saturation.
 - **Electron holography:** *Off-axis*: a Möllenstedt biprism overlaps the object wave with a vacuum reference wave; the hologram's Fourier transform shows the center band and sidebands, and the selected sideband is reconstructed into amplitude, phase and phase contours, with optional numerical removal of the lens aberrations. Biprism voltage trades fringe spacing and overlap width against fringe contrast, and the phase precision (2π/N) follows from contrast and dose. *In-line*: a focal series is recorded and the exit wave is recovered by iterative focal-series reconstruction, with a live convergence curve; the focal range controls how well slowly varying phase is recovered.
 - **Results panel:** enlarge it in place (`X`) or open it in a separate window for a second screen.
 - **Digital twin, across all modalities:**
@@ -102,6 +113,7 @@ Drag the column to orbit and scroll to zoom. Keys `1`–`9` and `0` switch modes
 | `js/sim.js` | Per-mode signal computation, 4D acquisition, DPC, ptychography, spectrum-image accumulation |
 | `js/techniques.js` | Ronchigram & corrector, CBED/LACBED |
 | `js/holography.js` | Off-axis and in-line (focal-series) electron holography |
+| `js/lorentz.js` | Lorentz TEM (Fresnel, Foucault, TIE) and Lorentz STEM (DPC) of magnetic specimens |
 | `js/profile.js` | Instrument profile, presets, focal spread |
 | `js/state.js` | Default state and the keys a session stores |
 | `js/calibrate.js`, `js/calibui.js` | Thon-ring and zero-loss fits, file readers (.mrc, .npy, images), calibration dialog |

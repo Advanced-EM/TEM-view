@@ -53,6 +53,11 @@ export function collectData(sim, S) {
     arrays.focal_series = A(stack, [st.thumbs.length, c, c], 'intensity');
     if (st.rec) { arrays.exit_phase = A(st.rec.ph, [c, c], 'rad'); arrays.exit_amplitude = A(st.rec.amp, [c, c], 'relative'); }
     Object.assign(cal, { pixel_A: st.dx, defocus_A: st.dfs.slice(0, st.thumbs.length), iterations: st.it });
+  } else if ((m === 'ltem' || m === 'lstem') && sim.lor.disp) {
+    const d = sim.lor.disp, n = d.n, units = { image: 'intensity', phase: 'rad', induction_x: 'a.u.', induction_y: 'a.u.', dpc_x: 'segment difference / sum', dpc_y: 'segment difference / sum', dpc_sum: 'relative' };
+    for (const [k, v] of Object.entries(sim.lor.arrays())) arrays[k] = A(v, [n, n], units[k]);
+    Object.assign(cal, { pixel_A: d.dx, lorentz_deflection_urad: +(d.betaS * 1e6).toFixed(3), magnetic_state: d.info.state ?? null,
+      ...(m === 'ltem' ? { lorentz_defocus_um: S.lorDf, divergence_urad: S.lorDiv } : { probe_semi_angle_urad: S.lorAlpha, probe_fwhm_A: d.fwhm }) });
   } else if (sim.main) {
     arrays.image = A(sim.main.arr, [sim.main.h, sim.main.w], 'a.u.');
   }
