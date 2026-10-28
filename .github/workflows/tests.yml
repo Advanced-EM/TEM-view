@@ -15,7 +15,9 @@ jobs:
         with:
           python-version: "3.12"
       - name: JavaScript syntax
-        run: for f in js/*.js; do node --check "$f"; done
+        run: for f in js/*.js scanning/*.js; do node --check "$f"; done
+      - name: Scanning 1938–2002 physics
+        run: node scanning/test.mjs
       - name: Python package (headless simulator)
         run: |
           pip install -e "tools/temview-py[test,plot]"

@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Scanning 1938–2002</title>
+<meta name="description" content="Drive three scanning transmission electron microscopes: von Ardenne’s 1938 instrument with its film drum, Crewe’s 1970 field-emission STEM that first showed single atoms, and the 2002 aberration-corrected VG HB501 that went below one ångström.">
+<meta property="og:title" content="Scanning 1938–2002: from the first scan to single atoms">
+<meta property="og:description" content="Shrink the probe, light a field-emission tip, see single uranium atoms, and tune a corrector below one ångström.">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#06080a">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="scanning.css">
+</head>
+<body>
+
+<header class="top"><div class="wrap">
+  <a class="brand" href="#">Scanning <span>1938–2002</span></a>
+  <nav aria-label="Sections"><a href="#drive">Drive it</a><a href="#how">How it works</a><a href="#history">History</a><a class="out" href="../">Seeing with Electrons ↗</a></nav>
+</div></header>
+
+<main>
+  <div class="hero wrap">
+    <p class="eyebrow">Interactive exhibit · the scanning transmission electron microscope</p>
+    <h1>From the first scan to <em>single atoms</em></h1>
+    <p class="lede">A scanning microscope builds its picture one point at a time with a focused probe. Make that probe smaller and brighter and you see more. Drive three machines that did it: von Ardenne’s in 1938, Crewe’s in 1970 and the corrected VG HB501 in 2002.</p>
+  </div>
+
+  <section id="drive" class="lab" aria-label="The microscope">
+    <div class="wrap-wide">
+      <div class="missions" role="tablist" aria-label="Missions" id="missions"></div>
+
+      <div class="labgrid">
+        <div class="col col-stage">
+          <div class="stage" id="stage" aria-label="3D model of the microscope. Drag to orbit, click a part to read about it.">
+            <div class="tip" id="tip" hidden></div>
+            <p class="badge" id="modelNote"></p>
+          </div>
+          <div class="toolbar">
+            <button class="pill" id="cutaway" aria-pressed="false">Cutaway</button>
+            <button class="pill" id="spin" aria-pressed="true">Turntable</button>
+          </div>
+          <article class="note" id="note" aria-live="polite"></article>
+        </div>
+
+        <div class="col col-screen">
+          <div class="viewer">
+            <div class="window" id="window">
+              <canvas id="screen" width="512" height="512" aria-label="The scanned image, building up line by line"></canvas>
+              <div class="ov tl" id="ovView"></div>
+              <div class="ov tr" id="ovProbe"></div>
+              <div class="ov bl"><span class="bar" id="scaleBar"></span><span id="scaleTxt"></span></div>
+              <div class="ov br" id="ovFov"></div>
+              <div class="ov msg" id="ovMsg"></div>
+              <div class="progress" id="progress"><i id="progBar"></i></div>
+            </div>
+            <div class="viewsel seg" role="group" aria-label="What the screen shows" id="viewsel" hidden>
+              <button data-view="image" aria-pressed="true">Scanned image</button>
+              <button data-view="ronch" aria-pressed="false">Ronchigram</button>
+            </div>
+            <p class="hint" id="viewHint">Drag the image to move the specimen · scroll it to change the magnification</p>
+          </div>
+
+          <div class="card mission" id="mission">
+            <div class="mhead"><p class="eyebrow" id="mYear"></p><h2 id="mTitle"></h2></div>
+            <p class="mintro" id="mIntro"></p>
+            <ol class="steps" id="steps"></ol>
+            <p class="coach" id="coach"></p>
+            <div class="mfoot"><button class="link" id="restart">Start this mission again</button><button class="link" id="hintBtn">Show me how</button></div>
+          </div>
+
+          <div class="card budget" id="budget">
+            <div class="bhead"><h3>What limits the probe</h3><p><span id="dNow">—</span><small>probe size (FWHM of the core)</small></p></div>
+            <div id="bRows"></div>
+            <p class="bnote" id="bNote"></p>
+          </div>
+        </div>
+
+        <div class="col col-panel">
+          <div class="panel" id="panel"></div>
+        </div>
+      </div>
+
+      <div class="plates" id="platesWrap">
+        <div class="phead"><h3>Micrographs</h3><p class="muted" id="platesInfo">No recordings yet. Press Record to keep the next full frame.</p></div>
+        <div class="platelist" id="plates"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="how"><div class="wrap">
+    <h2>How it <em>works</em></h2>
+    <p class="intro">A scanning transmission microscope focuses the beam into a probe and moves it across a thin specimen; detectors below (or, in the HB501, above) record what comes through at each point. Everything you see is computed from these rules each frame.</p>
+    <div class="features">
+      <article><span class="tag">Brightness</span><h3>Current costs size</h3><p>A source of brightness B puts at most <span class="eq">I = B · (π d²/4) · (π α²)</span> into a probe of size d and semi-angle α. Halve the probe and the current falls by four. A hot tungsten filament (~10⁴ A/cm²·sr) cannot fill a nanometre probe; a cold field emitter (~10⁸–10⁹) can.</p></article>
+      <article><span class="tag">Diffraction</span><h3>A wider cone, a smaller spot</h3><p>The probe can be no smaller than the diffraction disc of its aperture, about <span class="eq">0.5 λ/α</span>. At 120 kV, λ = 3.35 pm, so a 30 mrad cone allows a spot of about 0.6 Å.</p></article>
+      <article><span class="tag">Aberrations</span><h3>The flat region</h3><p>Rays at larger angles are focused too strongly by spherical aberration. Only within the angle where the phase error stays below π/4 do the waves add up into a sharp core; the rest of the current spreads into a halo. Defocus and astigmatism shrink that angle; the corrector widens it.</p></article>
+      <article><span class="tag">Z-contrast</span><h3>Heavy atoms shine</h3><p>Electrons that pass close to a nucleus are scattered to high angles, roughly as <span class="eq">Z^1.7</span>. An annular detector that collects only those makes a uranium atom (Z = 92) about a hundred times brighter than a carbon atom (Z = 6).</p></article>
+      <article><span class="tag">Ronchigram</span><h3>Seeing the aberrations</h3><p>With the probe focused near a thin amorphous film and the scan stopped, the detector plane shows a shadow image. Where the aberration phase is flat, the film is magnified so much that it looks smooth. Tuning a corrector means making that smooth centre as wide as possible.</p></article>
+      <article><span class="tag">Scanning</span><h3>Time is part of the image</h3><p>Each pixel is recorded at a different moment. Slow scans give more electrons per pixel, so less noise, but any drift during the frame shears and smears the picture. In 1938, one frame took many minutes on a film drum.</p></article>
+    </div>
+  </div></section>
+
+  <section id="history"><div class="wrap split">
+    <div>
+      <h2>Three probes, <em>three limits</em></h2>
+      <p class="intro">Each instrument removed the limit of the one before: von Ardenne showed that scanning works but had too dim a source; Crewe’s field-emission gun made the probe bright enough for single atoms; the aberration corrector made it smaller than an atom.</p>
+      <p class="intro">There was no screen to watch in 1938: the probe crossed the specimen while photographic film on a drum turned in step with it, and the picture appeared only when the film was developed.</p>
+    </div>
+    <ol class="timeline">
+      <li><b>1935</b><span>Max Knoll scans an electron beam across a specimen to form an image: the principle of the scanning electron microscope.</span></li>
+      <li><b>1938</b><span>Manfred von Ardenne builds a scanning microscope working in transmission, the first STEM, with a demagnified probe and film recording on a drum.</span></li>
+      <li><b>Late 1960s</b><span>Albert Crewe’s group at the University of Chicago develops a practical cold field-emission gun.</span></li>
+      <li><b>1970</b><span>Crewe, Wall and Langmore report images of single uranium and thorium atoms on thin carbon films.</span></li>
+      <li><b>1970s</b><span>Vacuum Generators (VG) builds dedicated STEMs, with the gun at the bottom and the beam going up.</span></li>
+      <li><b>1997–98</b><span>Working aberration correctors are demonstrated: Krivanek and Dellby for STEM in Cambridge, Haider, Rose and co-workers for TEM.</span></li>
+      <li><b>2002</b><span>Batson, Dellby and Krivanek report a probe smaller than one ångström on IBM’s corrected VG HB501 and resolve silicon dumbbells 0.78 Å apart.</span></li>
+      <li><b>2010</b><span>Corrected STEMs identify single atoms by both their scattering and their energy-loss spectra, atom by atom.</span></li>
+    </ol>
+  </div></section>
+</main>
+
+<footer><div class="wrap">
+  <p>Sources: M. von Ardenne, “Das Elektronen-Rastermikroskop”, <i>Z. Physik</i> 109, 553 (1938) and <i>Z. techn. Physik</i> 19, 407 (1938); A. V. Crewe, J. Wall and J. Langmore, “Visibility of single atoms”, <i>Science</i> 168, 1338 (1970); P. E. Batson, N. Dellby and O. L. Krivanek, “Sub-ångstrom resolution using aberration corrected electron optics”, <i>Nature</i> 418, 617 (2002). The columns are schematic and the instrument numbers are representative of each class of machine, not measurements of the originals; the physics is simplified so that it runs live in a browser.</p>
+  <p class="sitefoot">Part of <b>Seeing with Electrons</b> · <a href="../">TEM-view</a> · <a href="../ruska/">Ruska 1933</a> · <a href="../kids/">TEM-view Kids</a></p>
+</div></footer>
+
+<dialog id="result" aria-labelledby="rTitle">
+  <form method="dialog" class="rwrap">
+    <button class="close" aria-label="Close">×</button>
+    <p class="eyebrow" id="rEyebrow"></p>
+    <h2 id="rTitle"></h2>
+    <div class="rgrid">
+      <img id="rPlate" alt="Your recorded frame">
+      <div><p id="rText"></p></div>
+    </div>
+    <div class="row"><button class="btn solid" id="rNext" value="next">Next mission</button><button class="btn" value="stay">Keep exploring</button></div>
+  </form>
+</dialog>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module" src="main.js"></script>
+</body>
+</html>
