@@ -423,7 +423,8 @@ function complete(q, img, stars) {
   $('wStars').textContent = stars ? '⭐'.repeat(stars) + '☆'.repeat(3 - stars) : '⭐⭐⭐';
   const cf = $('confetti'); cf.innerHTML = Array.from({ length: 40 }, (_, i) => `<i style="--x:${Math.random() * 100}%;--d:${(Math.random() * 0.8).toFixed(2)}s;--c:${['#ff6b9a', '#ffd23f', '#3b82f6', '#22c55e', '#8b5cf6', '#ff8a1f'][i % 6]};--r:${Math.random() * 360}deg"></i>`).join('');
   const nx = current(); $('winDlg').querySelector('.go').textContent = tr(nx ? ['Next mission ▶', 'Siguiente misión ▶'] : ['Keep exploring ▶', 'Sigue explorando ▶']);
-  $('winDlg').showModal(); say(q.win, 'wow'); showQuest();
+  // a mission finished by a snap: the picture still goes into the sticker book first
+  $('winDlg').showModal(); if (img) say(cat(T.snapped, q.win), 'wow', [T.snapped, q.win]); else say(q.win, 'wow'); showQuest();
 }
 $('winDlg').addEventListener('close', () => { const q = current(); if (q) { say(cat(nextMission(q.title), q.text), 'happy', [nextMission(q.title), q.text]); if (q.spec && SP[q.spec] !== S.si) setSample(SP[q.spec], true); showQuest(); } });
 
@@ -452,9 +453,10 @@ function snap() {
   const q = current();
   if (q?.snap && SP[q.spec] === S.si) {
     const r = q.snap();
-    if (r === true && sh < 0.6) { say(T.snapBlurry, 'worry'); return; }
+    if (r === true && sh < 0.6) { say(cat(T.snapped, T.snapBlurry), 'worry', [T.snapped, T.snapBlurry]); return; }
     if (r === true) { complete(q, img, stars); return; }
-    say(r === 'zoom' ? T.snapZoom : T.snapAim);
+    const fb = r === 'zoom' ? T.snapZoom : T.snapAim;
+    say(cat(T.snapped, fb), 'happy', [T.snapped, fb]);
     return;
   }
   const tip = stars < 3 ? (sh <= 0.8 ? T.tipFocus : T.tipLight) : '';

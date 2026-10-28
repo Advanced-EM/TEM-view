@@ -1,5 +1,5 @@
-// Cache-busting: stamp a version onto every module, the stylesheet and the entry script in index.html,
-// so browsers fetch fresh code after each deploy. Run before committing a release:
+// Cache-busting: stamp a version onto every module, the stylesheet and the entry script in index.html and in
+// kids/index.html (Electron Explorer), so browsers fetch fresh code after each deploy. Run before committing a release:
 //   node tools/stamp.mjs
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 
@@ -13,4 +13,14 @@ html = html.replace(/<script type="importmap">[\s\S]*?<\/script>/, `<script type
 html = html.replace(/href="css\/style\.css(\?v=\w+)?"/, `href="css/style.css?v=${v}"`);
 html = html.replace(/src="js\/main\.js(\?v=\w+)?"/, `src="js/main.js?v=${v}"`);
 writeFileSync(new URL('index.html', root), html);
-console.log(`stamped v=${v} on ${mods.length} modules`);
+
+// Electron Explorer: an import map versions its modules (they import each other by relative path)
+const kmods = readdirSync(new URL('kids/', root)).filter((f) => f.endsWith('.js')).sort();
+let kids = readFileSync(new URL('kids/index.html', root), 'utf8');
+const kmap = `<script type="importmap">\n${JSON.stringify({ imports: Object.fromEntries(kmods.map((f) => [`./${f}`, `./${f}?v=${v}`])) }, null, 1)}\n</script>`;
+kids = /<script type="importmap">[\s\S]*?<\/script>/.test(kids) ? kids.replace(/<script type="importmap">[\s\S]*?<\/script>/, kmap)
+  : kids.replace(/<script type="module" src="main\.js/, `${kmap}\n<script type="module" src="main.js`);
+kids = kids.replace(/href="kids\.css(\?v=\w+)?"/, `href="kids.css?v=${v}"`);
+kids = kids.replace(/src="main\.js(\?v=\w+)?"/, `src="main.js?v=${v}"`);
+writeFileSync(new URL('kids/index.html', root), kids);
+console.log(`stamped v=${v} on ${mods.length} modules and ${kmods.length} kids modules`);

@@ -235,7 +235,7 @@ details summary { cursor: pointer; font-weight: 800; margin: 8px 0; }
   .cbody { grid-template-columns: 1fr 1fr; } .knobs { grid-column: 1 / -1; gap: 6px; }
   .kpm { flex-wrap: wrap; justify-content: center; gap: 4px 10px; } .kpm .klabel { order: -1; width: 100%; }
   .readouts { grid-template-columns: 1fr; }
-  .brand { font-size: 1.35rem; } .tools .chip span { display: none; }
+  .brand { font-size: 1.35rem; } .tools .chip span:not(#voiceIcon) { display: none; }
   .porthole { padding: 12px; }
   .keys { columns: 1; } .cgrid2 { grid-template-columns: 1fr; }
 }
