@@ -1,0 +1,48 @@
+// What each part of the three columns and each control does. { title, sub, body }.
+// The columns are schematic: the parts are where the physics puts them, not measured drawings of the machines.
+
+export const PARTS = {
+  // 1938
+  gun38: { title: 'Thermionic gun', sub: '1938 · hot tungsten filament', body: 'A hot tungsten filament boils off electrons, accelerated to about 23 kV. Its brightness, about 10⁴ A/cm²·sr, is the limit of the whole instrument: to put a fine probe on the specimen, the lenses must shrink the source thousands of times, and almost all its current is lost on the way.' },
+  lens38a: { title: 'First demagnifying lens', sub: 'Shrinks the source', body: 'Two lenses in series form a reduced image of the electron source: the probe. More demagnification gives a smaller probe but much less current, since the current falls with the square of the probe size.' },
+  column38: { title: 'Column', sub: 'Beam tube', body: 'The beam tube between the lenses, kept at high vacuum by diffusion pumps. Scan coils near the final lens sweep the probe across the specimen, line by line.' },
+  lens38b: { title: 'Final probe-forming lens', sub: 'Focuses the probe', body: 'The last lens focuses the probe onto the specimen. Its spherical aberration, millimetres to centimetres in lenses of the 1930s, sets how wide a cone of rays can be used before the probe blurs.' },
+  specimen38: { title: 'Specimen', sub: 'Crystals on a thin film', body: 'The thin specimen sits just below the final lens. The probe crosses it point by point; electrons that are not scattered go straight on to the film.' },
+  detector38: { title: 'Transmitted-beam aperture', sub: 'Bright field', body: 'Only the electrons that pass the specimen without being deflected reach the film: a bright-field signal. Crystals scatter electrons out of it, so they record as less exposed.' },
+  drum: { title: 'Film drum', sub: 'Mechanical recording', body: 'There was no electronic display: the picture was recorded on photographic film wound on a drum that turned and advanced in step with the scan. One picture took many minutes, and any drift of the specimen or wobble of the mechanics during that time went straight into the image.' },
+  bench: { title: 'Bench', sub: '', body: 'The column stood on a laboratory bench in von Ardenne’s private laboratory in Berlin-Lichterfelde. The instrument was destroyed in an air raid during the Second World War.' },
+  // 1970
+  gun70: { title: 'Cold field-emission gun', sub: '1970 · a needle in ultra-high vacuum', body: 'A tungsten needle with a tip radius of about 100 nm. A few kilovolts on an extraction anode pull electrons straight out of the cold metal by quantum tunnelling. The source is only a few nanometres across and about 10⁴ times brighter than a hot filament. It needs a vacuum of 10⁻⁹ mbar or better: gas molecules landing on the tip make the emission decay and flicker, so the tip is flashed clean now and then.' },
+  column70: { title: 'Ion pumps', sub: 'Ultra-high vacuum', body: 'Ion pumps and a bake-out keep the gun at ultra-high vacuum. Getting there takes a day of baking; losing it stops the instrument.' },
+  lens70: { title: 'Probe-forming lens', sub: 'About half a nanometre', body: 'With the bright field-emission source, the lens can make a probe about half a nanometre across and still carry picoamperes: enough to see single heavy atoms.' },
+  specimen70: { title: 'Specimen', sub: 'Atoms on a thin carbon film', body: 'Heavy atoms on a carbon film only a couple of nanometres thick, so that the film itself scatters as little as possible.' },
+  detector70: { title: 'Annular dark-field detector', sub: 'Elastic scattering', body: 'A ring-shaped detector collects electrons scattered to high angles by the nuclei. Heavy atoms scatter far more strongly (about Z^1.7), so uranium shines against the carbon: Z-contrast.' },
+  spectrometer70: { title: 'Energy-loss spectrometer', sub: 'Inelastic scattering', body: 'Electrons that passed through the hole in the annular detector go through a spectrometer, which separates those that lost energy. Crewe’s group used the ratio of elastic to inelastic signal: film thickness affects both, so it cancels, and heavy atoms stand out more cleanly.' },
+  stand70: { title: 'Stand', sub: 'University of Chicago', body: 'Albert Crewe’s group built field-emission STEMs at the University of Chicago. In 1970, Crewe, Wall and Langmore reported the first images of single atoms.' },
+  // 2002
+  gun02: { title: 'Cold field-emission gun', sub: 'At the bottom', body: 'In VG’s dedicated STEMs, the gun sits at the bottom and the beam travels up. With nothing heavy at the top, the column is mechanically stable, and the specimen and detectors are easy to reach from above. Nion’s microscopes keep this layout today.' },
+  condenser02: { title: 'Condenser lenses', sub: 'Probe current', body: 'The condensers set how strongly the source is demagnified, and so the trade between probe current and probe size.' },
+  corrector02: { title: 'Aberration corrector', sub: 'Quadrupoles and octupoles', body: 'A stack of quadrupole and octupole lenses gives the beam a spherical aberration of the opposite sign to the objective’s, so the two cancel. Without it, aberrations limited the probe to about 2 Å; with it, the cone of rays can open to 30 mrad and more, and the probe shrinks below 1 Å. Tuning it means reading the Ronchigram.' },
+  objective02: { title: 'Objective lens', sub: 'Probe-forming', body: 'The strongest lens, with the specimen inside its field. Its own spherical aberration is what the corrector cancels.' },
+  specimen02: { title: 'Specimen', sub: 'Silicon along [112]', body: 'Columns of silicon atoms 0.78 Å apart in projection: the test of a sub-ångström probe.' },
+  detector02: { title: 'Detectors', sub: 'Above the specimen', body: 'Annular dark-field and bright-field detectors sit above the specimen, since the beam travels upwards.' },
+  eels02: { title: 'Energy-loss spectrometer', sub: 'At the very top', body: 'The spectrometer on top analyses the energy each electron lost, for chemistry atom by atom.' },
+  cabinet02: { title: 'The VG HB501, upside down', sub: 'IBM, 2002', body: 'At IBM’s T. J. Watson Research Center, Philip Batson, with Niklas Dellby and Ondrej Krivanek of Nion, fitted a quadrupole-octupole corrector to a VG HB501 STEM. In 2002 it produced the first images with a probe smaller than one ångström.' },
+};
+
+export const CONTROLS = {
+  hv: { title: 'High voltage', sub: 'Electron energy', body: 'Higher voltage gives a shorter electron wavelength and a brighter gun, so a smaller, more intense probe. In 1938 it was a few tens of kilovolts.' },
+  filament: { title: 'Filament / emission', sub: 'Source', body: 'How hard the gun is driven. A hotter filament emits more, but it is the brightness, not the total current, that sets how much can be squeezed into a fine probe.' },
+  demag: { title: 'Condenser (demagnification)', sub: 'Probe size against current', body: 'Shrinks the image of the source onto the specimen. Each doubling of the demagnification makes the geometric probe half as big and cuts its current by four.' },
+  alpha: { title: 'Probe aperture', sub: 'Convergence semi-angle α', body: 'A wider cone of rays makes a smaller diffraction-limited spot (about 0.5 λ/α) and carries more current, but outer rays suffer more aberration. The best aperture balances the two; a corrector moves the balance far out.' },
+  focus: { title: 'Focus', sub: 'Probe defocus', body: 'Puts the narrowest part of the probe in the specimen. Out of focus, outer rays land beside the core: the core keeps less of the current, contrast fades first, then the image blurs.' },
+  stig: { title: 'Stigmator', sub: 'Two-fold astigmatism', body: 'Astigmatism makes the probe a line that flips by 90° through focus. The stigmator cancels it: drag until the image is sharp in every direction.' },
+  frame: { title: 'Scan speed', sub: 'Time per frame', body: 'A slower scan gives more electrons per pixel, so less noise, but drift has longer to move the specimen during the frame.' },
+  fov: { title: 'Magnification', sub: 'Field of view', body: 'The area the probe scans. Fewer nanometres per pixel shows finer detail, as long as the probe is smaller than a pixel.' },
+  detector: { title: 'Detector', sub: 'What is recorded', body: 'Bright field: the unscattered beam. Annular dark field: electrons scattered to high angles, bright for heavy atoms (Z-contrast). Ratio: elastic over inelastic signal, Crewe’s trick to cancel film-thickness variations.' },
+  vacuum: { title: 'Vacuum', sub: 'Pumps and bake-out', body: 'A field-emission tip needs ultra-high vacuum. Pump, bake, and wait for the gauge to fall below 10⁻⁹ mbar before switching on the extraction voltage.' },
+  flash: { title: 'Flash the tip', sub: 'Clean the emitter', body: 'A short current pulse heats the tip and drives off adsorbed gas. The emission jumps back up, then slowly decays again as gas returns.' },
+  extract: { title: 'Extraction voltage', sub: 'Field emission', body: 'A few kilovolts between the tip and the first anode pull electrons out of the cold metal by tunnelling. More voltage, more current, up to the point where the tip becomes unstable.' },
+  corrector: { title: 'Corrector', sub: 'C1, A1, C3', body: 'The corrector’s settings: defocus C1, two-fold astigmatism A1, and the residual spherical aberration C3. Tune them on the Ronchigram until its flat centre is as wide as the aperture.' },
+  record: { title: 'Record', sub: 'Keep a frame', body: 'Records the next full frame: on film in 1938, as a digital image later.' },
+};
