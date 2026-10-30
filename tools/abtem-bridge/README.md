@@ -1,5 +1,7 @@
 # temview-abtem: TEM-view → abTEM bridge
 
+Copyright © 2026 by Northwestern University. All Rights Reserved.
+
 Run what the TEM-view microscope is showing as an **abTEM** simulation (Madsen & Susi,
 [Open Research Europe 1, 24 (2021)](https://doi.org/10.12688/openreseurope.13015.2)). abTEM is a widely used,
 peer-reviewed open-source multislice code. The bridge returns:

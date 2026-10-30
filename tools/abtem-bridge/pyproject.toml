@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Run TEM-view's microscope state as an abTEM multislice simulation"
 requires-python = ">=3.11"
 # This package imports abTEM (GPL-3.0-or-later); see README "Licensing" before distributing it.
-license = { text = "To be decided with the abTEM authors (GPL-3.0-or-later compatible)" }
+license = { text = "Copyright © 2026 by Northwestern University. All Rights Reserved. License to be decided with the abTEM authors (GPL-3.0-or-later compatible)." }
 dependencies = ["abtem>=1.0.11", "ase>=3.23", "numpy", "scipy"]
 
 [project.optional-dependencies]

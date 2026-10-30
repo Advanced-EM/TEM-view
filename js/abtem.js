@@ -1,3 +1,4 @@
+// Copyright © 2026 by Northwestern University. All Rights Reserved.
 // Bridge to abTEM (Madsen & Susi, doi:10.12688/openreseurope.13015.2): send the microscope's current state to
 // a reference multislice simulation and get the result back in TEM-view's own data format.
 //

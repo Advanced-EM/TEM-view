@@ -2,6 +2,8 @@
 
     from temview_abtem import simulate, write_npz
     write_npz(simulate(request), "result.npz")
+
+Copyright © 2026 by Northwestern University. All Rights Reserved.
 """
 from .request import FORMAT, RequestError, validate
 from .simulate import CITATION, simulate, to_npz_bytes, write_npz
