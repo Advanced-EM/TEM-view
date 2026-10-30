@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// Copyright © 2026 by Northwestern University. All Rights Reserved.
 // temview-mcp: an MCP server that lets an AI agent (an emskills agent, Claude, …) use the TEM-view digital twin.
 //
 //   Live:      the exhibit (browser) connects to ws://127.0.0.1:8790 after the visitor clicks "Connect agent".

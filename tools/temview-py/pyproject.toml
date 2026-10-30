@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Script the TEM-view electron microscope simulator from Python: headless, or driving an open exhibit."
 readme = "README.md"
 requires-python = ">=3.9"
-license = { text = "All rights reserved; license to be decided. See LICENSE in the repository." }
+license = { text = "Copyright © 2026 by Northwestern University. All Rights Reserved. License to be decided; see LICENSE in the repository." }
 dependencies = ["numpy>=1.22"]
 
 [project.optional-dependencies]

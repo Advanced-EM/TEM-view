@@ -155,4 +155,6 @@ Drag the column to orbit and scroll to zoom. Keys `1`–`9` and `0` switch modes
 
 ## License
 
-All rights reserved while the licenses for the software, documentation, hardware and firmware are decided. See [LICENSE](LICENSE).
+Software: Copyright © 2026 by Northwestern University. All Rights Reserved.
+
+No license is granted while the licenses for the software, documentation, hardware and firmware are decided. See [LICENSE](LICENSE).

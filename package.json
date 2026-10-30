@@ -4,6 +4,7 @@
   "description": "Seeing with Electrons (TEM-view): a physics-based transmission electron microscope simulator and digital twin. The js/ modules run in browsers and in Node.",
   "type": "module",
   "license": "SEE LICENSE IN LICENSE",
+  "author": "Northwestern University",
   "repository": "github:Advanced-EM/TEM-view",
   "homepage": "https://advanced-em.github.io/TEM-view/",
   "files": ["js/", "tools/headless.mjs", "tools/temview-mcp/server.mjs", "tools/temview-mcp/package.json"],

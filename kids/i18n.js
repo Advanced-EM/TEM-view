@@ -41,7 +41,7 @@ const ES = {
   g3: '<b>Grados 6-8:</b> células y virus (<i>MS-LS1-1</i>); el grafeno como una estructura hecha de átomos (<i>MS-PS1-1</i>); el concepto transversal <i>Escala, proporción y cantidad</i>.',
   g4: '<b>Grados 9-12:</b> por qué enfocar es más difícil con mucho zoom, por qué el brillo causa daño y por qué la imagen "real" es gris. Después, pasen al <a href="../">simulador completo</a>.',
   teach2: 'En un stand o un museo, añade <code>?kiosk</code> a la dirección: la exhibición vuelve a empezar después de tres minutos sin que nadie la toque. Funciona con mouse, pantalla táctil, teclado, control de videojuegos o la <a href="../console/">Consola TEM-view</a>. Las muestras están dibujadas a escala con formas sencillas; no son imágenes reales grabadas.',
-  foot: 'Parte de <b>Seeing with Electrons</b> · <a href="../">TEM-view</a> · <a href="../ruska/">Ruska 1933</a>',
+  foot: 'Parte de <b>Seeing with Electrons</b> · <a href="../">TEM-view</a> · <a href="../ruska/">Ruska 1933</a><br>Copyright © 2026 by Northwestern University. All Rights Reserved.',
   yourPics: 'Tus fotos', noStickers: 'Todavía no hay stickers. ¡Presiona <b>FOTO</b> para tomar una!', done: '¡Misión cumplida!', close: 'Cerrar',
 };
 const EN = new Map();
