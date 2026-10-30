@@ -77,7 +77,7 @@ export const DE = {
   'spec.rec': 'Aufnahme', 'spec.recv': 'Photographische Platten in einer Kassette im Vakuum; Fenster aus 6–10 mm Bleiglas gegen Röntgenstrahlen',
   'spec.vac': 'Vakuum', 'spec.vacv': 'Vorpumpe und Quecksilber-Diffusionspumpe',
   'foot.1': 'Quellen: E. Ruska, „Über Fortschritte im Bau und in der Leistung des magnetischen Elektronenmikroskops“, <i>Z. Physik</i> 87, 580–602 (1934); E. Ruska, <a href="https://www.nobelprize.org/uploads/2018/06/ruska-lecture.pdf">Nobelvortrag</a>, 8. Dezember 1986. Die Säule ist eine Simulation: Ihre Geometrie und die Röhre von 1931 sind schematisch, und die Physik ist vereinfacht, damit sie live im Browser läuft.',
-  'foot.2': 'Teil von <b>Seeing with Electrons</b> · <a href="../">TEM-view</a> · <a href="../kids/">TEM-view Kids</a> · <a href="../scanning/">Scanning 1938–2002</a>',
+  'foot.2': 'Teil von <b>Seeing with Electrons</b> · <a href="../">TEM-view</a> · <a href="../kids/">TEM-view Kids</a> · <a href="../scanning/">Scanning 1938–2002</a><br>Copyright © 2026 by Northwestern University. All Rights Reserved.',
   'r.next': 'Nächste Mission', 'r.stay': 'Weiter erkunden',
   'c.close': 'Schließen',
   'aria:stage': '3D-Modell des Mikroskops. Ziehen zum Drehen, Teil anklicken zum Lesen.',

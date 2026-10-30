@@ -2,6 +2,8 @@
   "name": "temview-mcp",
   "version": "0.1.0",
   "private": true,
+  "license": "UNLICENSED",
+  "author": "Northwestern University",
   "description": "MCP server that lets an AI agent drive the TEM-view digital twin: live in the exhibit, or headless.",
   "type": "module",
   "bin": {
