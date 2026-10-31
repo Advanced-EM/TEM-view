@@ -15,6 +15,8 @@ const EXAMPLES = [
   ['through_focus.py', 'Through-focus series'],
   ['stem_detectors.py', 'STEM: compare detectors'],
   ['auto_focus_stig.py', 'Test automation: auto focus and stigmation'],
+  ['megalibrary_screen.py', 'High-throughput screen of a nanoparticle megalibrary'],
+  ['xyz_structure.py', 'Your own structure: load an XYZ file'],
 ];
 const store = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch {} return null; };
 const esc = (t) => String(t).replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' })[c]);

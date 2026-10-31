@@ -158,3 +158,33 @@ def test_lorentz_stem_dpc_saturates_with_a_small_probe_angle(tem):
     assert mag(strong) > 0.9 and mag(weak) < 0.15
     assert strong.calibration["probe_fwhm_A"] > weak.calibration["probe_fwhm_A"]
     tem.set(mode="tem")
+
+
+def test_megalibrary_goto_and_truth(tem):
+    lay = tem.library()
+    assert lay["particles"] == [1000, 1000] and lay["pitch_um"] == 1
+    r = tem.goto(123, 456)
+    assert tem.state()["specimen"] == "lib" and r["nearest_particle"] == [123, 456]
+    t = tem.particle(123, 456)
+    assert 15 <= t["diameter_nm"] <= 25 and abs(sum(t["composition"].values()) - 1) < 1e-3
+    # centre on the true particle: EDS sees its elements, and only its elements among the metals
+    s = tem.state()["stage_um"]
+    tem.move(dx_nm=(t["center_um"][0] - s[0]) * 1000, dy_nm=(t["center_um"][1] - s[1]) * 1000)
+    tem.set(mode="eds", fov_nm=40)
+    a = tem.acquire()
+    metals = {k[4:] for k in a.arrays if k.startswith("map_")} - {"Si", "N"}
+    assert metals == set(t["composition"]) if t["present"] else metals == set()
+    with pytest.raises(TemviewError, match="outside the library"):
+        tem.goto(1000, 0)
+
+
+def test_load_xyz(tem):
+    xyz = "4\ntest\nAu 0 0 0\nAu 2.04 2.04 0\nPd 2.04 0 2.04\nO 0 2.04 2.04\n"
+    r = tem.load_xyz(xyz, "tiny.xyz")
+    assert r["atoms"] == 4 and set(r["elements"]) == {"Au", "Pd", "O"}
+    assert tem.state()["specimen"] == "xyz"
+    tem.set(mode="eds", fov_nm=3)
+    a = tem.acquire()
+    assert {"map_Au", "map_Pd", "map_O"} <= set(a.arrays)
+    with pytest.raises(TemviewError, match="not an XYZ file"):
+        tem.load_xyz("hello\nworld\n")

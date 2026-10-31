@@ -1,5 +1,6 @@
 // Electron optics, specimen models, FFT and spectroscopy tables.
 // Units: lengths in Ångström unless noted, energies in eV, angles in radians.
+import * as ML from './megalibrary.js';
 
 export const MC2 = 510998.95; // electron rest energy, eV
 
@@ -194,15 +195,38 @@ export const EL = [
   { sym: 'S', Z: 16, name: 'Sulfur', color: '#ffe066' },
   { sym: 'P', Z: 15, name: 'Phosphorus', color: '#ff9e4a' },
   { sym: 'Fe', Z: 26, name: 'Iron', color: '#ff6a3d' },
+  { sym: 'Ag', Z: 47, name: 'Silver', color: '#d9e2ec' },
+  { sym: 'Cu', Z: 29, name: 'Copper', color: '#ff9a4d' },
+  { sym: 'Co', Z: 27, name: 'Cobalt', color: '#6f8cff' },
+  { sym: 'Ni', Z: 28, name: 'Nickel', color: '#5fe3a8' },
 ];
-export const EI = { C: 0, O: 1, Si: 2, SiOx: 3, Ti: 4, Sr: 5, Au: 6, Zr: 7, N: 8, S: 9, P: 10, Fe: 11 };
+export const EI = { C: 0, O: 1, Si: 2, SiOx: 3, Ti: 4, Sr: 5, Au: 6, Zr: 7, N: 8, S: 9, P: 10, Fe: 11, Ag: 12, Cu: 13, Co: 14, Ni: 15 };
 export const VP = EL.map((e) => Math.pow(e.Z, 0.75)); // projected-potential weight per atom
 export const ZH = EL.map((e) => Math.pow(e.Z, 1.7)); // high-angle (Rutherford-like) weight
 export const ZL = EL.map((e) => Math.pow(e.Z, 1.2)); // low-angle ADF weight
 
+// Any element can join the table (a loaded XYZ structure). Elements without tabulated X-ray lines get
+// Moseley's-law estimates: Kα ≈ 10.2 eV·(Z − 1)², Lα ≈ 1.89 eV·(Z − 7.4)² (good to a few per cent).
+export const SYMBOLS = ['H', 'He', 'Li', 'Be', 'B', 'C', 'N', 'O', 'F', 'Ne', 'Na', 'Mg', 'Al', 'Si', 'P', 'S', 'Cl', 'Ar', 'K', 'Ca', 'Sc', 'Ti', 'V', 'Cr', 'Mn', 'Fe', 'Co', 'Ni', 'Cu', 'Zn', 'Ga', 'Ge', 'As', 'Se', 'Br', 'Kr', 'Rb', 'Sr', 'Y', 'Zr', 'Nb', 'Mo', 'Tc', 'Ru', 'Rh', 'Pd', 'Ag', 'Cd', 'In', 'Sn', 'Sb', 'Te', 'I', 'Xe', 'Cs', 'Ba', 'La', 'Ce', 'Pr', 'Nd', 'Pm', 'Sm', 'Eu', 'Gd', 'Tb', 'Dy', 'Ho', 'Er', 'Tm', 'Yb', 'Lu', 'Hf', 'Ta', 'W', 'Re', 'Os', 'Ir', 'Pt', 'Au', 'Hg', 'Tl', 'Pb', 'Bi', 'Po', 'At', 'Rn', 'Fr', 'Ra', 'Ac', 'Th', 'Pa', 'U'];
+export function addElement(sym) {
+  if (EI[sym] !== undefined) return EI[sym];
+  const Z = SYMBOLS.indexOf(sym) + 1;
+  if (Z < 1) throw new Error(`unknown element ${sym}`);
+  const i = EL.push({ sym, Z, name: sym, color: `hsl(${(Z * 47) % 360} 70% 70%)` }) - 1;
+  EI[sym] = i; VP.push(Math.pow(Z, 0.75)); ZH.push(Math.pow(Z, 1.7)); ZL.push(Math.pow(Z, 1.2));
+  if (!XRAY.some((l) => l.el === sym) && Z > 4) {
+    const K = 0.0102 * (Z - 1) ** 2, L = 0.00189 * (Z - 7.4) ** 2;
+    if (K < 20) XRAY.push({ el: sym, line: 'Kα', E: +K.toFixed(3), w: 1, y: 1, est: true });
+    if (Z > 20 && L > 0.2 && L < 20) XRAY.push({ el: sym, line: 'Lα', E: +L.toFixed(3), w: K < 20 ? 0.1 : 1, y: 1, est: true });
+  }
+  return i;
+}
+
 // ---------------------------------------------------------------- specimens
+// Positions are relative to an origin (ox, oy), so a specimen far from the stage origin (the megalibrary spans
+// a millimetre) keeps Å precision in Float32.
 class AtomList {
-  constructor() { this.x = []; this.y = []; this.e = []; this.L = []; this.g = []; }
+  constructor(ox = 0, oy = 0) { this.x = []; this.y = []; this.e = []; this.L = []; this.g = []; this.ox = ox; this.oy = oy; }
   push(x, y, e, L, g) { this.x.push(x); this.y.push(y); this.e.push(e); this.L.push(L); this.g.push(g); }
   finalize(ext = 260, bin = 8) {
     this.count = this.x.length;
@@ -218,6 +242,7 @@ class AtomList {
   }
   query(x0, y0, x1, y1, cb) {
     const { ext, bin, nb } = this;
+    x0 -= this.ox; x1 -= this.ox; y0 -= this.oy; y1 -= this.oy;
     const bx0 = Math.max(0, Math.floor((x0 + ext) / bin)), bx1 = Math.min(nb - 1, Math.floor((x1 + ext) / bin));
     const by0 = Math.max(0, Math.floor((y0 + ext) / bin)), by1 = Math.min(nb - 1, Math.floor((y1 + ext) / bin));
     for (let by = by0; by <= by1; by++)
@@ -596,7 +621,150 @@ function makeBio() {
   return spec;
 }
 
-export const SPECIMENS = { au: makeGold(), si: makeSilicon(), sto: makeSTO(), gr: makeGraphene(), mof: makeUiO66(), bio: makeBio() };
+// Nanoparticle megalibrary (megalibrary.js): a million alloy particles on a 1 µm grid on a 10 nm Si₃N₄
+// membrane. Only the particle under the beam exists as atoms: locate() builds it, in 3D, from its domains'
+// lattices and orientations, rotated by the stage tilt, and projects every atom (no columns are assumed, so a
+// particle shows lattice fringes only when it happens to sit near a zone axis, as in a real screen).
+function makeLibrary() {
+  const empty = new AtomList(); empty.finalize(400, 8);
+  const STAGE = 1e4; // Å per µm
+  const fccBasis = [[0, 0, 0], [0.5, 0.5, 0], [0.5, 0, 0.5], [0, 0.5, 0.5]];
+  const rings = (a) => [[1, 1, 1], [2, 0, 0], [2, 2, 0], [3, 1, 1]].map(([h, k, l]) => ({ d: +(a / Math.hypot(h, k, l)).toFixed(3), hkl: `${h}${k}${l}` }));
+  const spec = {
+    id: 'lib', name: 'Nanoparticle megalibrary (1000 × 1000 alloy particles)', short: 'Megalibrary',
+    alpha: 1.4e-5, poly: true, noCBED: true, filmOnly: true, noGrid: true, ownTilt: true, zExp: 1,
+    atoms: empty, period: 1, center: [0, 0], fov: 40, zone: '—', grainRot: [0], ver: 0, cur: null,
+    grains: [{ a1: [2.88, 0], a2: [0, 4.07], label: () => 'fcc' }],
+    get rings() { return rings(this.cur?.p?.a_A ?? 4.0); },
+    get elements() {
+      const p = this.cur?.p, els = p?.present ? Object.keys(p.comp).map((e) => EI[e]) : [];
+      return [...els, EI.Si, EI.N];
+    },
+    get labels() {
+      const c = this.cur;
+      if (!c) return [];
+      const p = c.p, out = [{ x: c.ox, y: c.oy + (p.present ? p.b_nm * 10 + 45 : 40), text: `particle (${p.i}, ${p.j})${p.present ? '' : ': empty dot'}` }];
+      return out;
+    },
+    // particle-centred coordinates (nm) of a stage position (Å)
+    local(x, y) { const c = this.cur; return c ? [(x - c.ox) / 10, (y - c.oy) / 10] : [1e9, 1e9]; },
+    grainAt(x, y) { const c = this.cur; if (!c?.p.present) return -1; const [u, v] = this.local(x, y); return ML.rho(c.p, u, v) < 1 ? ML.domainAt(c.p, u, v, 0) : -1; },
+    amorph() { return 'SiN'; },
+    partT(x, y) { const c = this.cur; if (!c) return 0; const [u, v] = this.local(x, y); return 10 * ML.thicknessAt(c.p, u, v); }, // Å
+    thicknessAt(x, y, t) { return t + this.partT(x, y); },
+    tauAt(x, y, t, kV) { const p = this.cur?.p; return t / (10 * imfp(kV, 10)) + this.partT(x, y) / (10 * imfp(kV, p ? ML.meanZ(p.comp) : 50)); },
+    plasmon: [{ Ep: 23, G: 14, frac: 0.6 }, { Ep: 19, G: 12, frac: 0.4 }],
+    zeff: 10,
+    // build the particle nearest the stage position (Å) at this tilt (degrees); true when it changed
+    locate(cx, cy, tiltX = 0, tiltY = 0) {
+      const ij = ML.nearest(cx / STAGE, cy / STAGE), tk = `${Math.round(tiltX * 20)}|${Math.round(tiltY * 20)}`;
+      const key = ij ? `${ij[0]},${ij[1]}|${tk}` : 'none';
+      if (this.cur?.key === key || (!ij && !this.cur)) return false;
+      if (!ij) { this.cur = null; this.atoms = empty; this.ver++; return true; }
+      const p = ML.particle(ij[0], ij[1]), ox = p.x_um * STAGE, oy = p.y_um * STAGE;
+      // stage tilt: α about x, then β about y
+      const ta = (tiltX * Math.PI) / 180, tb = (tiltY * Math.PI) / 180;
+      const R = ML.mul3([[Math.cos(tb), 0, Math.sin(tb)], [0, 1, 0], [-Math.sin(tb), 0, Math.cos(tb)]], [[1, 0, 0], [0, Math.cos(ta), -Math.sin(ta)], [0, Math.sin(ta), Math.cos(ta)]]);
+      const A = new AtomList(ox, oy), rng = mulberry32((p.i * 1000 + p.j) | 0);
+      const pick = (comp) => { let r = rng(); for (const el in comp) { if (r < comp[el]) return EI[el]; r -= comp[el]; } return EI[Object.keys(comp)[0]]; };
+      // fill a body: every lattice point of the domain's crystal (orientation O, lattice a Å) inside `keep`
+      const fill = (O, a, Rb, cxA, cyA, comp, g, keep) => {
+        const M = ML.mul3(R, O), m = Math.ceil(Rb / a) + 1;
+        for (let u = -m; u <= m; u++) for (let v = -m; v <= m; v++) for (let w = -m; w <= m; w++)
+          for (const b of fccBasis) {
+            const rc = [(u + b[0]) * a, (v + b[1]) * a, (w + b[2]) * a];
+            if (rc[0] * rc[0] + rc[1] * rc[1] + rc[2] * rc[2] > Rb * Rb) continue;
+            const rs = ML.mv3(O, rc);
+            if (!keep(rs[0] / 10, rs[1] / 10, rs[2] / 10)) continue;
+            const rt = ML.mv3(M, rc);
+            A.push(cxA + rt[0], cyA + rt[1], pick(comp), 1, g);
+          }
+      };
+      if (p.present) {
+        const Rb = 10 * Math.max(p.a_nm, p.b_nm, p.c_nm) + 2;
+        p.domains.forEach((d, k) => fill(d.O, d.a_A, Rb, 0, 0, d.comp, k, (x, y, z) => ML.inside(p, x, y, z) && ML.domainAt(p, x, y, z) === k));
+        const s = p.satellite;
+        if (s) { const r = s.d_nm / 2; fill(s.O, s.a_A, 10 * r + 2, 10 * s.dx_nm, 10 * s.dy_nm, s.comp, p.domains.length, (x, y, z) => x * x + y * y + z * z < r * r); }
+      }
+      A.finalize(420, 8);
+      const a = p.a_A;
+      this.grains = [{ a1: [a / Math.SQRT2, 0], a2: [0, a], label: () => 'fcc' }];
+      this.grains[0].b = reciprocal(this.grains[0].a1, this.grains[0].a2);
+      this.atoms = A; this.cur = { key, p, ox, oy }; this.ver++;
+      return true;
+    },
+  };
+  const p0 = ML.particle(0, 0);
+  spec.center = [p0.x_um * STAGE, p0.y_um * STAGE]; // the first particle itself, not its grid node
+  spec.locate(...spec.center);
+  return spec;
+}
+
+// A structure of your own: an XYZ file (N, a comment line, then "element x y z" in Å; extended-XYZ extra
+// columns are ignored). Atoms keep their 3D positions, centred on the stage origin, and are rotated by the
+// stage tilt and projected, so any orientation can be explored; an amorphous carbon support (the thickness
+// setting) sits underneath. Replaces any structure loaded before.
+export function loadXYZ(text, name = 'structure.xyz') {
+  const lines = String(text).split(/\r?\n/);
+  const n = parseInt(lines[0], 10);
+  if (!(n > 0)) throw new Error('not an XYZ file: the first line must be the number of atoms');
+  if (n > 3e6) throw new Error(`${n} atoms is more than this simulator holds (3 million)`);
+  const sym = [], P3 = new Float64Array(3 * n);
+  for (let k = 0; k < n; k++) {
+    const f = (lines[k + 2] ?? '').trim().split(/\s+/);
+    if (f.length < 4) throw new Error(`line ${k + 3}: expected "element x y z"`);
+    let s = /^\d+$/.test(f[0]) ? SYMBOLS[+f[0] - 1] : f[0].replace(/[^A-Za-z]/g, '');
+    s = s ? s[0].toUpperCase() + s.slice(1, 2).toLowerCase() : s;
+    if (!SYMBOLS.includes(s)) { s = s?.[0]; if (!SYMBOLS.includes(s)) throw new Error(`line ${k + 3}: unknown element ${f[0]}`); }
+    sym.push(s);
+    for (let c = 0; c < 3; c++) { const v = +f[c + 1]; if (!Number.isFinite(v)) throw new Error(`line ${k + 3}: bad coordinate`); P3[3 * k + c] = v; }
+  }
+  const els = [...new Set(sym)], idx = Object.fromEntries(els.map((s) => [s, addElement(s)])), e = Uint8Array.from(sym, (s) => idx[s]);
+  // centre on the centroid
+  const c = [0, 0, 0];
+  for (let k = 0; k < n; k++) for (let d = 0; d < 3; d++) c[d] += P3[3 * k + d] / n;
+  let R = 0;
+  for (let k = 0; k < n; k++) { for (let d = 0; d < 3; d++) P3[3 * k + d] -= c[d]; R = Math.max(R, Math.hypot(P3[3 * k], P3[3 * k + 1], P3[3 * k + 2])); }
+  const zbar = sym.reduce((a, s) => a + SYMBOLS.indexOf(s) + 1, 0) / n;
+  const grid = { bin: 4, map: new Map() }; // atoms per 4 Å column, for the inelastic thickness (EELS)
+  const spec = {
+    id: 'xyz', name: `Your structure: ${name} (${n.toLocaleString('en')} atoms)`, short: name.replace(/\.xyz$/i, ''), xyz: true,
+    alpha: 1e-5, poly: true, noCBED: true, filmOnly: true, ownTilt: true, zExp: 1, period: 1, ver: 0, tk: null,
+    atoms: null, center: [0, 0], fov: +Math.min(120, Math.max(3, (2.4 * R) / 10)).toFixed(1), zone: '—', grainRot: [0],
+    grains: [{ a1: [3, 0], a2: [0, 3], label: () => '—' }], rings: [],
+    elements: [...els.map((s) => idx[s]), ...(els.includes('C') ? [] : [EI.C])],
+    labels: [{ x: 0, y: R + 25, text: name }],
+    grainAt() { return -1; },
+    amorph() { return 'C'; },
+    thicknessAt(x, y, t) { return t + 15 * (grid.map.get(`${Math.floor(x / grid.bin)},${Math.floor(y / grid.bin)}`) ?? 0) / (grid.bin * grid.bin); },
+    tauAt(x, y, t, kV) { return t / (10 * imfp(kV, 6)) + (this.thicknessAt(x, y, 0)) / (10 * imfp(kV, zbar)); },
+    plasmon: [{ Ep: 22, G: 14, frac: 1 }], zeff: 6,
+    locate(cx, cy, tiltX = 0, tiltY = 0) {
+      const tk = `${Math.round(tiltX * 20)}|${Math.round(tiltY * 20)}`;
+      if (tk === this.tk) return false;
+      const ta = (tiltX * Math.PI) / 180, tb = (tiltY * Math.PI) / 180, ca = Math.cos(ta), sa = Math.sin(ta), cb = Math.cos(tb), sb = Math.sin(tb);
+      const A = new AtomList();
+      grid.map.clear();
+      for (let k = 0; k < n; k++) {
+        const x = P3[3 * k], y0 = P3[3 * k + 1], z0 = P3[3 * k + 2];
+        const y = y0 * ca - z0 * sa, z = y0 * sa + z0 * ca; // α about x, then β about y
+        const X = x * cb + z * sb, Y = y;
+        A.push(X, Y, e[k], 1, 0);
+        const key = `${Math.floor(X / grid.bin)},${Math.floor(Y / grid.bin)}`;
+        grid.map.set(key, (grid.map.get(key) ?? 0) + 1);
+      }
+      A.finalize(Math.ceil(R + 10), Math.max(8, Math.ceil((2 * R) / 400)));
+      this.atoms = A; this.tk = tk; this.ver++;
+      return true;
+    },
+  };
+  spec.locate(0, 0);
+  for (const g of spec.grains) g.b = reciprocal(g.a1, g.a2);
+  SPECIMENS.xyz = spec;
+  return { name: spec.name, atoms: n, elements: els, extent_nm: +((2 * R) / 10).toFixed(2), fov_nm: spec.fov };
+}
+
+export const SPECIMENS = { au: makeGold(), si: makeSilicon(), sto: makeSTO(), gr: makeGraphene(), mof: makeUiO66(), bio: makeBio(), lib: makeLibrary() };
 for (const s of Object.values(SPECIMENS)) {
   for (const g of s.grains) g.b = reciprocal(g.a1, g.a2);
 }
@@ -612,6 +780,7 @@ const MAT = {
   lipid: { cell: 2.2, dens: 0.055, bio: true, mix: [[EI.C, 1]] },
   head: { cell: 2.2, dens: 0.075, bio: true, mix: [[EI.P, 0.12], [EI.O, 0.5], [EI.C, 0.32], [EI.N, 0.06]] },
   ferrihydrite: { cell: 2.2, dens: 0.09, mix: [[EI.Fe, 0.4], [EI.O, 0.6]] },
+  SiN: { cell: 2.2, dens: 0.096, mix: [[EI.Si, 0.43], [EI.N, 0.57]] }, // amorphous Si₃N₄ membrane
 };
 for (const M of Object.values(MAT)) M.pick = (r) => { for (const [e, f] of M.mix) { if (r < f) return e; r -= f; } return M.mix[M.mix.length - 1][0]; };
 
@@ -653,20 +822,22 @@ export function projectMaps(spec, { cx, cy, n, dx, thick, tiltX = 0, tiltY = 0, 
     }
   }
 
-  const A = spec.atoms, pad = 4;
-  if (part !== 'amorph') A.query((x0 - pad) / sc, (y0 - pad) / sc, (x0 + n * dx + pad) / sc, (y0 + n * dx + pad) / sc, (i) => {
+  // expansion is about the atom list's origin; a specimen that rotates its own atoms with the tilt (ownTilt)
+  // needs no smearing, and zExp is how high-angle scattering grows with the atoms in a column
+  const A = spec.atoms, pad = 4, ox = A.ox, oy = A.oy, tanA = spec.ownTilt ? 0 : tanT, zExp = spec.zExp ?? 0.85;
+  if (part !== 'amorph') A.query(ox + (x0 - pad - ox) / sc, oy + (y0 - pad - oy) / sc, ox + (x0 + n * dx + pad - ox) / sc, oy + (y0 + n * dx + pad - oy) / sc, (i) => {
     if (A.dead && A.dead[i]) return;
     const L = A.L[i] < 0 ? thick : A.L[i];
     let N = L / spec.period;
     const e = A.e[i];
-    const l = (L * tanT) / dx, l2 = (l * l) / 12;
-    let ax = A.x[i] * sc, ay = A.y[i] * sc;
+    const l = (L * tanA) / dx, l2 = (l * l) / 12;
+    let ax = ox + A.x[i] * sc, ay = oy + A.y[i] * sc;
     if (spec.dmg && A.jitter) { // radiolysis: atoms wander off their sites; linkers lose mass
       const sd = 7 * spec.dmg;
       ax += sd * A.jitter[2 * i]; ay += sd * A.jitter[2 * i + 1];
       if (e !== EI.Zr) N *= 1 - 0.35 * spec.dmg;
     }
-    splat((ax - x0) / dx - 0.5, (ay - y0) / dx - 0.5, sA2, l2, e, VP[e] * N, ZH[e] * Math.pow(N, 0.85) * tds, ZL[e] * N, N);
+    splat((ax - x0) / dx - 0.5, (ay - y0) / dx - 0.5, sA2, l2, e, VP[e] * N, ZH[e] * Math.pow(N, zExp) * tds, ZL[e] * N, N);
   });
 
   // amorphous material: seeded per cell so it is stable as the stage moves. spec.amorph(x, y, ctx) returns a
@@ -767,9 +938,18 @@ export const XRAY = [
   { el: 'Fe', line: 'Lα', E: 0.705, w: 0.1, y: 1.0 },
   { el: 'Fe', line: 'Kα', E: 6.404, w: 1, y: 1.0 },
   { el: 'Fe', line: 'Kβ', E: 7.058, w: 0.13, y: 1.0 },
-  { el: 'Cu', line: 'Kα', E: 8.048, w: 1, y: 0 },
-  { el: 'Cu', line: 'Kβ', E: 8.905, w: 0.13, y: 0 },
-  { el: 'Cu', line: 'Lα', E: 0.93, w: 0.25, y: 0 },
+  // copper is also the grid's system peak (added in buildEDS whatever the specimen)
+  { el: 'Cu', line: 'Kα', E: 8.048, w: 1, y: 1.0 },
+  { el: 'Cu', line: 'Kβ', E: 8.905, w: 0.13, y: 1.0 },
+  { el: 'Cu', line: 'Lα', E: 0.93, w: 0.25, y: 1.0 },
+  { el: 'Ag', line: 'Lα', E: 2.984, w: 1, y: 0.95 },
+  { el: 'Ag', line: 'Lβ', E: 3.151, w: 0.55, y: 0.95 },
+  { el: 'Co', line: 'Lα', E: 0.776, w: 0.1, y: 1.0 },
+  { el: 'Co', line: 'Kα', E: 6.93, w: 1, y: 1.0 },
+  { el: 'Co', line: 'Kβ', E: 7.649, w: 0.13, y: 1.0 },
+  { el: 'Ni', line: 'Lα', E: 0.851, w: 0.1, y: 1.0 },
+  { el: 'Ni', line: 'Kα', E: 7.478, w: 1, y: 1.0 },
+  { el: 'Ni', line: 'Kβ', E: 8.265, w: 0.13, y: 1.0 },
 ];
 export const detEff = (E) => Math.exp(-Math.pow(0.35 / E, 2)) * Math.exp(-E / 40);
 // Energy-dispersive detector resolution (keV): Fano-limited statistics plus electronic noise, set so the
@@ -796,6 +976,10 @@ export const EDGES = [
   { key: 'P', el: 'P', name: 'P L₂,₃', E: 132, kind: 'delayed', h: 1.8, delay: 6 },
   { key: 'S', el: 'S', name: 'S L₂,₃', E: 165, kind: 'delayed', h: 1.6, delay: 7 },
   { key: 'Fe', el: 'Fe', name: 'Fe L₃,₂', E: 708, kind: 'sharp', h: 0.45, elnes: [[709.5, 1.2, 1.6], [722.5, 1.4, 0.8]] },
+  { key: 'Co', el: 'Co', name: 'Co L₃,₂', E: 779, kind: 'sharp', h: 0.42, elnes: [[779.5, 1.3, 1.5], [794.5, 1.5, 0.75]] },
+  { key: 'Ni', el: 'Ni', name: 'Ni L₃,₂', E: 855, kind: 'sharp', h: 0.4, elnes: [[853.5, 1.2, 1.3], [871, 1.4, 0.6]] },
+  { key: 'Cu', el: 'Cu', name: 'Cu L₃,₂', E: 931, kind: 'delayed', h: 0.45, delay: 8 }, // metallic Cu: filled 3d, no white lines
+  { key: 'Ag', el: 'Ag', name: 'Ag M₄,₅', E: 367, kind: 'delayed', h: 0.9, delay: 30 },
 ];
 const erf = (x) => {
   const t = 1 / (1 + 0.3275911 * Math.abs(x));

@@ -14,13 +14,15 @@ import { parseCommand } from './voice.js';
 import { SCENARIOS } from './scenarios.js';
 import { MODES } from './ops.js';
 import { SESSION_KEYS } from './state.js';
+import { libGoto, stageMove, stagePos } from './ops.js';
+import * as ML from './megalibrary.js';
 
 export const SCRIPT_API = 1;
-const SPECS = ['au', 'si', 'sto', 'gr', 'mof', 'bio'];
+const SPECS = ['au', 'si', 'sto', 'gr', 'mof', 'bio', 'lib'];
 // training tasks a script can run as a challenge (the direct-alignment task needs its on-screen controls)
 const CHALLENGES = ['tem-focus-stig', 'corrector-ronch'];
 const SETTINGS = {
-  mode: 'tem, stem, 4d, diff, cbed, eds, eels, ronch, oah, ilh, ltem, lstem', specimen: 'au, si, sto, gr, mof, bio', kV: '80, 200 or 300',
+  mode: 'tem, stem, 4d, diff, cbed, eds, eels, ronch, oah, ilh, ltem, lstem', specimen: 'au, si, sto, gr, mof, bio, lib (nanoparticle megalibrary)', kV: '80, 200 or 300',
   defocus_nm: 'C1 in nm, negative is underfocus', fov_nm: 'field of view in nm', dose: 'electrons per Å²', thickness_nm: 'specimen thickness',
   corrector: 'True or False', holder: 'room, ln2, lhe, heat', temperature_K: 'specimen temperature', realistic: 'shot noise and real detectors',
   detector: 'bf, abf, adf, haadf (STEM)', convergence_mrad: 'probe semi-angle', camera_length_mm: 'diffraction camera length',
@@ -35,7 +37,7 @@ export function settingsToOps(a) {
   const bad = Object.keys(a).filter((k) => !(k in SETTINGS));
   if (bad.length) throw new Error(`unknown setting ${bad.join(', ')}. Settings: ${Object.keys(SETTINGS).join(', ')}`);
   const ops = [];
-  if (a.specimen !== undefined) { if (!SPECS.includes(a.specimen)) throw new Error(`specimen must be one of ${SPECS.join(', ')}`); ops.push({ op: 'spec', v: a.specimen }); }
+  if (a.specimen !== undefined) { if (!SPECS.includes(a.specimen) && !(a.specimen === 'xyz' && P.SPECIMENS.xyz)) throw new Error(`specimen must be one of ${SPECS.join(', ')}${P.SPECIMENS.xyz ? ', xyz' : ' (or xyz after load_xyz)'}`); ops.push({ op: 'spec', v: a.specimen }); }
   if (a.mode !== undefined) { if (!MODES.includes(a.mode)) throw new Error(`mode must be one of ${MODES.join(', ')}`); ops.push({ op: 'mode', v: a.mode }); }
   if (a.kV !== undefined) { if (![80, 200, 300].includes(+a.kV)) throw new Error('kV must be 80, 200 or 300'); ops.push({ op: 'chip', k: 'kV', v: +a.kV }); }
   if (a.corrector !== undefined) ops.push({ op: 'chip', k: 'corrector', v: !!a.corrector });
@@ -72,7 +74,7 @@ export function stateSummary(S, sim) {
     corrector: S.corrector, Cs_um: +(sim.CsA() / 1e4).toFixed(2), aberrations: { ...S.ab }, holder: S.holder, temperature_K: +sim.temp().toFixed(1),
     convergence_mrad: S.alpha, detector: S.detPreset, detector_mrad: [S.detIn, S.detOut], camera_length_mm: S.camL, tilt_deg: [S.tiltX, S.tiltY],
     clarity: S.clarity, beam: S.paused ? 'blanked' : 'on', wavelength_pm: +(sim.lam * 100).toFixed(4),
-    scherzer_defocus_nm: +(P.scherzerDefocus(sim.CsA(), sim.lam) / 10).toFixed(1),
+    scherzer_defocus_nm: +(P.scherzerDefocus(sim.CsA(), sim.lam) / 10).toFixed(1), ...stagePos(S),
   };
 }
 
@@ -141,6 +143,26 @@ export class ScriptCore {
     this.settle(3);
     return analyze(this.sim, this.S, name ?? undefined);
   }
+  // ---------------------------------------------------------------- the stage, and the nanoparticle megalibrary
+  move({ dx_nm = 0, dy_nm = 0 } = {}) { this.guard(); const r = stageMove(this.S, this.sim, +dx_nm, +dy_nm); this.h.refresh?.(); return r; }
+  library() { return ML.layout(); }
+  // a structure of your own from the text of an XYZ file (Å); it becomes specimen "xyz" and is loaded
+  load_xyz({ text, name = 'structure.xyz' } = {}) {
+    this.guard();
+    const r = P.loadXYZ(text, name);
+    this.h.run({ op: 'spec', v: 'xyz' });
+    this.h.refresh?.();
+    return r;
+  }
+  goto({ i, j } = {}) {
+    this.guard();
+    if (this.S.spec !== 'lib') this.h.run({ op: 'spec', v: 'lib' });
+    const r = libGoto(this.S, this.sim, i, j);
+    this.h.refresh?.();
+    return r;
+  }
+  // the true particle, for scoring an automated screen (like reveal() for a challenge)
+  particle({ i, j } = {}) { const t = ML.truth(i, j); if (!t) throw new Error(`particle (${i}, ${j}) is outside the library`); return t; }
   step({ n = 1 } = {}) { this.settle(Math.max(1, Math.min(2000, n | 0))); return { time_s: +(this.sim.clock ?? 0).toFixed(2) }; }
 
   // ---------------------------------------------------------------- challenges: a training task's hidden misalignment, scored
@@ -179,7 +201,7 @@ export class ScriptCore {
 
   // one entry point for remote callers (desktop Python): only these names can be called
   call(name, args = {}) {
-    if (!['info', 'state', 'set', 'command', 'aberrations', 'acquire', 'analyze', 'step', 'challenge', 'score', 'reveal', 'end_challenge'].includes(name)) throw new Error(`unknown call ${name}`);
+    if (!['info', 'state', 'set', 'command', 'aberrations', 'acquire', 'analyze', 'step', 'challenge', 'score', 'reveal', 'end_challenge', 'move', 'library', 'goto', 'particle', 'load_xyz'].includes(name)) throw new Error(`unknown call ${name}`);
     return this[name](args ?? {});
   }
 }

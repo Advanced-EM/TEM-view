@@ -6,13 +6,15 @@ import { MAGSPECS } from './lorentz.js';
 import { CORR_RANGE } from './state.js';
 import { HOLDERS } from './holder.js';
 import { analyze } from './analyze.js';
+import * as ML from './megalibrary.js';
 
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 export const MODES = ['tem', 'stem', '4d', 'diff', 'cbed', 'eds', 'eels', 'ronch', 'oah', 'ilh', 'ltem', 'lstem'];
 export const fam = (m) => (['tem', 'diff', 'oah', 'ilh', 'ltem'].includes(m) ? 'tem' : 'probe');
-// Lorentz holders tilt far (domains with out-of-plane magnetization, in-plane fields); atomic work stays near the zone axis
-export const tiltLimit = (S) => (S.mode === 'ltem' || S.mode === 'lstem' ? 30 : 3);
-const coreEdge = (spec) => (spec === 'sto' ? 462 : spec === 'si' ? 102 : spec === 'gr' ? 287 : spec === 'mof' ? 200 : spec === 'bio' ? 405 : 100);
+// Lorentz holders tilt far (domains with out-of-plane magnetization, in-plane fields); atomic work stays near the zone
+// axis, except on specimens built atom by atom in 3D (an XYZ structure, the megalibrary), which really rotate
+export const tiltLimit = (S) => (S.mode === 'ltem' || S.mode === 'lstem' || P.SPECIMENS[S.spec]?.ownTilt ? 30 : 3);
+const coreEdge = (spec) => (spec === 'sto' ? 462 : spec === 'si' ? 102 : spec === 'gr' ? 287 : spec === 'mof' ? 200 : spec === 'bio' ? 405 : spec === 'lib' ? 855 : 100);
 
 export function resetVdet(S, sim) {
   const a = S.alpha4d, mp = sim.fd?.mradPx ?? (P.wavelength(S.kV) * 1000) / (64 * 0.18);
@@ -41,6 +43,8 @@ export function specState(S, sim, v) {
   S.eelsWidth = v === 'si' ? 5 : v === 'au' ? 24 : v === 'gr' ? 6 : v === 'mof' ? 30 : v === 'bio' ? 20 : 16;
   // a MOF needs low-dose conditions; other specimens go back to a normal dose
   if (v === 'mof') { S.dose = 2; S.kV = 300; S.thick = 20; S.camL = 4000; }
+  else if (v === 'xyz') { S.thick = 3; if (S.dose < 20) S.dose = 400; } // thickness: the carbon support
+  else if (v === 'lib') { S.thick = 10; if (S.dose < 20) S.dose = 400; } // thickness: the Si₃N₄ membrane
   else if (v === 'bio') {
     // single-particle cryo-EM conditions: frozen grid, 300 kV, no corrector, ~1.5 µm underfocus, ~30 e⁻/Å²
     Object.assign(S, { holder: 'ln2', tempSet: 90, kV: 300, dose: 30, thick: 30, corrector: false, csUnc: S.profile.CsUnc, objAp: 'none', camL: 2000 });
@@ -148,6 +152,26 @@ export function chipState(S, sim, key, v) {
     return 'eelsRange';
   }
   return null;
+}
+
+// Megalibrary stage moves (S.cx, S.cy are in Å; the library is laid out in µm). goTo drives to particle
+// (i, j)'s grid node. A real stage lands within tens of nanometres of where it was sent, so in the realistic
+// view each move adds a random error; the particle itself also sits up to ~60 nm from its node.
+export const STAGE_ERR_NM = 25;
+// onParticle: centre on the particle itself rather than its node (the exhibit's buttons, which know the map)
+export function libGoto(S, sim, i, j, onParticle = false) {
+  if (!ML.inLibrary(i, j)) throw new Error(`particle (${i}, ${j}) is outside the library: i and j run from 0 to ${ML.LIB.n - 1}`);
+  const err = S.clarity === 'real' ? STAGE_ERR_NM * 10 : 0, g = () => Math.sqrt(-2 * Math.log(Math.random() + 1e-12)) * Math.cos(2 * Math.PI * Math.random());
+  const p = ML.particle(i, j), [x, y] = onParticle ? [p.x_um, p.y_um] : [i * ML.LIB.pitch_um, j * ML.LIB.pitch_um];
+  S.cx = x * 1e4 + err * g(); S.cy = y * 1e4 + err * g();
+  sim.freshArea(); sim.invalidate('stage');
+  return stagePos(S);
+}
+export function stageMove(S, sim, dx_nm, dy_nm) { S.cx += dx_nm * 10; S.cy += dy_nm * 10; sim.invalidate('stage'); return stagePos(S); }
+export function stagePos(S) {
+  const out = { stage_um: [+(S.cx / 1e4).toFixed(5), +(S.cy / 1e4).toFixed(5)] };
+  if (S.spec === 'lib') { const ij = ML.nearest(S.cx / 1e4, S.cy / 1e4); out.nearest_particle = ij; }
+  return out;
 }
 
 export const optimalDefocus = (S, sim) => +((fam(S.mode) === 'tem' ? P.scherzerDefocus(sim.CsA(), sim.lam) : P.probeDefocus(sim.CsA(), sim.lam)) / 10).toFixed(1);
