@@ -62,10 +62,10 @@ const LOR = 'ltem lstem';
 const CONTROLS = [
   { sec: 'The specimen' },
   { chips: 'spec', modes: NOT_LOR, opts: [['au', 'Gold on carbon'], ['si', 'Si / SiO₂'], ['sto', 'SrTiO₃ boundary'], ['gr', 'Graphene'], ['mof', 'UiO-66 (MOF)'], ['bio', 'Proteins in ice'], ['lib', 'NP megalibrary']] },
-  { modes: NOT_LOR, pFn: () => { const ij = ML.nearest(S.cx / 1e4, S.cy / 1e4); return `Stage at (${(S.cx / 1e4).toFixed(3)}, ${(S.cy / 1e4).toFixed(3)}) µm: ${ij ? `particle (${ij[0]}, ${ij[1]}) of 1000 × 1000, pen block (${Math.floor(ij[0] / 100)}, ${Math.floor(ij[1] / 100)})` : 'outside the library'}. Thickness is the Si₃N₄ membrane. Script a screen with goto(i, j) in Python.`; }, show: () => S.spec === 'lib' },
+  { modes: NOT_LOR, pFn: () => { const ij = ML.nearest(S.cx / 1e4, S.cy / 1e4); return `Stage at (${(S.cx / 1e4).toFixed(3)}, ${(S.cy / 1e4).toFixed(3)}) µm: ${ij ? `particle (${ij[0]}, ${ij[1]}) of 1000 × 1000, pen block (${Math.floor(ij[0] / 100)}, ${Math.floor(ij[1] / 100)}). ${ML.describe(ML.particle(...ij))}` : 'outside the library'}. Thickness is the Si₃N₄ membrane. Script a screen with goto(i, j) in Python.`; }, show: () => S.spec === 'lib' },
   { buttons: [['loadXYZ', 'Load an XYZ file…']] },
   { modes: NOT_LOR, pFn: () => `${sim.spec.name.replace(/[<>&]/g, '')}. Tilt the stage to turn it; the thickness setting is the carbon support underneath.`, show: () => S.spec === 'xyz' },
-  { buttons: [['libPrev', '← Particle'], ['libNext', 'Particle →'], ['libRow', 'Next row'], ['libRand', 'Random particle'], ['libChip', 'Whole chip']], modes: NOT_LOR, show: () => S.spec === 'lib' },
+  { buttons: [['libPrev', '← Particle'], ['libNext', 'Particle →'], ['libRow', 'Next row'], ['libRand', 'Random particle'], ['libAuCo', 'Au–Co, phase-separated'], ['libChip', 'Whole chip']], modes: NOT_LOR, show: () => S.spec === 'lib' },
   { chips: 'holder', label: 'Specimen holder', opts: Object.entries(HOLDERS).map(([k, v]) => [k, v.short]) },
   { slider: 'tempSet', label: 'Temperature setpoint', dyn: () => { const H = HOLDERS[S.holder]; return { min: H.min, max: H.max, step: H.step, log: H.log }; }, fmt: (v) => fmtT(v), show: () => S.holder !== 'room' },
   { pFn: () => `Specimen at ${fmtT(sim.temp())}${S.holder === 'room' ? '' : ` (setpoint ${fmtT(S.tempSet)}; the grid runs ${S.holder === 'heat' ? 'about 1 % hotter than the reading' : 'warmer than the holder tip'} and fluctuates by ±${HOLDERS[S.holder].jitter} K)`}. Drift ${sim.driftSpeed().toFixed(2)} Å/s.` },
@@ -445,7 +445,7 @@ function action(id, el) {
   }
   if (id.startsWith('lib')) {
     const [i, j] = ML.nearest(S.cx / 1e4, S.cy / 1e4) ?? [0, 0], n = ML.LIB.n;
-    const to = { libPrev: [Math.max(0, i - 1), j], libNext: [Math.min(n - 1, i + 1), j], libRow: [i, Math.min(n - 1, j + 1)], libRand: [Math.floor(Math.random() * n), Math.floor(Math.random() * n)] }[id];
+    const to = { libPrev: [Math.max(0, i - 1), j], libNext: [Math.min(n - 1, i + 1), j], libRow: [i, Math.min(n - 1, j + 1)], libRand: [Math.floor(Math.random() * n), Math.floor(Math.random() * n)], libAuCo: [945, 49] }[id]; // libAuCo: in the Au–Co pen's block
     // from a wide view, a particle button zooms back in to the particle
     if (to) { libGoto(S, sim, ...to, true); if (S.fov > 2000) set('fov', P.SPECIMENS.lib.fov, 'fov'); refreshControls(); explainChange('stage'); }
     if (id === 'libChip') { S.cx = S.cy = ((n - 1) / 2) * ML.LIB.pitch_um * 1e4; sim.invalidate('stage'); set('fov', fovMax(S), 'fov'); refreshControls(); explainChange('stage'); }

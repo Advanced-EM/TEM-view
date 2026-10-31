@@ -79,7 +79,8 @@ The megalibrary specimen (`lib`) is a million alloy nanoparticles (Au, Ag, Cu, C
 laid out as polymer pen lithography makes them: a 10 × 10 pen array, each pen writing a 100 × 100 block, with
 the ink composition changing across the pens and the dot size along each block. Particles where the noble
 metals meet Co–Ni segregate into two-crystal heterostructures; others are alloys, some twinned; every particle
-has its own crystal orientation. The same library, particle for particle, is in SEM-view for TKD. Its field of
+has its own crystal orientation. One pen, block (9, 0), carries a binary Au–Co ink, so every particle there is
+phase-separated: an Au crystal against a Co crystal. The same library, particle for particle, is in SEM-view for TKD. Its field of
 view goes from atoms to the whole chip (`fov_nm` up to 1.2e6): above 130 nm the particles are drawn as projected
 mass rather than atoms, so a survey can find the array, the pen blocks and single particles before zooming in.
 
