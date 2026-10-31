@@ -21,7 +21,7 @@ import { collectData, toNpz } from './export.js';
 import { openCalibration } from './calibui.js';
 import { ScriptCore, b64 } from './scripting.js';
 import { PythonIDE } from './ide.js';
-import { specState, modeState, setState, chipState, resetVdet as resetVdetState, optimalDefocus, dfLimits as dfLimitsOf, lorSet, tiltLimit, libGoto } from './ops.js';
+import { specState, modeState, setState, chipState, resetVdet as resetVdetState, optimalDefocus, dfLimits as dfLimitsOf, lorSet, tiltLimit, fovMax, libGoto } from './ops.js';
 import * as ML from './megalibrary.js';
 import { MAGSPECS } from './lorentz.js';
 
@@ -34,6 +34,7 @@ const fam = (m) => (['tem', 'diff', 'oah', 'ilh', 'ltem'].includes(m) ? 'tem' : 
 const stigXY = () => [S.ab.A1 * Math.cos((S.ab.A1a * Math.PI) / 90), S.ab.A1 * Math.sin((S.ab.A1a * Math.PI) / 90)];
 const fmtS = (t) => (t < 1e-3 ? `${+(t * 1e6).toPrecision(3)} µs` : t < 1 ? `${+(t * 1e3).toPrecision(3)} ms` : `${+t.toPrecision(3)} s`);
 const fmtT = (K) => `${K < 20 ? K.toFixed(1) : Math.round(K)} K (${Math.round(K - 273.15)} °C)`;
+const fmtFov = (nm) => (nm < 1000 ? `${nm.toFixed(1)} nm` : nm < 1e6 ? `${+(nm / 1000).toPrecision(3)} µm` : `${+(nm / 1e6).toPrecision(3)} mm`);
 S.df = S.dfFam[fam(S.mode)];
 
 const sim = new Sim(S);
@@ -64,7 +65,7 @@ const CONTROLS = [
   { modes: NOT_LOR, pFn: () => { const ij = ML.nearest(S.cx / 1e4, S.cy / 1e4); return `Stage at (${(S.cx / 1e4).toFixed(3)}, ${(S.cy / 1e4).toFixed(3)}) µm: ${ij ? `particle (${ij[0]}, ${ij[1]}) of 1000 × 1000, pen block (${Math.floor(ij[0] / 100)}, ${Math.floor(ij[1] / 100)})` : 'outside the library'}. Thickness is the Si₃N₄ membrane. Script a screen with goto(i, j) in Python.`; }, show: () => S.spec === 'lib' },
   { buttons: [['loadXYZ', 'Load an XYZ file…']], modes: NOT_LOR },
   { modes: NOT_LOR, pFn: () => `${sim.spec.name.replace(/[<>&]/g, '')}. Tilt the stage to turn it; the thickness setting is the carbon support underneath.`, show: () => S.spec === 'xyz' },
-  { buttons: [['libPrev', '← Particle'], ['libNext', 'Particle →'], ['libRow', 'Next row'], ['libRand', 'Random particle']], modes: NOT_LOR, show: () => S.spec === 'lib' },
+  { buttons: [['libPrev', '← Particle'], ['libNext', 'Particle →'], ['libRow', 'Next row'], ['libRand', 'Random particle'], ['libChip', 'Whole chip']], modes: NOT_LOR, show: () => S.spec === 'lib' },
   { chips: 'holder', label: 'Specimen holder', opts: Object.entries(HOLDERS).map(([k, v]) => [k, v.short]) },
   { slider: 'tempSet', label: 'Temperature setpoint', dyn: () => { const H = HOLDERS[S.holder]; return { min: H.min, max: H.max, step: H.step, log: H.log }; }, fmt: (v) => fmtT(v), show: () => S.holder !== 'room' },
   { pFn: () => `Specimen at ${fmtT(sim.temp())}${S.holder === 'room' ? '' : ` (setpoint ${fmtT(S.tempSet)}; the grid runs ${S.holder === 'heat' ? 'about 1 % hotter than the reading' : 'warmer than the holder tip'} and fluctuates by ±${HOLDERS[S.holder].jitter} K)`}. Drift ${sim.driftSpeed().toFixed(2)} Å/s.` },
@@ -81,7 +82,7 @@ const CONTROLS = [
   { slider: 'lorThick', label: 'Film thickness', min: 10, max: 150, step: 1, fmt: (v) => `${v} nm`, modes: LOR, ends: ['thin', '', 'thick'] },
   { slider: 'lorFov', label: 'Field of view', min: 0.3, max: 10, log: true, fmt: (v) => `${v < 1 ? Math.round(v * 1000) + ' nm' : v.toFixed(2) + ' µm'}`, modes: LOR, note: 'Scroll on the image to zoom.' },
   { buttons: [['lorReset', 'Saturate and relax']], modes: LOR, show: () => S.magSpec !== 'fege' },
-  { slider: 'fov', label: 'Field of view', min: 1.5, max: 120, log: true, fmt: (v) => `${v.toFixed(1)} nm`, modes: 'tem stem 4d eds eels oah ilh', note: 'Drag the detector image to move the stage; scroll to zoom.' },
+  { slider: 'fov', label: 'Field of view', dyn: () => ({ min: 1.5, max: fovMax(S) }), log: true, fmt: (v) => fmtFov(v), modes: 'tem stem 4d eds eels oah ilh', note: 'Drag the detector image to move the stage; scroll to zoom.' },
   { slider: 'tiltX', inv: 'tilt', label: 'Tilt α', dyn: () => ({ min: -tiltLimit(S), max: tiltLimit(S), step: tiltLimit(S) > 3 ? 0.5 : 0.02 }), fmt: (v) => `${v.toFixed(2)}°`, modes: TILTABLE },
   { slider: 'tiltY', inv: 'tilt', label: 'Tilt β', dyn: () => ({ min: -tiltLimit(S), max: tiltLimit(S), step: tiltLimit(S) > 3 ? 0.5 : 0.02 }), fmt: (v) => `${v.toFixed(2)}°`, ends: ['', 'zone axis', ''], modes: TILTABLE },
   { buttons: [['zone', 'Return to zone axis']], modes: TILTABLE },
@@ -444,7 +445,9 @@ function action(id, el) {
   if (id.startsWith('lib')) {
     const [i, j] = ML.nearest(S.cx / 1e4, S.cy / 1e4) ?? [0, 0], n = ML.LIB.n;
     const to = { libPrev: [Math.max(0, i - 1), j], libNext: [Math.min(n - 1, i + 1), j], libRow: [i, Math.min(n - 1, j + 1)], libRand: [Math.floor(Math.random() * n), Math.floor(Math.random() * n)] }[id];
-    if (to) { libGoto(S, sim, ...to, true); refreshControls(); explainChange('stage'); }
+    // from a wide view, a particle button zooms back in to the particle
+    if (to) { libGoto(S, sim, ...to, true); if (S.fov > 2000) set('fov', P.SPECIMENS.lib.fov, 'fov'); refreshControls(); explainChange('stage'); }
+    if (id === 'libChip') { S.cx = S.cy = ((n - 1) / 2) * ML.LIB.pitch_um * 1e4; sim.invalidate('stage'); set('fov', fovMax(S), 'fov'); refreshControls(); explainChange('stage'); }
   }
   if (id === 'fresh') { S.cx += 6 * (Math.random() - 0.5); sim.freshArea(); sim.invalidate('stage'); explainChange('fresh'); }
   if (id === 'scramble') {
@@ -635,7 +638,7 @@ function runOp(op) {
     case 'spec': if (P.SPECIMENS[op.v]) setSpec(op.v); break;
     case 'set':
       if (op.k === 'df') { set('df', +clamp(op.v, ...dfLimits()).toFixed(1), 'df'); op.v = S.df; }
-      else if (op.k === 'fov') { set('fov', +clamp(op.v, 1.5, 120).toFixed(2), 'fov'); op.v = S.fov; }
+      else if (op.k === 'fov') { set('fov', +clamp(op.v, 1.5, fovMax(S)).toFixed(2), 'fov'); op.v = S.fov; }
       else if (op.k === 'dose') { set('dose', +clamp(op.v, 0.5, 20000).toFixed(2), 'dose'); op.v = S.dose; }
       else if (op.k === 'clarity' && ['edu', 'real'].includes(op.v)) { S.clarity = op.v; sim.invalidate('clarity'); refreshControls(); explainChange('clarity'); }
       else if (op.k === 'camL') { set('camL', Math.round(clamp(op.v, 80, 6000)), 'camL'); op.v = S.camL; }
@@ -653,7 +656,7 @@ function runOp(op) {
       else if (op.k === 'eelsRange' && ['zlp', 'low', 'core', 'high'].includes(op.v)) { if (S.mode !== 'eels') setMode('eels'); chip('eelsRange', op.v); }
       break;
     case 'nudge': { const st = S.corrector ? 2 : S.spec === 'bio' ? 100 : 10; set('df', +clamp(S.df + op.d * st, ...dfLimits()).toFixed(1), 'df'); break; }
-    case 'zoom': set('fov', +clamp(S.fov * op.f, 1.5, 120).toFixed(2), 'fov'); break;
+    case 'zoom': set('fov', +clamp(S.fov * op.f, 1.5, fovMax(S)).toFixed(2), 'fov'); break;
     case 'scale': set(op.k, +clamp(S[op.k] * op.f, 0.5, 20000).toFixed(2), op.k); break;
     case 'temp': {
       // pick a holder that reaches the temperature, then set it
@@ -1049,7 +1052,7 @@ function wire() {
     if (S.mode === 'ltem' || S.mode === 'lstem') { e.preventDefault(); set('lorFov', +clamp(S.lorFov * Math.pow(1.0015, e.deltaY), 0.3, 10).toFixed(3), 'lorFov'); return; }
     if (!['tem', 'stem', '4d', 'eds', 'eels'].includes(S.mode)) return;
     e.preventDefault();
-    set('fov', clamp(S.fov * Math.pow(1.0015, e.deltaY), 1.5, 120), 'fov');
+    set('fov', clamp(S.fov * Math.pow(1.0015, e.deltaY), 1.5, fovMax(S)), 'fov');
   }, { passive: false });
 
   let sdrag = null;

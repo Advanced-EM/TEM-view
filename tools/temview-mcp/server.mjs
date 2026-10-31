@@ -75,7 +75,7 @@ const settings = {
   specimen: z.enum(SPECS).optional().describe('au gold on carbon, si silicon, sto SrTiO3 grain boundary, gr graphene, mof UiO-66, bio proteins in vitreous ice, lib nanoparticle megalibrary (1000 × 1000 alloy particles on a 1 µm grid; pick one with particle)'),
   kV: z.union([z.literal(80), z.literal(200), z.literal(300)]).optional(),
   defocus_nm: z.number().min(-5000).max(5000).optional().describe('C1; negative is underfocus'),
-  fov_nm: z.number().positive().max(200).optional().describe('field of view'),
+  fov_nm: z.number().positive().max(1.2e6).optional().describe('field of view (up to 120 nm; the megalibrary up to 1.2 mm, the whole chip)'),
   dose: z.number().positive().max(20000).optional().describe('electrons per Å²'),
   corrector: z.boolean().optional(),
   holder: z.enum(['room', 'ln2', 'lhe', 'heat']).optional(),

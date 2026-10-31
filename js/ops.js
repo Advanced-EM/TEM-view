@@ -13,6 +13,8 @@ export const MODES = ['tem', 'stem', '4d', 'diff', 'cbed', 'eds', 'eels', 'ronch
 export const fam = (m) => (['tem', 'diff', 'oah', 'ilh', 'ltem'].includes(m) ? 'tem' : 'probe');
 // Lorentz holders tilt far (domains with out-of-plane magnetization, in-plane fields); atomic work stays near the zone
 // axis, except on specimens built atom by atom in 3D (an XYZ structure, the megalibrary), which really rotate
+// widest field of view, nm: 120 for the atomic-scale specimens; the megalibrary zooms out to the whole chip
+export const fovMax = (S) => P.SPECIMENS[S.spec]?.fovMax ?? 120;
 export const tiltLimit = (S) => (S.mode === 'ltem' || S.mode === 'lstem' || P.SPECIMENS[S.spec]?.ownTilt ? 30 : 3);
 const coreEdge = (spec) => (spec === 'sto' ? 462 : spec === 'si' ? 102 : spec === 'gr' ? 287 : spec === 'mof' ? 200 : spec === 'bio' ? 405 : spec === 'lib' ? 855 : 100);
 
@@ -186,7 +188,7 @@ export function runOpState(S, sim, op) {
     case 'spec': if (P.SPECIMENS[op.v]) specState(S, sim, op.v); return true;
     case 'set':
       if (op.k === 'df') { set('df', +clamp(op.v, ...dfLimits(S)).toFixed(1), 'df'); op.v = S.df; }
-      else if (op.k === 'fov') { set('fov', +clamp(op.v, 1.5, 120).toFixed(2), 'fov'); op.v = S.fov; }
+      else if (op.k === 'fov') { set('fov', +clamp(op.v, 1.5, fovMax(S)).toFixed(2), 'fov'); op.v = S.fov; }
       else if (op.k === 'dose') { set('dose', +clamp(op.v, 0.5, 20000).toFixed(2), 'dose'); op.v = S.dose; }
       else if (op.k === 'clarity' && ['edu', 'real'].includes(op.v)) { S.clarity = op.v; sim.invalidate('clarity'); }
       else if (op.k === 'camL') { set('camL', Math.round(clamp(op.v, 80, 6000)), 'camL'); op.v = S.camL; }
@@ -200,7 +202,7 @@ export function runOpState(S, sim, op) {
       else if (['corrector', 'holder', 'detPreset', 'eelsRange', 'vdet', 'magSpec'].includes(op.k)) chipState(S, sim, op.k, op.k === 'corrector' ? !!op.v : op.v);
       return true;
     case 'nudge': { const st = S.corrector ? 2 : S.spec === 'bio' ? 100 : 10; set('df', +clamp(S.df + op.d * st, ...dfLimits(S)).toFixed(1), 'df'); return true; }
-    case 'zoom': set('fov', +clamp(S.fov * op.f, 1.5, 120).toFixed(2), 'fov'); return true;
+    case 'zoom': set('fov', +clamp(S.fov * op.f, 1.5, fovMax(S)).toFixed(2), 'fov'); return true;
     case 'scale': set(op.k, +clamp(S[op.k] * op.f, 0.5, 20000).toFixed(2), op.k); return true;
     case 'temp': {
       let h = S.holder;

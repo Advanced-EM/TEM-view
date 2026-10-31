@@ -633,7 +633,7 @@ function makeLibrary() {
   const spec = {
     id: 'lib', name: 'Nanoparticle megalibrary (1000 × 1000 alloy particles)', short: 'Megalibrary',
     alpha: 1.4e-5, poly: true, noCBED: true, filmOnly: true, noGrid: true, ownTilt: true, zExp: 1,
-    atoms: empty, period: 1, center: [0, 0], fov: 40, zone: '—', grainRot: [0], ver: 0, cur: null,
+    atoms: empty, period: 1, center: [0, 0], fov: 40, fovMax: 1.2e6, zone: '—', grainRot: [0], ver: 0, cur: null,
     grains: [{ a1: [2.88, 0], a2: [0, 4.07], label: () => 'fcc' }],
     get rings() { return rings(this.cur?.p?.a_A ?? 4.0); },
     get elements() {
@@ -655,6 +655,95 @@ function makeLibrary() {
     tauAt(x, y, t, kV) { const p = this.cur?.p; return t / (10 * imfp(kV, 10)) + this.partT(x, y) / (10 * imfp(kV, p ? ML.meanZ(p.comp) : 50)); },
     plasmon: [{ Ep: 23, G: 14, frac: 0.6 }, { Ep: 19, G: 12, frac: 0.4 }],
     zeff: 10,
+    // Above a 130 nm field the particles are drawn without atoms: each one's projected mass, element by element,
+    // on a membrane laid down as a continuum. High- and low-angle scattering add up atom by atom, weighted as
+    // projectMaps weights atoms (the integral of its Gaussians), so they carry on smoothly; the phase is a
+    // projected potential, so per area: it is scaled to match projectMaps at the 130 nm handover, (6 Å / dx)².
+    // Up to 2500 particles in the field each is the full particle (outline, satellite); up to 20 000 a sketch
+    // (position, volume, composition); beyond that (pixels of ~0.6 µm and more, up to the whole chip) the
+    // particles are a continuum: each pen block's mean particle per grid cell, averaged over the pixel.
+    overviewA: 1300,
+    overview({ cx, cy, n, dx, thick, elements, part, tds }) {
+      const N2 = n * n, phase = new Float32Array(N2), zHi = new Float32Array(N2), zLo = new Float32Array(N2);
+      const elem = elements ? EL.map(() => new Float32Array(N2)) : null;
+      const x0 = cx - (n / 2) * dx, y0 = cy - (n / 2) * dx, out = { phase, zHi, zLo, elem, n, dx, x0, y0 };
+      const K = 2 * Math.PI * 0.36, ps = 36 / (dx * dx * K); // sA = 0.6 px atoms; phase per area
+      if (part !== 'cryst') {
+        const M = MAT.SiN, W = M.dens * dx * dx * thick * 2 * Math.PI * 0.49; // sB = 0.7 px blobs
+        for (const [e, f] of M.mix) {
+          for (let i = 0; i < N2; i++) { phase[i] += VP[e] * W * f * ps; zHi[i] += ZH[e] * W * f; zLo[i] += ZL[e] * W * f; }
+          if (elem) elem[e].fill(W * f);
+        }
+      }
+      if (part === 'amorph') return out;
+      const put = (k, N, comp) => {
+        for (const el in comp) {
+          const e = EI[el], w = N * comp[el] * K;
+          phase[k] += VP[e] * w * ps; zHi[k] += ZH[e] * w * tds; zLo[k] += ZL[e] * w;
+          if (elem) elem[e][k] += w;
+        }
+      };
+      // N atoms at (px, py) pixels, shared bilinearly between the four nearest pixels
+      const deposit = (px, py, N, comp) => {
+        const fx = Math.floor(px), fy = Math.floor(py), ax = px - fx, ay = py - fy;
+        for (const [x, y, w] of [[fx, fy, (1 - ax) * (1 - ay)], [fx + 1, fy, ax * (1 - ay)], [fx, fy + 1, (1 - ax) * ay], [fx + 1, fy + 1, ax * ay]])
+          if (x >= 0 && y >= 0 && x < n && y < n && w > 0) put(y * n + x, N * w, comp);
+      };
+      const PITCH = ML.LIB.pitch_um * STAGE, margin = 1000;
+      const i0 = Math.max(0, Math.floor((x0 - margin) / PITCH)), i1 = Math.min(ML.LIB.n - 1, Math.ceil((x0 + n * dx + margin) / PITCH));
+      const j0 = Math.max(0, Math.floor((y0 - margin) / PITCH)), j1 = Math.min(ML.LIB.n - 1, Math.ceil((y0 + n * dx + margin) / PITCH));
+      if (i1 < i0 || j1 < j0) return out;
+      const count = (i1 - i0 + 1) * (j1 - j0 + 1), pix = (x, y) => [(x - x0) / dx - 0.5, (y - y0) / dx - 0.5];
+      if (count <= 2500) {
+        for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+          const p = ML.particle(i, j);
+          if (!p.present) continue;
+          const px0 = p.x_um * STAGE, py0 = p.y_um * STAGE, rho = 4 / p.a_A ** 3; // fcc: 4 atoms per a³
+          // the particle and its satellite: centre offset, bounding radius and volume (nm, nm³)
+          const sat = p.satellite, parts = [[0, 0, Math.max(p.a_nm, p.b_nm), ML.sketch(i, j).vol_nm3], ...(sat ? [[sat.dx_nm, sat.dy_nm, sat.d_nm / 2, (Math.PI / 6) * sat.d_nm ** 3]] : [])];
+          for (const [ux, uy, r, vol] of parts) {
+            const [qx, qy] = pix(px0 + 10 * ux, py0 + 10 * uy), R = (10 * r) / dx;
+            if (R < 1.5) { deposit(qx, qy, rho * 1000 * vol, p.comp); continue; }
+            const xa = Math.max(0, Math.floor(qx - R)), xb = Math.min(n - 1, Math.ceil(qx + R)), ya = Math.max(0, Math.floor(qy - R)), yb = Math.min(n - 1, Math.ceil(qy + R));
+            for (let y = ya; y <= yb; y++) for (let x = xa; x <= xb; x++) {
+              // thickness (nm) of this body only at the pixel centre
+              const u = ((x + 0.5) * dx + x0 - px0) / 10, v = ((y + 0.5) * dx + y0 - py0) / 10;
+              let t;
+              if (ux === 0 && uy === 0) { const rr = ML.rho(p, u, v); t = rr < 1 ? 2 * p.c_nm * Math.sqrt(1 - rr * rr) : 0; }
+              else { const d2 = (u - ux) ** 2 + (v - uy) ** 2; t = d2 < r * r ? 2 * Math.sqrt(r * r - d2) : 0; }
+              if (t > 0) put(y * n + x, rho * 10 * t * dx * dx, p.comp);
+            }
+          }
+        }
+      } else if (count <= 20000) {
+        for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+          const s = ML.sketch(i, j);
+          if (s.present) deposit(...pix(s.x_um * STAGE, s.y_um * STAGE), (4000 * s.vol_nm3) / s.a_A ** 3, s.comp);
+        }
+      } else {
+        // mean particle of grid node (i, j): its column in the block sets the size, its pen the ink; 1.5 % of
+        // dots are empty; the mean in-plane area factor over the shapes (65 % elliptical, 35 % squarer) is 3.285.
+        // Each pixel averages 3 × 3 points over its area, so the blocks' edges and size ramps are not aliased.
+        const [d0, d1] = ML.LIB.d_nm, B = ML.LIB.block, L = ML.LIB.n, perArea = (dx * dx) / (PITCH * PITCH);
+        const memo = new Map(), mean = (i, j) => {
+          const key = (Math.floor(j / B) * ML.LIB.pens + Math.floor(i / B)) * B + (i % B);
+          if (!memo.has(key)) {
+            const ink = ML.sketchInk(i, j), d = d0 + ((d1 - d0) * (i % B)) / (B - 1);
+            memo.set(key, [(0.985 * 4000 * (4 / 3) * 0.43 * d * (d / 2) ** 2 * 3.285) / ML.latticeA(ink) ** 3, ink]);
+          }
+          return memo.get(key);
+        };
+        for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+          for (let sy = 0; sy < 3; sy++) for (let sx = 0; sx < 3; sx++) {
+            const i = Math.round((x0 + (x + (sx + 0.5) / 3) * dx) / PITCH), j = Math.round((y0 + (y + (sy + 0.5) / 3) * dx) / PITCH);
+            if (i < 0 || j < 0 || i >= L || j >= L) continue;
+            const [N, ink] = mean(i, j);
+            put(y * n + x, (N * perArea) / 9, ink);
+          }
+        }
+      }
+      return out;
+    },
     // build the particle nearest the stage position (Å) at this tilt (degrees); true when it changed
     locate(cx, cy, tiltX = 0, tiltY = 0) {
       const ij = ML.nearest(cx / STAGE, cy / STAGE), tk = `${Math.round(tiltX * 20)}|${Math.round(tiltY * 20)}`;
@@ -824,6 +913,7 @@ export function projectMaps(spec, { cx, cy, n, dx, thick, tiltX = 0, tiltY = 0, 
 
   // expansion is about the atom list's origin; a specimen that rotates its own atoms with the tilt (ownTilt)
   // needs no smearing, and zExp is how high-angle scattering grows with the atoms in a column
+  if (spec.overview && n * dx > spec.overviewA) return spec.overview({ cx, cy, n, dx, thick, elements, part, tds });
   const A = spec.atoms, pad = 4, ox = A.ox, oy = A.oy, tanA = spec.ownTilt ? 0 : tanT, zExp = spec.zExp ?? 0.85;
   if (part !== 'amorph') A.query(ox + (x0 - pad - ox) / sc, oy + (y0 - pad - oy) / sc, ox + (x0 + n * dx + pad - ox) / sc, oy + (y0 + n * dx + pad - oy) / sc, (i) => {
     if (A.dead && A.dead[i]) return;
