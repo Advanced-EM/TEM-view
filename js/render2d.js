@@ -118,7 +118,9 @@ function roundRect(ctx, x, y, w, h, r) {
 }
 
 export function scaleBar(ctx, dst, fovA, dpr) {
-  const nice = [1, 2, 5, 10, 20, 50, 100, 200];
+  // 1, 2, 5 × 10ⁿ Å, from 1 Å to 1 mm (the megalibrary zooms out to the whole chip)
+  const nice = [];
+  for (let e = 1; e <= 1e7; e *= 10) nice.push(e, 2 * e, 5 * e);
   const target = fovA * 0.22;
   let L = nice[0];
   for (const v of nice) if (v <= target) L = v;
@@ -129,7 +131,7 @@ export function scaleBar(ctx, dst, fovA, dpr) {
   font(ctx, 10, dpr, 500);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'bottom';
-  ctx.fillText(L >= 10 ? `${L / 10} nm` : `${L} Å`, x + px / 2, y - 3 * dpr);
+  ctx.fillText(L >= 1e7 ? `${L / 1e7} mm` : L >= 1e4 ? `${L / 1e4} µm` : L >= 10 ? `${L / 10} nm` : `${L} Å`, x + px / 2, y - 3 * dpr);
   ctx.textAlign = 'left';
 }
 
