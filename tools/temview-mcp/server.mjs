@@ -22,6 +22,9 @@ import * as P from '../../js/physics.js';
 import { collectData, toNpz } from '../../js/export.js';
 import { analyze, ANALYSES } from '../../js/analyze.js';
 import { MAGSPECS } from '../../js/lorentz.js';
+import { particle as libParticle } from '../../js/megalibrary.js';
+import { readFileSync } from 'node:fs';
+import { basename } from 'node:path';
 
 const PORT = +(process.env.TEMVIEW_PORT ?? 8790);
 const ORIGINS = (process.env.TEMVIEW_ORIGINS ?? 'https://advanced-em.github.io').split(',').map((s) => s.trim()).filter(Boolean);
@@ -66,10 +69,10 @@ const safe = (fn) => async (args) => { try { return await fn(args); } catch (e) 
 
 // ------------------------------------------------------------------ settings → exhibit operations (same ops as voice commands)
 const MODES = ['tem', 'stem', '4d', 'diff', 'cbed', 'eds', 'eels', 'ronch', 'oah', 'ilh', 'ltem', 'lstem'];
-const SPECS = ['au', 'si', 'sto', 'gr', 'mof', 'bio'];
+const SPECS = ['au', 'si', 'sto', 'gr', 'mof', 'bio', 'lib'];
 const settings = {
   mode: z.enum(MODES).optional().describe('tem, stem, 4d (4D-STEM), diff (SAED), cbed, eds, eels, ronch (Ronchigram), oah (off-axis holography), ilh (in-line holography), ltem (Lorentz TEM: magnetic domains), lstem (Lorentz STEM: DPC induction maps)'),
-  specimen: z.enum(SPECS).optional().describe('au gold on carbon, si silicon, sto SrTiO3 grain boundary, gr graphene, mof UiO-66, bio proteins in vitreous ice'),
+  specimen: z.enum(SPECS).optional().describe('au gold on carbon, si silicon, sto SrTiO3 grain boundary, gr graphene, mof UiO-66, bio proteins in vitreous ice, lib nanoparticle megalibrary (1000 × 1000 alloy particles on a 1 µm grid; pick one with particle)'),
   kV: z.union([z.literal(80), z.literal(200), z.literal(300)]).optional(),
   defocus_nm: z.number().min(-5000).max(5000).optional().describe('C1; negative is underfocus'),
   fov_nm: z.number().positive().max(200).optional().describe('field of view'),
@@ -78,6 +81,8 @@ const settings = {
   holder: z.enum(['room', 'ln2', 'lhe', 'heat']).optional(),
   temperature_K: z.number().min(4).max(1500).optional(),
   realistic: z.boolean().optional().describe('shot noise and real detectors instead of the clean educational view'),
+  xyz_file: z.string().optional().describe('path to an XYZ file (atoms in Å) to use as the specimen; tilt rotates it'),
+  particle: z.tuple([z.number().int().min(0).max(999), z.number().int().min(0).max(999)]).optional().describe('megalibrary particle [i, j] to centre under the beam (specimen lib)'),
   // Lorentz modes (ltem, lstem)
   magnetic_specimen: z.enum(['vortex', 'landau', 'fege']).optional().describe('Lorentz modes: vortex permalloy disc, landau permalloy rectangle, fege FeGe lamella (cool below 278 K; field along the beam makes skyrmions)'),
   lorentz_view: z.enum(['fresnel', 'foucault', 'tie', 'phase']).optional().describe('ltem display'),
@@ -108,7 +113,9 @@ function toOps(a) {
 // ------------------------------------------------------------------ headless simulation
 function simulate(a) {
   const S = defaultState();
-  if (a.specimen) { const sp = P.SPECIMENS[a.specimen]; S.spec = a.specimen; S.fov = sp.fov; [S.cx, S.cy] = sp.center; }
+  if (a.specimen) { const sp = P.SPECIMENS[a.specimen]; S.spec = a.specimen; S.fov = sp.fov; [S.cx, S.cy] = sp.center; if (a.specimen === 'lib') S.thick = 10; }
+  if (a.xyz_file) { const r = P.loadXYZ(readFileSync(a.xyz_file, 'utf8'), basename(a.xyz_file)); S.spec = 'xyz'; S.fov = a.fov_nm ?? r.fov_nm; S.cx = 0; S.cy = 0; S.thick = a.thickness_nm ?? 3; }
+  if (a.particle) { const p = libParticle(...a.particle); S.spec = 'lib'; S.cx = p.x_um * 1e4; S.cy = p.y_um * 1e4; if (!a.specimen) { S.fov = P.SPECIMENS.lib.fov; S.thick = 10; } }
   if (a.mode) S.mode = a.mode;
   const fam = ['tem', 'diff', 'oah', 'ilh', 'ltem'].includes(S.mode) ? 'tem' : 'probe';
   if (a.kV) S.kV = a.kV;

@@ -51,6 +51,10 @@ img.save("haadf.npz")                    # the same .npz the exhibit's Export bu
 | `tem.challenge(id, seed)` | start a hidden misalignment: `tem-focus-stig` or `corrector-ronch` |
 | `tem.score()` | the challenge score, computed from the true optics, as in the training tasks |
 | `tem.reveal()` / `tem.end_challenge()` | the hidden values / restore the instrument as it was before the challenge |
+| `tem.load_xyz(path_or_text, name=None)` | your own structure from an XYZ file (Å, any elements) as specimen `xyz`, on a thin carbon support; tilt (±30°) rotates it |
+| `tem.move(dx_nm, dy_nm)` | move the stage, e.g. to centre a feature found in an image |
+| `tem.library()` / `tem.goto(i, j)` | the nanoparticle megalibrary's layout / drive to its particle (i, j) (`specimen="lib"`) |
+| `tem.particle(i, j)` | the true particle (i, j): composition, size, shape, phase, lattice, orientations; for scoring a screen |
 | `tem.info()` | modes, specimens, settings, analyses and challenges this backend offers |
 
 ## Testing automation
@@ -69,7 +73,26 @@ Headless and in the exhibit's IDE, the same seeds give the same scores.
 python examples/auto_focus_stig.py
 ```
 
-Other examples: `quickstart.py`, `through_focus.py`, `stem_detectors.py`. All of them are in the IDE's
+### A high-throughput screen
+
+The megalibrary specimen (`lib`) is a million alloy nanoparticles (Au, Ag, Cu, Co, Ni; 15–25 nm) on a 1 µm grid,
+laid out as polymer pen lithography makes them: a 10 × 10 pen array, each pen writing a 100 × 100 block, with
+the ink composition changing across the pens and the dot size along each block. Particles where the noble
+metals meet Co–Ni segregate into two-crystal heterostructures; others are alloys, some twinned; every particle
+has its own crystal orientation. The same library, particle for particle, is in SEM-view for TKD.
+
+`examples/megalibrary_screen.py` drives the stage particle by particle, finds and re-centres each one in a
+HAADF survey (in the realistic view the stage misses by ~25 nm), then measures size and shape (HAADF),
+composition and segregation (EDS, multiple least squares over a Kramers continuum) and the lattice parameter
+(diffraction, indexed with the composition), and scores everything against `particle(i, j)`. On a 4 × 4
+sample: composition within 3.9 at.% per element, size within 0.4 nm, every heterostructure recognized,
+lattice parameter within 0.03 Å; about 3 s per particle headless.
+
+```bash
+python examples/megalibrary_screen.py --n 10   # one particle per pen block
+```
+
+Other examples: `xyz_structure.py` (a structure of your own from an XYZ file, on and off a zone axis), `quickstart.py`, `through_focus.py`, `stem_detectors.py`. All of them are in the IDE's
 Examples menu.
 
 ## Rules

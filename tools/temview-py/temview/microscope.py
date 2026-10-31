@@ -107,6 +107,38 @@ class Microscope:
         """Advance the simulation n frames of 50 ms (drift, dose, temperature change with time)."""
         return self._t.call("step", {"n": int(n)})
 
+    # -- a structure of your own
+    def load_xyz(self, xyz: str, name: str | None = None) -> dict:
+        """Use an XYZ file (a path, or the file's text) as the specimen "xyz": atoms in Å, any elements, on a
+        thin carbon support. Tilting the stage rotates the structure. Returns the atom count and elements."""
+        import os
+
+        if "\n" not in xyz and os.path.exists(xyz):
+            name = name or os.path.basename(xyz)
+            with open(xyz) as f:
+                xyz = f.read()
+        return self._t.call("load_xyz", {"text": xyz, "name": name or "structure.xyz"})
+
+    # -- the stage, and the nanoparticle megalibrary (specimen="lib")
+    def move(self, dx_nm: float = 0, dy_nm: float = 0) -> dict:
+        """Move the stage by (dx, dy) nm, e.g. to centre a particle found in an image."""
+        return self._t.call("move", {"dx_nm": float(dx_nm), "dy_nm": float(dy_nm)})
+
+    def library(self) -> dict:
+        """The megalibrary's layout: 1000 × 1000 particles on a 1 µm grid, the pen blocks, the elements."""
+        return self._t.call("library")
+
+    def goto(self, i: int, j: int) -> dict:
+        """Drive the stage to particle (i, j) of the megalibrary (loads it if needed). With realistic=True the
+        stage lands within ~25 nm of the node, and the particle sits within ~60 nm of it: re-centre before
+        measuring."""
+        return self._t.call("goto", {"i": int(i), "j": int(j)})
+
+    def particle(self, i: int, j: int) -> dict:
+        """The true particle (i, j): composition, size, shape, phase, lattice, domains and orientations. For
+        scoring an automated screen, not for running one."""
+        return self._t.call("particle", {"i": int(i), "j": int(j)})
+
     # -- challenges: a training task's hidden misalignment, for testing automation
     def challenge(self, id: str, seed: int | None = None) -> dict:
         """Start a training task as a challenge: tem-focus-stig or corrector-ronch. The knob readings no

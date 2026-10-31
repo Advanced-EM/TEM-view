@@ -171,7 +171,9 @@ export class Sim {
   maps(opts) {
     const S = this.S;
     const th = this.thermal(), ice = this.ice();
-    const key = [S.spec, th.u2r, th.eps, Math.round(ice.t), ice.cryst ? 1 : 0, this.spec.damageVer ?? 0, S.cx.toFixed(2), S.cy.toFixed(2), S.thick, S.tiltX, S.tiltY, opts.n, opts.dx.toFixed(4), !!opts.elements, !!opts.noTilt, opts.part ?? ''].join('|');
+    // a specimen built around the stage position (the megalibrary) builds the particle under the beam first
+    this.spec.locate?.(S.cx, S.cy, S.tiltX, S.tiltY);
+    const key = [S.spec, this.spec.ver ?? 0, th.u2r, th.eps, Math.round(ice.t), ice.cryst ? 1 : 0, this.spec.damageVer ?? 0, S.cx.toFixed(2), S.cy.toFixed(2), S.thick, S.tiltX, S.tiltY, opts.n, opts.dx.toFixed(4), !!opts.elements, !!opts.noTilt, opts.part ?? ''].join('|');
     let m = this.mapCache.get(key);
     if (!m) {
       const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
@@ -439,7 +441,7 @@ export class Sim {
     // (beam spreading, channeling) are in the recorded patterns. On Au/C the particles sit on top of the film.
     const K = 3, thickA = this.spec.fixedT ?? S.thick * 10, dz = thickA / K;
     const slices = [];
-    if (this.spec.id === 'au') {
+    if (this.spec.filmOnly) {
       const top = this.maps({ n: gridN, dx, part: 'cryst' }), bot = this.maps({ n: gridN, dx, part: 'amorph' });
       for (let k = 0; k < K; k++) slices.push(P.transmission((k < K / 2 ? top : bot).phase, S.kV, 2 / K));
     } else {
@@ -779,7 +781,8 @@ export class Sim {
       }
     };
     for (const L of P.XRAY) {
-      if (L.el === 'Cu') { addLine(L.E, 0.012 * L.w * P.detEff(L.E)); continue; }
+      // the copper grid's system peak (a membrane chip on a silicon frame has none)
+      if (L.el === 'Cu' && !this.spec.noGrid) addLine(L.E, 0.012 * L.w * P.detEff(L.E));
       const c = compSym[L.el];
       if (c) addLine(L.E, c * L.y * L.w * P.detEff(L.E));
     }

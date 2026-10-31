@@ -21,7 +21,8 @@ import { collectData, toNpz } from './export.js';
 import { openCalibration } from './calibui.js';
 import { ScriptCore, b64 } from './scripting.js';
 import { PythonIDE } from './ide.js';
-import { specState, modeState, setState, chipState, resetVdet as resetVdetState, optimalDefocus, dfLimits as dfLimitsOf, lorSet, tiltLimit } from './ops.js';
+import { specState, modeState, setState, chipState, resetVdet as resetVdetState, optimalDefocus, dfLimits as dfLimitsOf, lorSet, tiltLimit, libGoto } from './ops.js';
+import * as ML from './megalibrary.js';
 import { MAGSPECS } from './lorentz.js';
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -59,7 +60,11 @@ const NOT_LOR = 'tem stem 4d diff cbed eds eels ronch oah ilh';
 const LOR = 'ltem lstem';
 const CONTROLS = [
   { sec: 'The specimen' },
-  { chips: 'spec', modes: NOT_LOR, opts: [['au', 'Gold on carbon'], ['si', 'Si / SiO₂'], ['sto', 'SrTiO₃ boundary'], ['gr', 'Graphene'], ['mof', 'UiO-66 (MOF)'], ['bio', 'Proteins in ice']] },
+  { chips: 'spec', modes: NOT_LOR, opts: [['au', 'Gold on carbon'], ['si', 'Si / SiO₂'], ['sto', 'SrTiO₃ boundary'], ['gr', 'Graphene'], ['mof', 'UiO-66 (MOF)'], ['bio', 'Proteins in ice'], ['lib', 'NP megalibrary']] },
+  { modes: NOT_LOR, pFn: () => { const ij = ML.nearest(S.cx / 1e4, S.cy / 1e4); return `Stage at (${(S.cx / 1e4).toFixed(3)}, ${(S.cy / 1e4).toFixed(3)}) µm: ${ij ? `particle (${ij[0]}, ${ij[1]}) of 1000 × 1000, pen block (${Math.floor(ij[0] / 100)}, ${Math.floor(ij[1] / 100)})` : 'outside the library'}. Thickness is the Si₃N₄ membrane. Script a screen with goto(i, j) in Python.`; }, show: () => S.spec === 'lib' },
+  { buttons: [['loadXYZ', 'Load an XYZ file…']], modes: NOT_LOR },
+  { modes: NOT_LOR, pFn: () => `${sim.spec.name.replace(/[<>&]/g, '')}. Tilt the stage to turn it; the thickness setting is the carbon support underneath.`, show: () => S.spec === 'xyz' },
+  { buttons: [['libPrev', '← Particle'], ['libNext', 'Particle →'], ['libRow', 'Next row'], ['libRand', 'Random particle']], modes: NOT_LOR, show: () => S.spec === 'lib' },
   { chips: 'holder', label: 'Specimen holder', opts: Object.entries(HOLDERS).map(([k, v]) => [k, v.short]) },
   { slider: 'tempSet', label: 'Temperature setpoint', dyn: () => { const H = HOLDERS[S.holder]; return { min: H.min, max: H.max, step: H.step, log: H.log }; }, fmt: (v) => fmtT(v), show: () => S.holder !== 'room' },
   { pFn: () => `Specimen at ${fmtT(sim.temp())}${S.holder === 'room' ? '' : ` (setpoint ${fmtT(S.tempSet)}; the grid runs ${S.holder === 'heat' ? 'about 1 % hotter than the reading' : 'warmer than the holder tip'} and fluctuates by ±${HOLDERS[S.holder].jitter} K)`}. Drift ${sim.driftSpeed().toFixed(2)} Å/s.` },
@@ -424,6 +429,22 @@ function action(id, el) {
     // saturate and relax: the vortex (or the Landau pattern) comes back with a random sense, and a random core
     S.lorChir = Math.random() < 0.5 ? -1 : 1; S.lorPol = Math.random() < 0.5 ? -1 : 1;
     sim.invalidate('magnet'); explainChange('lorReset');
+  }
+  if (id === 'loadXYZ') {
+    const inp = Object.assign(document.createElement('input'), { type: 'file', accept: '.xyz,chemical/x-xyz,text/plain' });
+    inp.addEventListener('change', async () => {
+      const f = inp.files[0];
+      if (!f) return;
+      const esc = (t) => String(t).replace(/[<>&]/g, '');
+      try { P.loadXYZ(await f.text(), f.name); setSpec('xyz'); }
+      catch (err) { $('#change').hidden = false; $('#change').innerHTML = `<small>Could not load ${esc(f.name)}</small><p>${esc(err.message)}</p>`; }
+    });
+    inp.click();
+  }
+  if (id.startsWith('lib')) {
+    const [i, j] = ML.nearest(S.cx / 1e4, S.cy / 1e4) ?? [0, 0], n = ML.LIB.n;
+    const to = { libPrev: [Math.max(0, i - 1), j], libNext: [Math.min(n - 1, i + 1), j], libRow: [i, Math.min(n - 1, j + 1)], libRand: [Math.floor(Math.random() * n), Math.floor(Math.random() * n)] }[id];
+    if (to) { libGoto(S, sim, ...to, true); refreshControls(); explainChange('stage'); }
   }
   if (id === 'fresh') { S.cx += 6 * (Math.random() - 0.5); sim.freshArea(); sim.invalidate('stage'); explainChange('fresh'); }
   if (id === 'scramble') {
