@@ -32,6 +32,9 @@ const XY = ['gunShift', 'gunTilt', 'beamShift', 'c2', 'condStig', 'ppX', 'ppY', 
 export const isColdFEG = (S) => /cold/i.test(S.profile?.gun ?? '');
 const hyp = (v) => Math.hypot(v[0], v[1]);
 const r3 = (v) => +v.toFixed(3);
+// pads are round and span the unit disk: 1 is the rim. The dot's center travels 46 px, so it stays inside the 104 px pad
+const PAD_TRAVEL = 46;
+const padClamp = (x, y) => { const m = Math.max(1, Math.hypot(x, y)); return [r3(x / m), r3(y / m)]; };
 const esc = (t) => String(t).replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' })[c]);
 
 // effective misalignment = knob + hidden offset (aligned when ≈ 0)
@@ -145,13 +148,13 @@ export const ALIGN_SCENARIO = {
     let on = false;
     const set = (e) => {
       const r = pad.getBoundingClientRect();
-      A[k] = [r3(((e.clientX - r.left) / r.width * 2 - 1) * 0.6), r3(-((e.clientY - r.top) / r.height * 2 - 1) * 0.6)];
+      A[k] = padClamp((e.clientX - r.left - r.width / 2) / PAD_TRAVEL, -(e.clientY - r.top - r.height / 2) / PAD_TRAVEL);
     };
     el.addEventListener('pointerdown', () => this.select(k));
     pad.addEventListener('pointerdown', (e) => { on = true; pad.setPointerCapture(e.pointerId); this.ui.api.noteSource?.(e.pointerType === 'touch' ? 'touch' : 'mouse'); set(e); });
     pad.addEventListener('pointermove', (e) => { if (on) set(e); });
     pad.addEventListener('pointerup', () => { on = false; });
-    pad.addEventListener('wheel', (e) => { e.preventDefault(); this.select(k); A[k] = [A[k][0], r3(A[k][1] - Math.sign(e.deltaY) * 0.005)]; }, { passive: false });
+    pad.addEventListener('wheel', (e) => { e.preventDefault(); this.select(k); A[k] = padClamp(A[k][0], A[k][1] - Math.sign(e.deltaY) * 0.005); }, { passive: false });
   },
   // the panel's multifunction knobs drive the selected control (fine steps)
   mf() {
@@ -160,7 +163,7 @@ export const ALIGN_SCENARIO = {
     if (!k) return null;
     return {
       label: () => (k === 'z' ? `Stage Z ${A.z.toFixed(2)} µm` : `${KNOBS[STEPS[A.step].id].find((x) => x[0] === k)?.[1] ?? k}: ${A[k][0].toFixed(3)}, ${A[k][1].toFixed(3)}`),
-      apply: (dx, dy) => { if (k === 'z') A.z = +(A.z + (dx - dy) * 0.05).toFixed(2); else A[k] = [r3(Math.max(-0.6, Math.min(0.6, A[k][0] + dx * 0.004))), r3(Math.max(-0.6, Math.min(0.6, A[k][1] + dy * 0.004)))]; },
+      apply: (dx, dy) => { if (k === 'z') A.z = +(A.z + (dx - dy) * 0.05).toFixed(2); else A[k] = padClamp(A[k][0] + dx * 0.004, A[k][1] + dy * 0.004); },
     };
   },
 
@@ -169,7 +172,7 @@ export const ALIGN_SCENARIO = {
     const { api, body } = this.ui, A = api.S.align;
     body.querySelectorAll('.algn-pad').forEach((p) => {
       const v = A[p.dataset.k];
-      p.querySelector('i').style.transform = `translate(${(v[0] / 0.6) * 46}px, ${(-v[1] / 0.6) * 46}px)`;
+      p.querySelector('i').style.transform = `translate(${v[0] * PAD_TRAVEL}px, ${-v[1] * PAD_TRAVEL}px)`;
       p.querySelector('small').textContent = `${v[0].toFixed(3)}, ${v[1].toFixed(3)}`;
     });
     const zs = body.querySelector('.algn-z span'); if (zs) zs.textContent = A.z.toFixed(2);
