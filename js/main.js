@@ -63,7 +63,7 @@ const CONTROLS = [
   { sec: 'The specimen' },
   { chips: 'spec', modes: NOT_LOR, opts: [['au', 'Gold on carbon'], ['si', 'Si / SiO₂'], ['sto', 'SrTiO₃ boundary'], ['gr', 'Graphene'], ['mof', 'UiO-66 (MOF)'], ['bio', 'Proteins in ice'], ['lib', 'NP megalibrary']] },
   { modes: NOT_LOR, pFn: () => { const ij = ML.nearest(S.cx / 1e4, S.cy / 1e4); return `Stage at (${(S.cx / 1e4).toFixed(3)}, ${(S.cy / 1e4).toFixed(3)}) µm: ${ij ? `particle (${ij[0]}, ${ij[1]}) of 1000 × 1000, pen block (${Math.floor(ij[0] / 100)}, ${Math.floor(ij[1] / 100)})` : 'outside the library'}. Thickness is the Si₃N₄ membrane. Script a screen with goto(i, j) in Python.`; }, show: () => S.spec === 'lib' },
-  { buttons: [['loadXYZ', 'Load an XYZ file…']], modes: NOT_LOR },
+  { buttons: [['loadXYZ', 'Load an XYZ file…']] },
   { modes: NOT_LOR, pFn: () => `${sim.spec.name.replace(/[<>&]/g, '')}. Tilt the stage to turn it; the thickness setting is the carbon support underneath.`, show: () => S.spec === 'xyz' },
   { buttons: [['libPrev', '← Particle'], ['libNext', 'Particle →'], ['libRow', 'Next row'], ['libRand', 'Random particle'], ['libChip', 'Whole chip']], modes: NOT_LOR, show: () => S.spec === 'lib' },
   { chips: 'holder', label: 'Specimen holder', opts: Object.entries(HOLDERS).map(([k, v]) => [k, v.short]) },
@@ -437,7 +437,8 @@ function action(id, el) {
       const f = inp.files[0];
       if (!f) return;
       const esc = (t) => String(t).replace(/[<>&]/g, '');
-      try { P.loadXYZ(await f.text(), f.name); setSpec('xyz'); }
+      // the Lorentz modes image magnetic specimens only, so a structure opens in TEM
+      try { P.loadXYZ(await f.text(), f.name); if (LOR.split(' ').includes(S.mode)) setMode('tem'); setSpec('xyz'); }
       catch (err) { $('#change').hidden = false; $('#change').innerHTML = `<small>Could not load ${esc(f.name)}</small><p>${esc(err.message)}</p>`; }
     });
     inp.click();
