@@ -1063,17 +1063,18 @@ export class Sim {
   // Critical dose Dc ∝ β² (inelastic cross-section ∝ 1/β²), so lower voltage destroys the crystal faster.
   // radiolysis: falls as β² at lower voltage; cooling to liquid-nitrogen temperature slows it several-fold
   critDose() { return this.spec.Dc300 * Math.pow(P.betaOf(this.S.kV) / P.betaOf(300), 2) * radiolysisFactor(this.temp(), this.spec.cryoProtect ?? 3); }
-  radiolysis(dt) {
+  radiolysis(dt, live = false) {
     const S = this.S, spec = this.spec;
     if (!spec.beamSensitive || S.paused || S.mode === 'ronch') return;
     this.doseAcc = (this.doseAcc || 0) + S.dose * 0.5 * dt * S.speed;
     // too hot: the framework or the protein decomposes even without the beam (expressed as equivalent dose)
     if (spec.thermalLimit && this.temp() > spec.thermalLimit) this.doseAcc += this.critDose() * 0.08 * Math.exp((this.temp() - spec.thermalLimit) / 40) * dt * S.speed;
     const q = 1 - Math.exp(-this.doseAcc / this.critDose()), qs = Math.round(q * 40) / 40;
-    // refresh at most ~3× a second, and never spend more than about a third of the time recomputing the
-    // projected specimen (the expensive part, e.g. ~0.3 s for proteins in ice)
+    // live, refresh at most ~3× a second, and never spend more than about a third of the time recomputing the
+    // projected specimen (the expensive part, e.g. ~0.3 s for proteins in ice). Scripts follow simulated time
+    // only, so the same settings give the same damage on any machine.
     const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
-    if (qs !== spec.dmg && now - (this._dmgT || 0) > Math.max(330, 3 * (this._mapsMs || 0))) { this._dmgT = now; spec.dmg = qs; spec.damageVer++; this.invalidate('damage'); this._soft = true; }
+    if (qs !== spec.dmg && (!live || now - (this._dmgT || 0) > Math.max(330, 3 * (this._mapsMs || 0)))) { this._dmgT = now; spec.dmg = qs; spec.damageVer++; this.invalidate('damage'); this._soft = true; }
   }
   freshArea() {
     const spec = this.spec;
@@ -1156,9 +1157,9 @@ export class Sim {
     }
   }
 
-  update(dt) {
+  update(dt, live = false) {
     this.sputter(dt);
-    this.radiolysis(dt);
+    this.radiolysis(dt, live);
     this.thermalStep(dt);
     this.zlpStep(dt);
     const S = this.S, m = S.mode;

@@ -1166,7 +1166,7 @@ function frame(now) {
   try {
     hwPanel.poll(dt);
     scn.tick();
-    sim.update(dt);
+    sim.update(dt, true);
     const live = S.clarity === 'real' && ['tem', 'stem', 'diff', 'ronch', 'cbed'].includes(S.mode) && !S.paused;
     if (sim.version !== lastVer || (live && now - lastDraw > 70) || redraw) {
       redraw = false;

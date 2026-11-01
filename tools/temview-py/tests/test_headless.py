@@ -1,4 +1,6 @@
 """Headless backend: the same calls a script makes in the exhibit. Run: pytest tools/temview-py/tests"""
+import time
+
 import numpy as np
 import pytest
 
@@ -188,3 +190,20 @@ def test_load_xyz(tem):
     assert {"map_Au", "map_Pd", "map_O"} <= set(a.arrays)
     with pytest.raises(TemviewError, match="not an XYZ file"):
         tem.load_xyz("hello\nworld\n")
+
+
+def test_beam_damage_follows_simulated_time_not_the_clock():
+    # the live exhibit throttles damage refreshes by wall time; a script must not depend on how fast it runs
+    def series(pause):
+        m = tv.connect("headless")
+        m.set(mode="tem", specimen="mof", kV=300, dose=2, fov_nm=20)
+        first = m.acquire().image.copy()
+        m.step(40)
+        time.sleep(pause)
+        last = m.acquire().image.copy()
+        m.close()
+        return np.abs(last - first).mean() / first.mean()
+
+    fast, paced = series(0), series(0.5)
+    assert fast > 0.01
+    assert fast == pytest.approx(paced, rel=0.05)
