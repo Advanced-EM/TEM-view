@@ -58,10 +58,7 @@ body::after { content: ''; position: fixed; inset: 0; pointer-events: none; back
 .grp > div { display: flex; gap: 2px; }
 .modes button { position: relative; padding: 5px 16px 5px 9px; border-radius: 8px; font: 600 12.5px var(--sans); color: var(--muted); transition: background 0.2s, color 0.2s; white-space: nowrap; }
 .modes button kbd { position: absolute; top: 3px; right: 3px; font-size: 8px; padding: 0 2px; border: 0; color: var(--dim); }
-.modes button:hover, .modes a:hover { color: var(--text); background: rgba(255, 255, 255, 0.04); }
-.modes a { padding: 5px 9px; border-radius: 8px; font: 600 12.5px var(--sans); color: var(--muted); text-decoration: none; white-space: nowrap; transition: background 0.2s, color 0.2s; }
-.grp.hist a { color: #e2b56b; }
-.grp.hist a:hover { color: #f6d28f; }
+.modes button:hover { color: var(--text); background: rgba(255, 255, 255, 0.04); }
 .modes button.on { color: var(--text); background: var(--accent-soft); box-shadow: inset 0 0 0 1px rgba(111, 214, 255, 0.35); }
 
 .chead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
@@ -193,7 +190,7 @@ body.stacked .explain, body.stacked .detector, body.stacked .controls { position
 body.stacked .modes { position: sticky; top: 0; left: auto; transform: none; z-index: 12; max-width: none; margin: 0; border-radius: 0; border-width: 0 0 1px; flex-wrap: nowrap; justify-content: flex-start; overflow-x: auto; scrollbar-width: none; padding: 6px 10px; background: rgba(8, 10, 14, 0.94); }
 body.stacked .modes::-webkit-scrollbar { display: none; }
 body.stacked .grp { flex: none; }
-body.stacked .modes button, body.stacked .modes a { padding: 8px 12px; }
+body.stacked .modes button { padding: 8px 12px; }
 body.stacked .detector { max-width: none; }
 body.stacked .dhead #secTitle, body.stacked .dhead .sp { display: none; }
 body.stacked .dhead #status { display: none; }
@@ -501,6 +498,8 @@ body.detBig .cmdbar { display: none; }
 .support { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; pointer-events: auto; }
 .spill { display: inline-flex; align-items: center; gap: 6px; font: 500 12px var(--sans); color: var(--text); text-decoration: none; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--panel); backdrop-filter: blur(10px); cursor: pointer; }
 .spill:hover { border-color: var(--accent); color: var(--accent); }
+.spill.hist { border-color: rgba(226, 181, 107, 0.45); }
+.spill.hist:hover { color: #f6d28f; border-color: #e2b56b; }
 .newsform { display: grid; gap: 10px; margin: 12px 0 6px; }
 .newsform label { display: grid; gap: 4px; font: 500 12px var(--sans); color: var(--muted); }
 .newsform label small { font-weight: 400; }

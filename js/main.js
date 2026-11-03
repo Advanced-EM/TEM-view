@@ -935,13 +935,6 @@ function wire() {
     b.addEventListener('click', () => setMode(m));
     grp.lastChild.appendChild(b);
   });
-  // the history exhibits are stand-alone pages; each links back here
-  grp = document.createElement('div');
-  grp.className = 'grp hist'; grp.dataset.g = 'History';
-  grp.innerHTML = '<small>History</small><div>'
-    + '<a href="ruska/" title="Drive the first electron microscope, Ernst Ruska’s column of 1933">Ruska 1933 ↗</a>'
-    + '<a href="scanning/" title="Three scanning transmission microscopes, 1938–2002">Scanning ↗</a></div>';
-  nav.appendChild(grp);
   document.querySelectorAll('.clarity button').forEach((b) => b.addEventListener('click', () => { S.clarity = b.dataset.v; sim.invalidate('clarity'); refreshControls(); explainChange('clarity'); }));
   $('#btnLabels').addEventListener('click', () => set('showLabels', !S.showLabels));
   $('#btnFull').addEventListener('click', () => { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.(); });
