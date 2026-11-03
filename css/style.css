@@ -498,6 +498,8 @@ body.detBig .cmdbar { display: none; }
 .support { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; pointer-events: auto; }
 .spill { display: inline-flex; align-items: center; gap: 6px; font: 500 12px var(--sans); color: var(--text); text-decoration: none; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--panel); backdrop-filter: blur(10px); cursor: pointer; }
 .spill:hover { border-color: var(--accent); color: var(--accent); }
+.spill.hist { border-color: rgba(226, 181, 107, 0.45); }
+.spill.hist:hover { color: #f6d28f; border-color: #e2b56b; }
 .newsform { display: grid; gap: 10px; margin: 12px 0 6px; }
 .newsform label { display: grid; gap: 4px; font: 500 12px var(--sans); color: var(--muted); }
 .newsform label small { font-weight: 400; }
