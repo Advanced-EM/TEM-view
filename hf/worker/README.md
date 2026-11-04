@@ -53,6 +53,42 @@ The CSV holds personal data, so keep it private (`subscribers*.csv` is git-ignor
 the key `email:<address>`. To remove someone, run
 `npx wrangler kv key delete --binding SUBSCRIBERS --remote "email:<address>"`.
 
+## Usage metrics
+
+The exhibits post anonymous usage records to `/usage` (see `../../privacy.html` and `../../js/usage.js`). The Worker
+adds the city-level location Cloudflare attaches to each request and, with the `USAGE_SALT` secret, a visitor
+key that changes daily. It never stores the IP address. Records go to a D1 database and, every day at 02:10 UTC,
+the previous day is committed to `USAGE_REPO` as `usage/<year>/<day>.jsonl`. Rows older than 90 days are dropped.
+
+Set it up once:
+
+1. On Hugging Face, create a **private** dataset `rmsreis/tem-view-usage` (or change `USAGE_REPO` in
+   `wrangler.toml`). The `HF_TOKEN` secret needs write access to it as well as to the alignment dataset.
+2. Create the database and its table:
+
+   ```bash
+   npx wrangler d1 create tem-view-usage
+   npx wrangler d1 execute tem-view-usage --remote --file usage.sql
+   ```
+
+   Paste the `database_id` it prints into `wrangler.toml` (replacing `PASTE_THE_ID_HERE`).
+3. Set the salt for the visitor key to a long random string, and keep it secret:
+
+   ```bash
+   openssl rand -hex 32 | npx wrangler secret put USAGE_SALT
+   ```
+
+4. Run `npx wrangler deploy`. The status page (`/`) then shows `"usage": true`.
+
+To see today's records before the daily commit:
+
+```bash
+npx wrangler d1 execute tem-view-usage --remote --command "SELECT record FROM usage WHERE day = date('now')"
+```
+
+Without the D1 binding, `/usage` answers 204 and stores nothing; without `USAGE_SALT`, records carry no visitor
+key.
+
 ## Test
 
 ```bash

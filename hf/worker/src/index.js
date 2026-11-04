@@ -12,7 +12,13 @@
 // It also keeps the news mailing list: POST /subscribe {email, name, institution, role} stores the address in the SUBSCRIBERS KV
 // namespace (private to the Cloudflare account, never in the public dataset). Without that binding, /subscribe
 // answers 503.
+//
+// And usage metrics (usage.js): POST /usage {tem-view-usage/1} from js/usage.js, with the coarse location Cloudflare
+// derives from the connection, into the USAGE_DB D1 database; a daily cron commits the previous day to USAGE_REPO as
+// usage/<year>/<day>.jsonl. Settings: USAGE_REPO (a private dataset), the USAGE_SALT secret for the per-day visitor
+// key. Without USAGE_DB, /usage answers 204 and stores nothing.
 import { clean, Invalid, MAX_BYTES } from './schema.js';
+import { cleanUsage, place, visitorKey, storeUsage, dayLines, prune, Invalid as BadUsage, USAGE_MAX_BYTES } from './usage.js';
 
 const json = (body, status = 200, headers = {}) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', ...headers } });
 
@@ -37,12 +43,12 @@ const b64 = (text) => {
 };
 
 // one commit per session: header line + file line (NDJSON), https://huggingface.co/docs/hub/api
-async function commit(env, path, text, summary) {
+async function commit(env, path, text, summary, repo = env.DATASET_REPO) {
   const body = [
     JSON.stringify({ key: 'header', value: { summary, description: '' } }),
     JSON.stringify({ key: 'file', value: { path, content: b64(text), encoding: 'base64' } }),
   ].join('\n');
-  const r = await fetch(`https://huggingface.co/api/datasets/${env.DATASET_REPO}/commit/main`, {
+  const r = await fetch(`https://huggingface.co/api/datasets/${repo}/commit/main`, {
     method: 'POST', headers: { authorization: `Bearer ${env.HF_TOKEN}`, 'content-type': 'application/x-ndjson' }, body,
   });
   if (!r.ok) throw new Error(`hub ${r.status}`);
@@ -71,20 +77,50 @@ async function subscribe(req, env, h) {
   return json({ ok: true }, 200, h);
 }
 
+async function usage(req, env, h) {
+  if (!env.USAGE_DB) return new Response(null, { status: 204, headers: h });
+  const text = await req.text();
+  if (text.length > USAGE_MAX_BYTES) return json({ detail: 'record too large' }, 413, h);
+  let rec;
+  try { rec = cleanUsage(JSON.parse(text)); } catch (e) {
+    return json({ detail: `invalid record: ${e instanceof BadUsage ? e.message : 'not JSON'}` }, 422, h);
+  }
+  const day = new Date().toISOString().slice(0, 10);
+  Object.assign(rec, place(req.cf), { visitor: await visitorKey(req.headers.get('cf-connecting-ip'), env.USAGE_SALT, day) });
+  await storeUsage(env.USAGE_DB, rec);
+  return new Response(null, { status: 204, headers: h });
+}
+
+// daily: commit yesterday's visits to the usage dataset, then drop old rows
+async function exportUsage(env, now = new Date()) {
+  if (!env.USAGE_DB) return;
+  const day = new Date(now - 86_400_000).toISOString().slice(0, 10);
+  const lines = await dayLines(env.USAGE_DB, day);
+  if (lines && env.HF_TOKEN && env.USAGE_REPO) await commit(env, `usage/${day.slice(0, 4)}/${day}.jsonl`, `${lines}\n`, `Usage ${day} (${lines.split('\n').length} visits)`, env.USAGE_REPO);
+  await prune(env.USAGE_DB, now);
+}
+
+export { exportUsage };
+
 export default {
+  async scheduled(event, env, ctx) { ctx.waitUntil(exportUsage(env, new Date(event.scheduledTime))); },
+
   async fetch(req, env) {
     const url = new URL(req.url), h = cors(req, env);
     const dry = !(env.HF_TOKEN && env.DATASET_REPO);
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: h });
-    if (req.method === 'GET' && url.pathname === '/') return json({ service: 'tem-view session collector', dataset: env.DATASET_REPO || null, dry_run: dry, mailing_list: !!env.SUBSCRIBERS }, 200, h);
-    if (req.method !== 'POST' || !['/submit', '/subscribe'].includes(url.pathname)) return json({ detail: 'not found' }, 404, h);
+    if (req.method === 'GET' && url.pathname === '/') return json({ service: 'tem-view session collector', dataset: env.DATASET_REPO || null, dry_run: dry, mailing_list: !!env.SUBSCRIBERS, usage: !!env.USAGE_DB }, 200, h);
+    if (req.method !== 'POST' || !['/submit', '/subscribe', '/usage'].includes(url.pathname)) return json({ detail: 'not found' }, 404, h);
     // browsers send from the exhibit only; sendBeacon carries the origin too
     if (!h['access-control-allow-origin']) return json({ detail: 'origin not allowed' }, 403);
-    if (env.LIMITER) {
-      const { success } = await env.LIMITER.limit({ key: await hashIp(req) });
+    // usage reports have their own, wider limit: a page reports once a minute and when it is hidden
+    const lim = url.pathname === '/usage' ? env.USAGE_LIMITER : env.LIMITER;
+    if (lim) {
+      const { success } = await lim.limit({ key: await hashIp(req) });
       if (!success) return json({ detail: 'too many submissions, try again later' }, 429, h);
     }
     if (url.pathname === '/subscribe') return subscribe(req, env, h);
+    if (url.pathname === '/usage') return usage(req, env, h);
     const text = await req.text();
     if (text.length > MAX_BYTES) return json({ detail: 'session too large' }, 413, h);
     let s;

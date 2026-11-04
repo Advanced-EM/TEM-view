@@ -6,6 +6,8 @@ workers_dev = true
 
 [vars]
 DATASET_REPO = "rmsreis/tem-view-alignment"
+# a private dataset for usage metrics (create it on Hugging Face first, private)
+USAGE_REPO = "rmsreis/tem-view-usage"
 ALLOWED_ORIGINS = "https://advanced-em.github.io,http://localhost:8765"
 
 # at most 10 sessions per minute from one visitor (keyed on a daily salted hash, nothing stored)
@@ -23,3 +25,24 @@ namespace_id = "1001"
 [[kv_namespaces]]
 binding = "SUBSCRIBERS"
 id = "56885e6912e44820a601313c0721e4fb"
+
+# usage metrics (POST /usage) from js/usage.js. Create the database once with
+#   npx wrangler d1 create tem-view-usage
+#   npx wrangler d1 execute tem-view-usage --remote --file usage.sql
+# and paste the database_id it prints below. Set the visitor-key salt with `npx wrangler secret put USAGE_SALT`.
+[[d1_databases]]
+binding = "USAGE_DB"
+database_name = "tem-view-usage"
+database_id = "f2e38afc-f6d7-448b-bea6-6ad4f4d13ddf"
+
+# one report a minute per open page, plus one when it is hidden
+[[ratelimits]]
+name = "USAGE_LIMITER"
+namespace_id = "1002"
+  [ratelimits.simple]
+  limit = 30
+  period = 60
+
+# commit yesterday's usage to USAGE_REPO at 02:10 UTC
+[triggers]
+crons = ["10 2 * * *"]

@@ -8,44 +8,45 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=202611022229">
+<link rel="stylesheet" href="css/style.css?v=202611040304">
 <script type="importmap">
 {
  "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
-  "./js/acquire.js": "./js/acquire.js?v=202611022229",
-  "./js/agent.js": "./js/agent.js?v=202611022229",
-  "./js/align.js": "./js/align.js?v=202611022229",
-  "./js/analyze.js": "./js/analyze.js?v=202611022229",
-  "./js/calibrate.js": "./js/calibrate.js?v=202611022229",
-  "./js/calibui.js": "./js/calibui.js?v=202611022229",
-  "./js/components.js": "./js/components.js?v=202611022229",
-  "./js/config.js": "./js/config.js?v=202611022229",
-  "./js/explain.js": "./js/explain.js?v=202611022229",
-  "./js/export.js": "./js/export.js?v=202611022229",
-  "./js/holder.js": "./js/holder.js?v=202611022229",
-  "./js/holography.js": "./js/holography.js?v=202611022229",
-  "./js/ide.js": "./js/ide.js?v=202611022229",
-  "./js/lorentz.js": "./js/lorentz.js?v=202611022229",
-  "./js/main.js": "./js/main.js?v=202611022229",
-  "./js/megalibrary.js": "./js/megalibrary.js?v=202611022229",
-  "./js/narration.js": "./js/narration.js?v=202611022229",
-  "./js/npy.js": "./js/npy.js?v=202611022229",
-  "./js/ops.js": "./js/ops.js?v=202611022229",
-  "./js/panel.js": "./js/panel.js?v=202611022229",
-  "./js/physics.js": "./js/physics.js?v=202611022229",
-  "./js/profile.js": "./js/profile.js?v=202611022229",
-  "./js/render2d.js": "./js/render2d.js?v=202611022229",
-  "./js/scenarios.js": "./js/scenarios.js?v=202611022229",
-  "./js/scene3d.js": "./js/scene3d.js?v=202611022229",
-  "./js/scripting.js": "./js/scripting.js?v=202611022229",
-  "./js/sim.js": "./js/sim.js?v=202611022229",
-  "./js/state.js": "./js/state.js?v=202611022229",
-  "./js/techniques.js": "./js/techniques.js?v=202611022229",
-  "./js/telemetry.js": "./js/telemetry.js?v=202611022229",
-  "./js/voice.js": "./js/voice.js?v=202611022229",
-  "./js/vpanel.js": "./js/vpanel.js?v=202611022229"
+  "./js/acquire.js": "./js/acquire.js?v=202611040304",
+  "./js/agent.js": "./js/agent.js?v=202611040304",
+  "./js/align.js": "./js/align.js?v=202611040304",
+  "./js/analyze.js": "./js/analyze.js?v=202611040304",
+  "./js/calibrate.js": "./js/calibrate.js?v=202611040304",
+  "./js/calibui.js": "./js/calibui.js?v=202611040304",
+  "./js/components.js": "./js/components.js?v=202611040304",
+  "./js/config.js": "./js/config.js?v=202611040304",
+  "./js/explain.js": "./js/explain.js?v=202611040304",
+  "./js/export.js": "./js/export.js?v=202611040304",
+  "./js/holder.js": "./js/holder.js?v=202611040304",
+  "./js/holography.js": "./js/holography.js?v=202611040304",
+  "./js/ide.js": "./js/ide.js?v=202611040304",
+  "./js/lorentz.js": "./js/lorentz.js?v=202611040304",
+  "./js/main.js": "./js/main.js?v=202611040304",
+  "./js/megalibrary.js": "./js/megalibrary.js?v=202611040304",
+  "./js/narration.js": "./js/narration.js?v=202611040304",
+  "./js/npy.js": "./js/npy.js?v=202611040304",
+  "./js/ops.js": "./js/ops.js?v=202611040304",
+  "./js/panel.js": "./js/panel.js?v=202611040304",
+  "./js/physics.js": "./js/physics.js?v=202611040304",
+  "./js/profile.js": "./js/profile.js?v=202611040304",
+  "./js/render2d.js": "./js/render2d.js?v=202611040304",
+  "./js/scenarios.js": "./js/scenarios.js?v=202611040304",
+  "./js/scene3d.js": "./js/scene3d.js?v=202611040304",
+  "./js/scripting.js": "./js/scripting.js?v=202611040304",
+  "./js/sim.js": "./js/sim.js?v=202611040304",
+  "./js/state.js": "./js/state.js?v=202611040304",
+  "./js/techniques.js": "./js/techniques.js?v=202611040304",
+  "./js/telemetry.js": "./js/telemetry.js?v=202611040304",
+  "./js/usage.js": "./js/usage.js?v=202611040304",
+  "./js/voice.js": "./js/voice.js?v=202611040304",
+  "./js/vpanel.js": "./js/vpanel.js?v=202611040304"
  }
 }
 </script>
@@ -123,7 +124,7 @@
     <div class="chips small" id="narrLevel"></div><div class="chips small" id="narrVoice"></div>
   </div>
   <div id="controlsBody"></div>
-  <footer class="sitefoot">Part of <b>Seeing with Electrons</b> · <a href="kids/" target="_blank" rel="noopener">TEM-view Kids</a> · <a href="ruska/" target="_blank" rel="noopener">Ruska 1933</a> · <a href="scanning/" target="_blank" rel="noopener">Scanning 1938–2002</a><br>Copyright © 2026 by Northwestern University. All Rights Reserved.</footer>
+  <footer class="sitefoot">Part of <b>Seeing with Electrons</b> · <span aria-current="page">TEM-view</span> · <a href="ruska/">Ruska 1933</a> · <a href="scanning/">Scanning 1938–2002</a> · <a href="kids/">TEM-view Kids</a> · <a href="privacy.html">Privacy</a><br>Copyright © 2026 by Northwestern University. All Rights Reserved.</footer>
 </aside>
 
 
@@ -168,6 +169,6 @@
 <input id="fileSession" type="file" accept=".json,application/json" hidden>
 <div id="calib" class="modal calib" hidden><div class="card"><button class="close" aria-label="Close">×</button><div class="calibBody"></div></div></div>
 
-<script type="module" src="js/main.js?v=202611022229"></script>
+<script type="module" src="js/main.js?v=202611040304"></script>
 </body>
 </html>

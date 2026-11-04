@@ -24,12 +24,15 @@ import { PythonIDE } from './ide.js';
 import { specState, modeState, setState, chipState, resetVdet as resetVdetState, optimalDefocus, dfLimits as dfLimitsOf, lorSet, tiltLimit, fovMax, libGoto } from './ops.js';
 import * as ML from './megalibrary.js';
 import { MAGSPECS } from './lorentz.js';
+import { startUsage } from './usage.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 // ------------------------------------------------------------------ state
 const S = defaultState();
+// anonymous usage metrics (usage.js, privacy.html): time in each mode and specimen while visible, and what is used
+const usage = startUsage({ page: 'tem-view', dims: () => ({ mode: S.mode, specimen: S.spec, clarity: S.clarity }) });
 const fam = (m) => (['tem', 'diff', 'oah', 'ilh', 'ltem'].includes(m) ? 'tem' : 'probe');
 const stigXY = () => [S.ab.A1 * Math.cos((S.ab.A1a * Math.PI) / 90), S.ab.A1 * Math.sin((S.ab.A1a * Math.PI) / 90)];
 const fmtS = (t) => (t < 1e-3 ? `${+(t * 1e6).toPrecision(3)} µs` : t < 1 ? `${+(t * 1e3).toPrecision(3)} ms` : `${+t.toPrecision(3)} s`);
@@ -407,10 +410,10 @@ function setMode(m) {
 }
 
 function action(id, el) {
-  if (id.startsWith('scn:')) return scn.start(id.slice(4));
+  if (id.startsWith('scn:')) { usage.count(`task_${id.slice(4)}`); return scn.start(id.slice(4)); }
   if (id === 'voiceHelp') { setAI(true); return voice.handle('help'); }
-  if (id === 'ide') return ide.toggle();
-  if (id === 'agent') return agent.connected || agent.status === 'connecting' ? agent.disconnect() : agent.connect();
+  if (id === 'ide') { usage.count('python'); return ide.toggle(); }
+  if (id === 'agent') { if (agent.connected || agent.status === 'connecting') return agent.disconnect(); usage.count('agent'); usage.input('agent'); return agent.connect(); }
   if (id === 'replayFile') return $('#fileReplay').click();
   if (id === 'lastSession') { if (scn.lastSession) scn.downloadSession(scn.lastSession); else { $('#change').hidden = false; $('#change').innerHTML = '<small>No recorded session yet</small><p>Run a training scenario with recording on, then download it here.</p>'; } return; }
   if (scn.blocked(id)) { scn.recorder.event('blocked', { id }); $('#change').hidden = false; $('#change').innerHTML = '<small>Not in this task</small><p>Automatic tuning is disabled in this scenario: the point is to see how people do it by hand.</p>'; return; }
@@ -439,7 +442,7 @@ function action(id, el) {
       if (!f) return;
       const esc = (t) => String(t).replace(/[<>&]/g, '');
       // the Lorentz modes image magnetic specimens only, so a structure opens in TEM
-      try { P.loadXYZ(await f.text(), f.name); if (LOR.split(' ').includes(S.mode)) setMode('tem'); setSpec('xyz'); }
+      try { P.loadXYZ(await f.text(), f.name); usage.count('xyz'); if (LOR.split(' ').includes(S.mode)) setMode('tem'); setSpec('xyz'); }
       catch (err) { $('#change').hidden = false; $('#change').innerHTML = `<small>Could not load ${esc(f.name)}</small><p>${esc(err.message)}</p>`; }
     });
     inp.click();
@@ -595,7 +598,7 @@ const hwPanel = new Panel({
   // quiet change for the wobbler: no explanation, no control rebuild
   setRaw: (k, v, inv) => { S[k] = v; if (k === 'df') S.dfFam[fam(S.mode)] = v; sim.invalidate(inv); },
   moveStage: (dx, dy) => { S.cx += dx; S.cy += dy; sim.invalidate('stage'); },
-  noteSource: (s) => scn.recorder.noteSource(s),
+  noteSource: (s) => { scn.recorder.noteSource(s); usage.input(s === 'controller' ? 'gamepad' : 'panel'); },
   openVirtual: (where) => (where === 'window' ? vPanel.openWindow() : vPanel.openDock()),
   talk: (down) => (down ? voice.start() : voice.stop()),
   mfOverride: () => scn?.mfOverride() ?? null,
@@ -627,7 +630,7 @@ const acq = new Acquisitions({
     $('#change').innerHTML = `<small>Acquired #${a.id}</small><p>${a.mode.toUpperCase()} on ${sim.spec.short}: ${a.summary}. Open the acquisitions (the stacked-frames button next to Acquire) to download the picture or the data.${sim.spec.beamSensitive ? ` This exposure added ${S.dose < 10 ? S.dose.toFixed(1) : Math.round(S.dose)} e⁻/Å² to the specimen's dose.` : ''}</p>`;
   },
 });
-function acquireNow() { redraw = true; R2.draw(sim, S, mainCv, secCv); acq.acquire(); if (scn.recorder.active) scn.recorder.event('acquire'); }
+function acquireNow() { usage.count('acquire'); redraw = true; R2.draw(sim, S, mainCv, secCv); acq.acquire(); if (scn.recorder.active) scn.recorder.event('acquire'); }
 
 // ------------------------------------------------------------------ training scenarios and telemetry (scenarios.js, telemetry.js)
 // ------------------------------------------------------------------ voice commands and the agent bridge
@@ -760,7 +763,7 @@ const scriptCore = new ScriptCore({
   get scenarioApi() { return scn.api; },
 });
 const ide = new PythonIDE({ core: scriptCore, onRun: () => { refreshControls(); renderInfo(); updateDetectorHeader(); } });
-$('#btnScript')?.addEventListener('click', () => ide.toggle());
+$('#btnScript')?.addEventListener('click', () => { usage.count('python'); ide.toggle(); });
 // which input caused each change
 window.addEventListener('pointerdown', (e) => scn.recorder.noteSource(e.pointerType === 'touch' ? 'touch' : e.pointerType === 'pen' ? 'pen' : 'mouse'), true);
 window.addEventListener('wheel', () => scn.recorder.noteSource('mouse'), true);
@@ -982,10 +985,11 @@ function wire() {
   });
   $('#newsModal .close').addEventListener('click', () => ($('#newsModal').hidden = true));
   $('#newsModal').addEventListener('click', (e) => { if (e.target.id === 'newsModal') $('#newsModal').hidden = true; });
-  const openTraining = () => scn.menu({ replay: () => action('replayFile'), last: () => action('lastSession') });
+  const openTraining = () => { usage.count('training'); scn.menu({ replay: () => action('replayFile'), last: () => action('lastSession') }); };
   $('#btnTrain').addEventListener('click', openTraining);
   const bar = $('#cmdBar'), inp = $('#cmdInput'), hist = []; let hi = 0;
   setAI = (on) => {
+    if (on) usage.count('ai');
     bar.hidden = !on;
     $('#btnAI').classList.toggle('on', on); $('#btnAI').setAttribute('aria-pressed', String(on));
     if (on) inp.focus(); else { inp.blur(); voice.escape(); }
@@ -999,7 +1003,7 @@ function wire() {
     else if (e.key === 'Escape') setAI(false);
   });
   const mic = $('#btnMic');
-  mic.addEventListener('pointerdown', (e) => { e.preventDefault(); mic.setPointerCapture(e.pointerId); voice.start(); });
+  mic.addEventListener('pointerdown', (e) => { e.preventDefault(); mic.setPointerCapture(e.pointerId); usage.count('voice'); usage.input('voice'); voice.start(); });
   for (const ev of ['pointerup', 'pointercancel']) mic.addEventListener(ev, () => voice.stop());
   document.querySelectorAll('[data-fold]').forEach((b) => b.addEventListener('click', () => fold(b.dataset.fold)));
   for (const k of ['L', 'R']) if (store(`tem-fold${k}`) === '1') document.body.classList.add(`fold${k}`);
@@ -1015,7 +1019,7 @@ function wire() {
   $('#fileReplay').addEventListener('change', async (e) => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; try { scn.loadReplay(await f.text()); } catch (err) { $('#change').hidden = false; $('#change').innerHTML = `<small>Could not replay ${f.name.replace(/[<>&]/g, '')}</small><p>${String(err.message).replace(/[<>&]/g, '')}</p>`; } });
   $('#btnGallery').addEventListener('click', () => { $('#gallery').hidden = false; acq.render($('#gallery .gBody')); });
   $('#gallery').addEventListener('click', (e) => { if (e.target.id === 'gallery' || e.target.closest('.close')) $('#gallery').hidden = true; });
-  $('#btnPanel').addEventListener('click', () => { $('#panelCfg').hidden = false; hwPanel.renderConfig($('#panelCfg .pBody')); });
+  $('#btnPanel').addEventListener('click', () => { usage.count('panel_setup'); $('#panelCfg').hidden = false; hwPanel.renderConfig($('#panelCfg .pBody')); });
   $('#panelCfg').addEventListener('click', (e) => { if (e.target.id === 'panelCfg' || e.target.closest('.close')) $('#panelCfg').hidden = true; });
   $('#btnExpand').addEventListener('click', () => setExpanded(!document.body.classList.contains('detBig')));
   $('#btnPopout').addEventListener('click', openPopout);

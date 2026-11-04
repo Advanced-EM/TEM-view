@@ -25,3 +25,7 @@ export const SHARE = {
   url: 'https://tem-view-collector.tem-view.workers.dev/submit',
   dataset: 'rmsreis/tem-view-alignment',
 };
+
+// usage: anonymous usage metrics (js/usage.js, privacy.html), sent to the collector Worker's /usage. Empty turns
+// them off everywhere.
+export const USAGE = { url: 'https://tem-view-collector.tem-view.workers.dev/usage' };

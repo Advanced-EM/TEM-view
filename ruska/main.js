@@ -7,6 +7,7 @@ import { Knob, Pad, Gauge } from './ui.js';
 import { PARTS, CONTROLS } from './texts.js';
 import { lang, tr, num, fmtInt, applyStatic, setLang, onLang } from './i18n.js';
 import { Console } from './console.js';
+import { startUsage } from '../js/usage.js';
 
 const $ = (id) => document.getElementById(id);
 const fmtLen = (nm) => nm >= 1e6 ? `${num(nm / 1e6, nm >= 1e7 ? 0 : 1)} mm` : nm >= 1e3 ? `${num(nm / 1e3, nm >= 1e4 ? 0 : 1)} µm` : nm >= 1 ? `${num(nm, nm >= 100 ? 0 : 1)} nm` : `${num(nm * 1000, 0)} pm`;
@@ -28,6 +29,8 @@ const S = {
 let D = {};                  // derived each frame, read by the missions and the panel
 let mission = null, stepI = 0, done = new Set(), finished = new Set();
 let noteKey = null, coachMsg = null;
+// anonymous usage metrics (../js/usage.js, ../privacy.html)
+const usage = startUsage({ page: 'ruska', privacy: '../privacy.html', dims: () => ({ instrument: S.inst, mission: mission?.id ?? 'free', specimen: S.spec, lang }) });
 
 // ------------------------------------------------------------------ screen
 const canvas = $('screen');
@@ -204,7 +207,7 @@ function closeShutter() {
   const ex = S.exp; S.exposing = false; S.exp = null; click();
   $('expose').setAttribute('aria-pressed', 'false'); $('expose').firstChild.textContent = tr(['Expose a plate', 'Platte belichten']); $('shutter').hidden = true;
   if (!ex || ex.t < 0.05) return;
-  S.platesLeft--; S.plateNo++;
+  S.platesLeft--; S.plateNo++; usage.count('plate');
   // smear: how far the image wandered during the exposure (drift, pump bumps, stage moves), in nm rms
   let mx = 0, my = 0; for (const [x, y, w] of ex.path) { mx += x * w; my += y * w; } mx /= ex.t; my /= ex.t;
   let v = 0; for (const [x, y, w] of ex.path) v += ((x - mx) ** 2 + (y - my) ** 2) * w; v /= ex.t;
