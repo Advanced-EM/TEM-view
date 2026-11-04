@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy · Seeing with Electrons</title>
+<meta name="description" content="What the Seeing with Electrons exhibits record, what they do not, and how to turn usage metrics off.">
+<style>
+  :root { color-scheme: dark; --bg: #07090d; --text: #e8ecf2; --muted: #9aa3b5; --line: rgba(255, 255, 255, 0.12); --accent: #8fd6ff; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 "IBM Plex Sans", system-ui, sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 40px 16px 64px; }
+  h1 { font: 400 40px/1.1 "Instrument Serif", Georgia, serif; margin: 6px 0 12px; }
+  h2 { font-size: 18px; margin: 34px 0 8px; }
+  .eyebrow { font: 500 11px "IBM Plex Mono", monospace; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); margin: 0; }
+  p, li { color: #d3d9e4; }
+  ul { padding-left: 20px; }
+  a { color: var(--accent); }
+  code { font: 13px "IBM Plex Mono", monospace; background: rgba(255, 255, 255, 0.06); padding: 1px 5px; border-radius: 4px; }
+  .box { border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin: 18px 0; }
+  .row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+  button { font: 500 14px inherit; font-family: inherit; padding: 7px 14px; border-radius: 8px; border: 1px solid var(--accent); background: none; color: var(--accent); cursor: pointer; }
+  button:hover { background: rgba(143, 214, 255, 0.1); }
+  #state { color: var(--muted); }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  td { padding: 7px 8px 7px 0; border-top: 1px solid var(--line); vertical-align: top; }
+  td:first-child { color: var(--muted); white-space: nowrap; padding-right: 14px; }
+  footer { margin-top: 48px; padding-top: 12px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+<main>
+  <p class="eyebrow">Seeing with Electrons · TEM-view</p>
+  <h1>Privacy</h1>
+  <p>The exhibits on this site are TEM-view, Ruska 1933 and Scanning 1938–2002. They count how they are used, anonymously, so we can see which parts help people learn and where in the world they are used. This page says exactly what is counted, what is not, and how to turn it off.</p>
+
+  <div class="box">
+    <div class="row"><span id="state">Checking…</span><button id="toggle" hidden></button></div>
+  </div>
+
+  <h2>What is counted</h2>
+  <p>Each time you open an exhibit page, it keeps one small record of that visit. It sends the record a minute after the page opens, then about once a minute while you use it, and when you leave. The record holds:</p>
+  <ul>
+    <li>which exhibit, the time it was opened (to the minute), and how long it was open and in view;</li>
+    <li>how long each mode, specimen, instrument or mission was on screen;</li>
+    <li>how many times features were used: acquisitions, photographic plates, training tasks, Python scripting, voice and AI commands, the control panel, structure files you loaded (only the fact that one was loaded, never its contents);</li>
+    <li>the kinds of input used (mouse, touch, keyboard, game controller, control panel);</li>
+    <li>the device class (phone, tablet or desktop), the window size rounded to 100 pixels, the browser language, and the website that linked to the exhibit, if any;</li>
+    <li>a random id for that one page visit, so that its later reports replace the earlier ones.</li>
+  </ul>
+  <p>When the record arrives, the collector adds the approximate location that our network provider, Cloudflare, derives from the connection: country, region, city, time zone and coordinates rounded to about 10 km. To tell how many different people visit in a day, it also adds a <em>visitor key</em>. The key is a one-way code made from the connection address, a secret and the date. It changes every day and cannot be turned back into an address.</p>
+
+  <h2>What is not</h2>
+  <ul>
+    <li><b>No IP address is stored.</b> It is used only for the moment it takes to work out the city and the daily visitor key.</li>
+    <li>No cookies, no advertising, no tracking across other sites, and no device fingerprinting.</li>
+    <li>Nothing you type, say or record: commands, voice, scripts, images and structure files stay in your browser.</li>
+    <li>No name, email or account. The records cannot be linked to you.</li>
+    <li><b>TEM-view Kids (Electron Explorer) counts nothing.</b></li>
+  </ul>
+
+  <h2>Where it goes</h2>
+  <table>
+    <tr><td>Collector</td><td>A Cloudflare Worker receives the records and keeps them in a Cloudflare database for up to 90 days.</td></tr>
+    <tr><td>Dataset</td><td>Once a day, the previous day's records are added to a <b>private</b> Hugging Face dataset belonging to the TEM-view author. They are used for usage statistics: how many visits, from which cities and countries, which parts are used and for how long. Only totals and maps made from them may be shown publicly, never single records.</td></tr>
+    <tr><td>Not shared</td><td>The records are not sold or given to anyone else.</td></tr>
+  </table>
+
+  <h2>Turning it off</h2>
+  <ul>
+    <li>Use the button at the top of this page, or <b>Turn off</b> on the notice the exhibit shows the first time. It is remembered in this browser.</li>
+    <li>If your browser sends <b>Do Not Track</b> or <b>Global Privacy Control</b>, nothing is counted.</li>
+    <li>Add <code>?notrack</code> to an exhibit's address, for example on a museum kiosk.</li>
+  </ul>
+
+  <h2>Other data</h2>
+  <ul>
+    <li><b>Training sessions:</b> during a training task you can choose to record your session. <i>Record only</i> keeps it in your browser. <i>Record and share</i> sends it, with an anonymous id and the experience level you chose, to a private research dataset on alignment.</li>
+    <li><b>News:</b> if you subscribe, your name, email, role and optional institution are kept privately to send you news, and nowhere else. Ask to be removed at any time.</li>
+    <li><b>Hosting:</b> the site is served by GitHub Pages, and its fonts and 3D library come from Google Fonts and jsDelivr. Like any website, these services receive your IP address when they deliver the files; their own privacy policies apply.</li>
+  </ul>
+
+  <h2>Your rights</h2>
+  <p>The usage records are anonymous: they carry no IP address or identifier that leads back to you, so we cannot find or delete records about a particular person. You can stop them at any time as described above. For questions, open an issue on <a href="https://github.com/Advanced-EM/TEM-view/issues">GitHub</a>.</p>
+
+  <h2 lang="de">Kurz auf Deutsch</h2>
+  <p lang="de">Die Ausstellungen zählen ihre Nutzung anonym: welche Ausstellung, welche Teile wie lange genutzt werden, Geräteart und Sprache, dazu die ungefähre Stadt, die Cloudflare aus der Verbindung ableitet. Die IP-Adresse wird nicht gespeichert, es gibt keine Cookies und keine Verfolgung über andere Seiten. TEM-view Kids zählt nichts. Die Daten liegen bis zu 90 Tage bei Cloudflare und danach in einem privaten Hugging-Face-Datensatz für Nutzungsstatistiken. Ausschalten: mit der Schaltfläche oben, mit „Do Not Track“ oder „Global Privacy Control“ im Browser, oder mit <code>?notrack</code> in der Adresse.</p>
+
+  <footer>Updated 3 November 2026 · <a href="./">Back to Seeing with Electrons</a><br>Copyright © 2026 by Northwestern University. All Rights Reserved.</footer>
+</main>
+<script type="module">
+  import { usageAllowed, setUsageOff } from './js/usage.js';
+  const state = document.getElementById('state'), btn = document.getElementById('toggle');
+  const off = () => { try { return !!localStorage.getItem('tv-usage-off'); } catch { return false; } };
+  const show = () => {
+    const signal = navigator.doNotTrack === '1' || navigator.globalPrivacyControl === true;
+    state.textContent = signal ? 'Usage metrics are off: your browser asks sites not to track.'
+      : off() ? 'Usage metrics are off in this browser.' : usageAllowed() ? 'Usage metrics are on in this browser.' : 'Usage metrics are off here (a test copy of the site).';
+    btn.hidden = signal;
+    btn.textContent = off() ? 'Turn on' : 'Turn off';
+  };
+  btn.addEventListener('click', () => { setUsageOff(!off()); try { localStorage.setItem('tv-usage-notice', '1'); } catch { /* private window */ } show(); });
+  show();
+</script>
+</body>
+</html>

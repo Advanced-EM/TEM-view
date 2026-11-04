@@ -3,6 +3,7 @@ import { ERAS, probe, ronchiShift, electrons, lambdaNm } from './optics.js';
 import { SPECIMENS, U_REF } from './specimens.js';
 import { Knob, Pad, Gauge } from './ui.js';
 import { PARTS, CONTROLS } from './texts.js';
+import { startUsage } from '../js/usage.js';
 
 const $ = (id) => document.getElementById(id);
 const N = 256;                       // pixels per line
@@ -27,6 +28,8 @@ const S = {
 };
 let D = {};
 let mission = null, stepI = 0, done = new Set(), finished = new Set(), noteKey = null;
+// anonymous usage metrics (../js/usage.js, ../privacy.html)
+const usage = startUsage({ page: 'scanning', privacy: '../privacy.html', dims: () => ({ era: S.era, mission: mission?.id ?? 'free', specimen: S.spec }) });
 
 // ------------------------------------------------------------------ the image: a buffer filled line by line
 const canvas = $('screen'), ctx = canvas.getContext('2d');
@@ -322,6 +325,7 @@ function showResult(m, r) {
 
 // ------------------------------------------------------------------ recordings
 function record() {
+  usage.count('frame');
   const p = D.p, sp = SPECIMENS[S.spec];
   const smear = Math.hypot(S.drift[0] - S.frameDrift0[0], S.drift[1] - S.frameDrift0[1]);
   let density = 0; if (S.det === 'film') { for (let k = 0; k < N * N; k++) density += buf[k]; density /= N * N; }

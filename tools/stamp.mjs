@@ -1,5 +1,5 @@
 // Cache-busting: stamp a version onto every module, the stylesheet and the entry script in index.html and in
-// kids/index.html (Electron Explorer), so browsers fetch fresh code after each deploy. Run before committing a release:
+// kids/index.html (Electron Explorer), and the shared modules in ruska/ and scanning/, so browsers fetch fresh code after each deploy. Run before committing a release:
 //   node tools/stamp.mjs
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 
@@ -23,4 +23,15 @@ kids = /<script type="importmap">[\s\S]*?<\/script>/.test(kids) ? kids.replace(/
 kids = kids.replace(/href="kids\.css(\?v=\w+)?"/, `href="kids.css?v=${v}"`);
 kids = kids.replace(/src="main\.js(\?v=\w+)?"/, `src="main.js?v=${v}"`);
 writeFileSync(new URL('kids/index.html', root), kids);
-console.log(`stamped v=${v} on ${mods.length} modules and ${kmods.length} kids modules`);
+// Ruska 1933 and Scanning 1938–2002: their own modules, the entry script, the stylesheet, and ../js/usage.js with the
+// config it reads
+for (const page of ['ruska', 'scanning']) {
+  const dir = new URL(`${page}/`, root), f = new URL('index.html', dir);
+  const own = readdirSync(dir).filter((n) => n.endsWith('.js')).sort();
+  const pmap = { three: map.three, 'three/addons/': map['three/addons/'], ...Object.fromEntries(own.map((n) => [`./${n}`, `./${n}?v=${v}`])),
+    '../js/usage.js': `../js/usage.js?v=${v}`, '../js/config.js': `../js/config.js?v=${v}` };
+  let h = readFileSync(f, 'utf8').replace(/<script type="importmap">[\s\S]*?<\/script>/, `<script type="importmap">\n${JSON.stringify({ imports: pmap }, null, 1)}\n</script>`);
+  h = h.replace(/href="(\w+)\.css(\?v=\w+)?"/, `href="$1.css?v=${v}"`).replace(/src="main\.js(\?v=\w+)?"/, `src="main.js?v=${v}"`);
+  writeFileSync(f, h);
+}
+console.log(`stamped v=${v} on ${mods.length} modules, ${kmods.length} kids modules and the history exhibits`);
