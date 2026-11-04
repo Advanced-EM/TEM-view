@@ -33,7 +33,7 @@ id = "56885e6912e44820a601313c0721e4fb"
 [[d1_databases]]
 binding = "USAGE_DB"
 database_name = "tem-view-usage"
-database_id = "PASTE_THE_ID_HERE"
+database_id = "f2e38afc-f6d7-448b-bea6-6ad4f4d13ddf"
 
 # one report a minute per open page, plus one when it is hidden
 [[ratelimits]]

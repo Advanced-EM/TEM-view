@@ -38,6 +38,9 @@
     <div class="row"><span id="state">Checking…</span><button id="toggle" hidden></button></div>
   </div>
 
+  <h2>Who collects it</h2>
+  <p>Roberto dos Reis, the author of TEM-view, collects and keeps these records. Contact: <a href="mailto:roberto.reis@northwestern.edu">roberto.reis@northwestern.edu</a>.</p>
+
   <h2>What is counted</h2>
   <p>Each time you open an exhibit page, it keeps one small record of that visit. It sends the record a minute after the page opens, then about once a minute while you use it, and when you leave. The record holds:</p>
   <ul>
@@ -62,7 +65,7 @@
   <h2>Where it goes</h2>
   <table>
     <tr><td>Collector</td><td>A Cloudflare Worker receives the records and keeps them in a Cloudflare database for up to 90 days.</td></tr>
-    <tr><td>Dataset</td><td>Once a day, the previous day's records are added to a <b>private</b> Hugging Face dataset belonging to the TEM-view author. They are used for usage statistics: how many visits, from which cities and countries, which parts are used and for how long. Only totals and maps made from them may be shown publicly, never single records.</td></tr>
+    <tr><td>Dataset</td><td>Once a day, the previous day's records are added to a <b>private</b> Hugging Face dataset belonging to Roberto dos Reis. They are used for usage statistics: how many visits, from which cities and countries, which parts are used and for how long. Only totals and maps made from them may be shown publicly, never single records.</td></tr>
     <tr><td>Not shared</td><td>The records are not sold or given to anyone else.</td></tr>
   </table>
 
@@ -81,10 +84,10 @@
   </ul>
 
   <h2>Your rights</h2>
-  <p>The usage records are anonymous: they carry no IP address or identifier that leads back to you, so we cannot find or delete records about a particular person. You can stop them at any time as described above. For questions, open an issue on <a href="https://github.com/Advanced-EM/TEM-view/issues">GitHub</a>.</p>
+  <p>The usage records are anonymous: they carry no IP address or identifier that leads back to you, so we cannot find or delete records about a particular person. You can stop them at any time as described above. For questions, write to <a href="mailto:roberto.reis@northwestern.edu">roberto.reis@northwestern.edu</a> or open an issue on <a href="https://github.com/Advanced-EM/TEM-view/issues">GitHub</a>.</p>
 
   <h2 lang="de">Kurz auf Deutsch</h2>
-  <p lang="de">Die Ausstellungen zählen ihre Nutzung anonym: welche Ausstellung, welche Teile wie lange genutzt werden, Geräteart und Sprache, dazu die ungefähre Stadt, die Cloudflare aus der Verbindung ableitet. Die IP-Adresse wird nicht gespeichert, es gibt keine Cookies und keine Verfolgung über andere Seiten. TEM-view Kids zählt nichts. Die Daten liegen bis zu 90 Tage bei Cloudflare und danach in einem privaten Hugging-Face-Datensatz für Nutzungsstatistiken. Ausschalten: mit der Schaltfläche oben, mit „Do Not Track“ oder „Global Privacy Control“ im Browser, oder mit <code>?notrack</code> in der Adresse.</p>
+  <p lang="de">Die Ausstellungen zählen ihre Nutzung anonym: welche Ausstellung, welche Teile wie lange genutzt werden, Geräteart und Sprache, dazu die ungefähre Stadt, die Cloudflare aus der Verbindung ableitet. Die IP-Adresse wird nicht gespeichert, es gibt keine Cookies und keine Verfolgung über andere Seiten. TEM-view Kids zählt nichts. Verantwortlich: Roberto dos Reis (roberto.reis@northwestern.edu). Die Daten liegen bis zu 90 Tage bei Cloudflare und danach in einem privaten Hugging-Face-Datensatz für Nutzungsstatistiken. Ausschalten: mit der Schaltfläche oben, mit „Do Not Track“ oder „Global Privacy Control“ im Browser, oder mit <code>?notrack</code> in der Adresse.</p>
 
   <footer>Updated 3 November 2026<br>Part of <b>Seeing with Electrons</b> · <a href="./">TEM-view</a> · <a href="ruska/">Ruska 1933</a> · <a href="scanning/">Scanning 1938–2002</a> · <a href="kids/">TEM-view Kids</a> · <span aria-current="page">Privacy</span><br>Copyright © 2026 by Northwestern University. All Rights Reserved.</footer>
 </main>
