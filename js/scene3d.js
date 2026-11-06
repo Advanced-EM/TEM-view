@@ -782,7 +782,6 @@ export class Scene3D {
       setAp(this.saAp, this.anim.saT, null, 'sar', 'saX', Y.sa, 1);
     }
     // holder tilt (exaggerated ×6 so it reads)
-    // holder tilt (exaggerated ×6 so it reads)
     const cold = S.holder === 'ln2' || S.holder === 'lhe', T = sim.temp();
     this.dewar.visible = cold;
     if (cold) {
@@ -792,8 +791,9 @@ export class Scene3D {
     this.heatLeads.visible = S.holder === 'heat';
     this.heatGlow.visible = S.holder === 'heat' && T > 450;
     if (this.heatGlow.visible) { const g = Math.min(1, (T - 450) / 900); this.heatGlow.material.opacity = 0.25 + 0.7 * g; this.heatGlow.material.color.setRGB(1, 0.35 + 0.5 * g, 0.12 + 0.6 * g * g); }
-    this.holder.rotation.x = (S.tiltY * Math.PI / 180) * 6;
-    this.holder.rotation.z = (S.tiltX * Math.PI / 180) * 6;
+    // α (tiltX) turns the holder about its own rod (the x axis); β (tiltY) is the cradle tilt about the perpendicular axis
+    this.holder.rotation.x = (S.tiltX * Math.PI / 180) * 6;
+    this.holder.rotation.z = (S.tiltY * Math.PI / 180) * 6;
     this.corrector.visible = S.corrector;
     this.corrector.children.forEach((c, i) => { c.material.emissiveIntensity = m === 'ronch' ? 0.35 + 0.25 * Math.sin(this.time * 4 + i) : 0.05; });
     // glows
