@@ -431,7 +431,7 @@ function drawDiff(sim, S, m, s) {
         ctx.beginPath(); ctx.arc(x, y, 7 * dpr, 0, 7); ctx.stroke();
         label(ctx, gr.label(a, b), x + 10 * dpr, y - 10 * dpr, dpr, { color: '#ffe2b8', size: 9 });
       }
-      if (spec.id === 'si') label(ctx, '002: "forbidden", appears by double diffraction', 10 * dpr, H - 16 * dpr, dpr, { color: C.muted, size: 9 });
+      if ((spec.like ?? spec.id) === 'si') label(ctx, '002: "forbidden", appears by double diffraction', 10 * dpr, H - 16 * dpr, dpr, { color: C.muted, size: 9 });
       if (spec.id === 'sto') label(ctx, 'two grains → two square nets, 36.9° apart', 10 * dpr, H - 16 * dpr, dpr, { color: C.muted, size: 9 });
       if (spec.twoD) label(ctx, '6-fold spots, no Kikuchi lines (one layer); the twisted layer adds a second hexagon 5° away', 10 * dpr, H - 16 * dpr, dpr, { color: C.muted, size: 9 });
     }

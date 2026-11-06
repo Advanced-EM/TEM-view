@@ -193,12 +193,21 @@ export class CBED {
         if (F > 0.02) folz.push({ h, k, l, gx: g[0], gy: g[1], g: g2, F });
       }
     }
-    return (this._base = { id: spec.id, cr, zolz, folz, H });
+    // a doubled cell (SrTiO₃ below 105 K) adds a half-order Laue zone: superlattice reflections ½(odd odd odd)
+    const half = [];
+    if (spec.phase && 'sl' in spec.phase) {
+      const H2 = H / 2, g0 = Math.sqrt((2 * H2) / P.wavelength(60)) - 1.2, g1 = Math.sqrt((2 * H2) / P.wavelength(300)) + 1.2, m = Math.ceil(g1 * cr.a) + 1;
+      for (let h = -m - 0.5; h <= m; h++) for (let k = -m - 0.5; k <= m; k++) {
+        const g = P.zoneG(cr, h, k, 0.5), g2 = Math.hypot(g[0], g[1]);
+        if (Math.abs(g[2] - H2) < 1e-6 && g2 > g0 && g2 < g1) half.push({ h, k, l: 0.5, gx: g[0], gy: g[1], g: g2, F: P.fElec(8, g2 / 2) });
+      }
+    }
+    return (this._base = { id: spec.id, cr, zolz, folz, H, half });
   }
   lists() {
     // strain = the set strain plus thermal expansion; Debye–Waller: F·exp(−ΔB·s²), B = 8π²⟨u²⟩ relative to 293 K
     const sim = this.sim, S = sim.S, spec = sim.spec, th = sim.thermal(), sc = 1 + sim.strainPct() / 100, lam = sim.lam;
-    const key = [spec.id, sc, S.kV, th.u2r].join('|');
+    const sl = spec.phase?.sl ?? 0, key = [spec.id, sc, S.kV, th.u2r, sl].join('|');
     if (this._key === key) return this._lists;
     const dw = (g) => Math.exp(-0.4 * (th.u2r - 1) * (g / 2) ** 2);
     const B = this.base(spec), H = B.H / sc, GH = Math.sqrt((2 * H) / lam);
@@ -211,6 +220,11 @@ export class CBED {
     }
     const Fm = Math.max(1e-6, ...layers.map((x) => x.F));
     for (const x of layers) x.w = x.F / Fm;
+    if (sl && B.half?.length) { // weak superlattice lines, growing with the octahedral rotation
+      const H2 = H / 2, G2 = Math.sqrt((2 * H2) / lam), sup = B.half.map((o) => ({ ...o, g: o.g / sc })).filter((o) => Math.abs(o.g - G2) < 1.1);
+      const Fh = Math.max(1e-6, ...sup.map((o) => o.F));
+      for (const o of sup) layers.push({ ...o, gx: o.gx / sc, gy: o.gy / sc, d: (H2 - (lam * (o.g * o.g + H2 * H2)) / 2) / o.g, w: 0.55 * sl * (o.F / Fh) });
+    }
     this._key = key;
     this._lists = { zolz, holz: layers.filter((x) => x.w > 0.08), H, GH };
     return this._lists;

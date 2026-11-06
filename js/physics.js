@@ -148,7 +148,10 @@ export const CRYST = {
   au: { a: 4.078, sg: 'Fm3̄m', name: 'Au (fcc)', basis: fcc.map((p) => [...p, 79]), xAx: [1, -1, 0], yAx: [0, 0, 1] },
   gr: { a: 2.46, sg: 'P6/mmm (2D)', name: 'graphene (monolayer)', twoD: true, basis: [[0, 0, 0, 6], [1 / 3, 1 / 3, 0, 6]], xAx: [1, 0, 0], yAx: [0, 1, 0] },
   si: { a: 5.431, sg: 'Fd3̄m', name: 'Si (diamond)', basis: [...fcc, ...fcc.map((p) => p.map((v) => v + 0.25))].map((p) => [...p, 14]), xAx: [1, -1, 0], yAx: [0, 0, 1] },
+  // CsPbBr₃ in its pseudocubic cell (the cubic phase above 403 K); the octahedral tilts of the lower phases are in the specimen
+  cspb: { a: 5.87, sg: 'Pm3̄m (pseudocubic)', name: 'CsPbBr₃ (perovskite)', basis: [[0, 0, 0, 55], [0.5, 0.5, 0.5, 82], [0.5, 0.5, 0, 35], [0.5, 0, 0.5, 35], [0, 0.5, 0.5, 35]], xAx: [1, 0, 0], yAx: [0, 1, 0] },
 };
+CRYST.hesi = CRYST.si; // helium bubbles sit in ordinary silicon
 for (const c of Object.values(CRYST)) {
   const n = (v) => { const l = Math.hypot(...v); return v.map((x) => x / l); };
   c.x = n(c.xAx); c.y = n(c.yAx);
@@ -199,8 +202,11 @@ export const EL = [
   { sym: 'Cu', Z: 29, name: 'Copper', color: '#ff9a4d' },
   { sym: 'Co', Z: 27, name: 'Cobalt', color: '#6f8cff' },
   { sym: 'Ni', Z: 28, name: 'Nickel', color: '#5fe3a8' },
+  { sym: 'Cs', Z: 55, name: 'Caesium', color: '#b58cff' },
+  { sym: 'Pb', Z: 82, name: 'Lead', color: '#9aa7b8' },
+  { sym: 'Br', Z: 35, name: 'Bromine', color: '#ff8f5a' },
 ];
-export const EI = { C: 0, O: 1, Si: 2, SiOx: 3, Ti: 4, Sr: 5, Au: 6, Zr: 7, N: 8, S: 9, P: 10, Fe: 11, Ag: 12, Cu: 13, Co: 14, Ni: 15 };
+export const EI = { C: 0, O: 1, Si: 2, SiOx: 3, Ti: 4, Sr: 5, Au: 6, Zr: 7, N: 8, S: 9, P: 10, Fe: 11, Ag: 12, Cu: 13, Co: 14, Ni: 15, Cs: 16, Pb: 17, Br: 18 };
 export const VP = EL.map((e) => Math.pow(e.Z, 0.75)); // projected-potential weight per atom
 export const ZH = EL.map((e) => Math.pow(e.Z, 1.7)); // high-angle (Rutherford-like) weight
 export const ZL = EL.map((e) => Math.pow(e.Z, 1.2)); // low-angle ADF weight
@@ -853,7 +859,317 @@ export function loadXYZ(text, name = 'structure.xyz') {
   return { name: spec.name, atoms: n, elements: els, extent_nm: +((2 * R) / 10).toFixed(2), fov_nm: spec.fov };
 }
 
-export const SPECIMENS = { au: makeGold(), si: makeSilicon(), sto: makeSTO(), gr: makeGraphene(), mof: makeUiO66(), bio: makeBio(), lib: makeLibrary() };
+// ---------------------------------------------------------------- specimens that change with temperature
+const KB = 8.617e-5; // eV/K
+// Arrhenius rate relative to a reference temperature: 1 at T0, falling steeply below it
+const arrh = (Ea, T, T0) => Math.exp(-(Ea / KB) * (1 / Math.max(T, 1) - 1 / T0));
+const frac1 = (v) => v - Math.floor(v);
+const near = (v, c) => Math.abs(frac1(v + 0.5 - c) - 0.5) < 0.08;
+
+// Helium implanted into silicon, viewed along [110]. As implanted, the helium sits in small over-pressurized
+// bubbles (1–2.5 nm). Nothing happens below ~400 °C. From ~500–700 °C the bubbles migrate and coalesce (fewer,
+// larger); at ~700–900 °C the helium escapes through the silicon and leaves empty voids that facet on {111}
+// and {001}; above ~1000 °C the voids shrink as they emit vacancies. A bubble is a hole in the crystal: its
+// chord shortens the atom columns through it, which gives the Fresnel contrast that is used to find bubbles.
+// The kinetics are effective Arrhenius laws tuned so the stages appear within tens of seconds at the
+// temperatures where they happen in practice (minutes to hours in a furnace).
+function makeHeSi() {
+  const A = new AtomList();
+  const a = 5.431, ax = a / Math.SQRT2, ay = a;
+  const basis = [[0, 0, [EI.Si]], [0, 0.25, [EI.Si]], [0.5, 0.5, [EI.Si]], [0.5, 0.75, [EI.Si]]];
+  fillLattice(A, { a1: [ax, 0], a2: [0, ay], basis, angle: 0, origin: [0.3, 0.2], R: 250, g: 0, L: -1, inside: () => true });
+  A.finalize();
+  const rng = mulberry32(77031), init = [];
+  for (let t = 0; init.length < 260 && t < 30000; t++) {
+    const b = { x: (rng() * 2 - 1) * 235, y: (rng() * 2 - 1) * 235, r: 6 + 6.5 * rng() };
+    if (init.every((q) => Math.hypot(b.x - q.x, b.y - q.y) > b.r + q.r + 8)) init.push(b);
+  }
+  const N0 = init.length, V0 = init.reduce((v, b) => v + b.r ** 3, 0), n0 = 80; // He atoms per nm³, as implanted
+  // coalescence order, worked out once: the closest pairs meet first, small (more mobile) bubbles sooner
+  let merges = null;
+  const plan = () => {
+    const B = init.map((b) => ({ ...b, on: true }));
+    merges = [];
+    const key = (p, q) => (Math.hypot(p.x - q.x, p.y - q.y) - p.r - q.r + 4) * Math.min(p.r, q.r);
+    for (let left = N0; left > 10; left--) {
+      let bi = -1, bj = -1, bk = Infinity;
+      for (let i = 0; i < N0; i++) {
+        if (!B[i].on) continue;
+        for (let j = i + 1; j < N0; j++) { if (!B[j].on) continue; const k = key(B[i], B[j]); if (k < bk) { bk = k; bi = i; bj = j; } }
+      }
+      const p = B[bi], q = B[bj], vp = p.r ** 3, vq = q.r ** 3;
+      p.x = (p.x * vp + q.x * vq) / (vp + vq); p.y = (p.y * vp + q.y * vq) / (vp + vq); p.r = Math.cbrt(vp + vq); q.on = false;
+      merges.push([bi, bj, p.x, p.y, p.r]);
+    }
+  };
+  const st = { tau: 0, fHe: 1, vol: 1, k: 0, sig: '' };
+  let list = init, grid = new Map(), G = 40, facet = 0, swell = 1;
+  const rebuild = () => {
+    if (st.k && !merges) plan();
+    const B = init.map((b) => ({ ...b, on: true }));
+    for (let m = 0; m < st.k; m++) { const [i, j, x, y, r] = merges[m]; Object.assign(B[i], { x, y, r }); B[j].on = false; }
+    // coalescence lets over-pressurized bubbles relax toward equilibrium (p = 2γ/r), so the volume grows;
+    // once the helium is gone, the empty voids round off and shrink
+    swell = 1 + 0.5 * (st.k / Math.max(1, N0 - 10));
+    facet = Math.min(1, (1 - st.fHe) * 1.15);
+    const s = Math.cbrt(swell * st.vol);
+    list = B.filter((b) => b.on).map((b) => ({ x: b.x, y: b.y, r: b.r * s })).filter((b) => b.r > 2.5);
+    G = Math.max(40, 2 * Math.max(...list.map((b) => b.r), 0));
+    grid = new Map();
+    for (const b of list) for (let gy = Math.floor((b.y - b.r) / G); gy <= Math.floor((b.y + b.r) / G); gy++) for (let gx = Math.floor((b.x - b.r) / G); gx <= Math.floor((b.x + b.r) / G); gx++) {
+      const k = gx * 65536 + gy; if (!grid.has(k)) grid.set(k, []); grid.get(k).push(b);
+    }
+  };
+  rebuild();
+  // in-plane facet normals in the [110] projection: {111} at ±35.3° from [1̄10], {001} along [001]
+  const c1 = Math.cos(0.6155), s1 = Math.sin(0.6155);
+  const spec = {
+    id: 'hesi', like: 'si', name: 'Helium bubbles in silicon', short: 'He in Si', alpha: 2.6e-6,
+    grainRot: [0], grainAt() { return 0; },
+    atoms: A, grains: [{ a1: [ax, 0], a2: [0, ay], label: (m, n) => `${bar(m)}${bar(-m)}${bar(n)}` }],
+    period: ax, center: [0, 0], fov: 12, zone: '[110]',
+    elements: [EI.Si],
+    amorph() { return null; },
+    voidAt(x, y) {
+      const cell = grid.get(Math.floor(x / G) * 65536 + Math.floor(y / G));
+      if (!cell) return 0;
+      let c = 0;
+      for (const b of cell) {
+        const dx = x - b.x, dy = y - b.y;
+        if (dx * dx + dy * dy > b.r * b.r * 1.2) continue;
+        let rho = Math.hypot(dx, dy);
+        if (facet) {
+          const rp = 1.04 * Math.max(Math.abs(dx * c1 + dy * s1), Math.abs(dx * c1 - dy * s1), Math.abs(dy) / 1.06);
+          rho = (1 - facet) * rho + facet * rp;
+        }
+        const u = rho / b.r;
+        if (u >= 1) continue;
+        const m = 2 + 4 * facet; // flat-topped (faceted) voids have a more uniform chord
+        c += 2 * b.r * Math.pow(1 - Math.pow(u, m), 1 / m);
+      }
+      return c;
+    },
+    thicknessAt(x, y, t) { return Math.max(0, t - spec.voidAt(x, y)); },
+    tauAt(x, y, t, kV) { return Math.max(0, t - spec.voidAt(x, y)) / (10 * imfp(kV, 14)); },
+    rings: [{ d: 3.135, hkl: '111' }, { d: 1.92, hkl: '220' }, { d: 1.638, hkl: '311' }, { d: 1.358, hkl: '400' }],
+    labels: [{ x: -40, y: -50, text: 'Si [110] implanted with He' }],
+    plasmon: [{ Ep: 16.7, G: 3.8, frac: 1 }],
+    zeff: 14, damageVer: 0,
+    // helium density in the bubbles (atoms/nm³): fixed while a sealed bubble only heats up; falls as bubbles
+    // relax and as the helium escapes
+    heDensity() { return (n0 * st.fHe) / swell; },
+    // He 1s→2p excitation in the bubbles: ~21.2 eV for the free atom, blue-shifted roughly in proportion to the
+    // density (≈ 0.016 eV per atom/nm³); its strength follows the helium left
+    extraLoss(E, res) {
+      if (st.fHe < 0.02) return 0;
+      const Ec = 21.22 + 0.016 * spec.heDensity(), w = Math.hypot(0.75, res / 2.355);
+      return (0.035 * st.fHe * Math.exp(-0.5 * ((E - Ec) / w) ** 2)) / (w * 2.5066);
+    },
+    evolve(T, dt) {
+      if (T > 600) {
+        st.tau += (dt * arrh(2.0, T, 873)) / 3; // migration and coalescence
+        st.fHe *= Math.exp((-dt * arrh(2.5, T, 1073)) / 10); // helium escapes through the lattice
+        if (st.fHe < 0.3) st.vol *= Math.exp((-dt * arrh(3.0, T, 1400)) / 30); // empty voids emit vacancies
+      }
+      st.k = Math.min(N0 - 10, Math.round(N0 * (1 - Math.pow(1 + st.tau, -0.6))));
+      const sig = `${st.k}|${Math.round(st.fHe * 50)}|${Math.round(st.vol * 50)}`;
+      if (sig === st.sig) return false;
+      st.sig = sig; rebuild(); return true;
+    },
+    reset() { Object.assign(st, { tau: 0, fHe: 1, vol: 1, k: 0, sig: '' }); rebuild(); spec.damageVer++; },
+    resetLabel: 'Fresh as-implanted sample',
+    stage() {
+      if (st.vol < 0.97) return 'voids annealing out';
+      if (st.fHe < 0.1) return 'empty faceted voids';
+      if (st.fHe < 0.9) return 'helium escaping';
+      if (st.k > 2) return 'coarsening';
+      return 'as implanted';
+    },
+    status(T) {
+      const d = list.length ? (2 * list.reduce((v, b) => v + b.r, 0)) / list.length / 10 : 0;
+      const sg = spec.stage();
+      return `${sg[0].toUpperCase() + sg.slice(1)}: ${list.length} cavities in the 48 nm field, mean diameter ${d.toFixed(1)} nm, ${st.fHe > 0.02 ? `helium density ≈ ${Math.round(spec.heDensity())} atoms/nm³ (He peak ≈ ${(21.22 + 0.016 * spec.heDensity()).toFixed(1)} eV in low-loss EELS)` : 'no helium left'}. ${T < 650 ? 'Below ~400 °C nothing changes: the bubbles only feel more pressure as it heats.' : ''} To see them in TEM, put in the 10 µm objective aperture and go ~1 µm underfocus (bright cavities, dark rims) or overfocus (dark); HAADF STEM shows them directly as dark patches.`;
+    },
+  };
+  spec.bubbles = () => list;
+  return spec;
+}
+
+// SrTiO₃ below 105 K: the TiO₆ octahedra rotate about one cube axis, alternating from one octahedron to the next
+// in all three directions (a⁰a⁰c⁻), so the cell doubles and the crystal splits into tetragonal domains with the
+// rotation axis along x, y or z. Rotation angle ≈ 2.1° at 4 K, falling to zero at 105 K. Along [001] the
+// alternation along the beam averages each oxygen column into two half-columns only ~0.07 Å apart, so images
+// barely change; the doubled cell shows up as a half-order Laue zone in CBED (and ½{ooo} spots at [110]).
+function addSTOPhase(spec) {
+  const A = spec.atoms, a = 3.905, n = A.count;
+  const kind = new Uint8Array(n), u1 = [], u2 = [];
+  spec.grainRot.forEach((r, g) => { u1[g] = [Math.cos(r), Math.sin(r)]; u2[g] = [-Math.sin(r), Math.cos(r)]; });
+  const fu = new Float32Array(2 * n);
+  for (let i = 0; i < n; i++) {
+    const g = A.g[i], x = A.ox + A.x[i], y = A.oy + A.y[i];
+    const u = (x * u1[g][0] + y * u1[g][1]) / a, v = (x * u2[g][0] + y * u2[g][1]) / a;
+    fu[2 * i] = u; fu[2 * i + 1] = v;
+    if (A.e[i] !== EI.O) continue;
+    if (near(u, 0.5) && near(v, 0)) kind[i] = 1; // on a Ti–O–Ti link along a2: moves along a1
+    else if (near(u, 0) && near(v, 0.5)) kind[i] = 2; // link along a1: moves along a2
+    else if (near(u, 0.5) && near(v, 0.5)) kind[i] = 3; // apical O in the Ti–O column
+  }
+  const ph = { sl: 0, theta: 0, cycle: 0, sig: '' };
+  spec.phase = ph;
+  // three tetragonal domain variants (rotation axis along a1, a2 or the beam) in stripes with {110} walls;
+  // a new cooling cycle gives a new pattern
+  const variant = (g, u, v) => {
+    const s = hash2(ph.cycle, g, 7), w = 14 + (s % 9), off = (s >>> 8) % 97;
+    const k = Math.floor((u + v + off + 1.5 * Math.sin((u - v) / 9 + s)) / w);
+    return [2, 0, 2, 1][((k % 4) + 4) % 4]; // 0: axis ∥ a1, 1: ∥ a2, 2: ∥ beam
+  };
+  spec.shift = (i, out) => {
+    if (!ph.sl || !kind[i]) return 0;
+    const g = A.g[i], vr = variant(g, fu[2 * i], fu[2 * i + 1]), k = kind[i], d = (a / 2) * Math.tan(ph.theta);
+    let dir = null;
+    if (vr === 2) dir = k === 1 ? u1[g] : k === 2 ? u2[g] : null;
+    else if (k === 3) dir = vr === 0 ? u2[g] : u1[g];
+    if (!dir) return 0;
+    out.dx = d * dir[0]; out.dy = d * dir[1];
+    return 2;
+  };
+  spec.evolve = (T) => {
+    const sl = T < 105 ? Math.round(Math.pow((105 - T) / 105, 0.33) * 20) / 20 : 0;
+    if (sl > 0 && ph.sl === 0) ph.cycle++;
+    ph.sl = sl; ph.theta = (2.1 * Math.PI / 180) * sl;
+    const sig = `${sl}|${ph.cycle}`;
+    if (sig === ph.sig) return false;
+    ph.sig = sig; return true;
+  };
+  spec.status = (T) => (T < 105
+    ? `Tetragonal (below 105 K): TiO₆ octahedra rotated by ${(ph.theta * 180 / Math.PI).toFixed(1)}°, alternating along every axis, so the cell doubles. Along [001] this barely shows in images (oxygen columns split by only ${((a / 2) * Math.tan(ph.theta) * 2).toFixed(2)} Å); in CBED an extra, inner half-order Laue zone adds HOLZ lines.`
+    : `Cubic at ${Math.round(T)} K. Cool below 105 K (liquid-nitrogen or helium holder) and the octahedra start to rotate.`);
+  return spec;
+}
+
+// CsPbBr₃ perovskite nanocubes on carbon, viewed along the pseudocubic [001] (cubes lie flat on a facet).
+// Cubic above 403 K; tetragonal (P4/mbm, in-phase rotation of the PbBr₆ octahedra about one axis, a⁰a⁰c⁺)
+// from 361 to 403 K; orthorhombic (Pnma, a⁻a⁻c⁺) below 361 K, down to the lowest temperatures. Each phase change
+// breaks the crystal into domains: 90° twin walls appear on cooling through 403 K (rotation axis along the beam,
+// which gives a checkerboard of the Br columns and ½{110} superlattice spots, or in the plane, which only blurs
+// them), and orthorhombic twins (the extra tilts about [110] or [1̄10]) on cooling through 361 K. Heating back
+// removes them, and every cooling cycle draws a new pattern. Beam-sensitive: radiolysis drives off bromine and the
+// lead left behind gathers into Pb nanoparticles.
+function makeCsPbBr3() {
+  const A = new AtomList();
+  const a = 5.87, rng = mulberry32(5150);
+  const cubes = [{ x: 0, y: 0, e: 190, rot: 0 }];
+  for (let t = 0; cubes.length < 7 && t < 3000; t++) {
+    const c = { x: (rng() * 2 - 1) * 320, y: (rng() * 2 - 1) * 320, e: 70 + 60 * rng(), rot: rng() * Math.PI / 2 };
+    if (Math.abs(c.x) + 0.71 * c.e < 370 && Math.abs(c.y) + 0.71 * c.e < 370 && cubes.every((q) => Math.hypot(c.x - q.x, c.y - q.y) > (c.e + q.e) * 0.75 + 12)) cubes.push(c);
+  }
+  const inCube = (c, x, y) => { const dx = x - c.x, dy = y - c.y, cs = Math.cos(c.rot), sn = Math.sin(c.rot); return Math.abs(dx * cs + dy * sn) < c.e / 2 && Math.abs(-dx * sn + dy * cs) < c.e / 2; };
+  const basis = [[0, 0, [EI.Cs]], [0.5, 0.5, [EI.Pb, EI.Br]], [0.5, 0, [EI.Br]], [0, 0.5, [EI.Br]]];
+  cubes.forEach((c, g) => fillLattice(A, { a1: [a, 0], a2: [0, a], basis, angle: c.rot, origin: [c.x - c.e / 2 + 0.3, c.y - c.e / 2 + 0.2], R: c.e * 1.5, g, inside: (x, y) => (inCube(c, x, y) ? c.e : false) }));
+  A.finalize(380);
+  const n = A.count, kind = new Uint8Array(n), par = new Int8Array(n), fu = new Float32Array(2 * n);
+  const U1 = cubes.map((c) => [Math.cos(c.rot), Math.sin(c.rot)]), U2 = cubes.map((c) => [-Math.sin(c.rot), Math.cos(c.rot)]);
+  const D1 = cubes.map((c, g) => [(U1[g][0] + U2[g][0]) / Math.SQRT2, (U1[g][1] + U2[g][1]) / Math.SQRT2]);
+  const D2 = cubes.map((c, g) => [(U1[g][0] - U2[g][0]) / Math.SQRT2, (U1[g][1] - U2[g][1]) / Math.SQRT2]);
+  for (let i = 0; i < n; i++) {
+    const g = A.g[i], c = cubes[g], x = A.x[i] - (c.x - c.e / 2 + 0.3), y = A.y[i] - (c.y - c.e / 2 + 0.2);
+    const u = (x * U1[g][0] + y * U1[g][1]) / a, v = (x * U2[g][0] + y * U2[g][1]) / a;
+    fu[2 * i] = u; fu[2 * i + 1] = v;
+    if (A.e[i] !== EI.Br) continue;
+    const iu = Math.floor(u + 0.01), iv = Math.floor(v + 0.01);
+    par[i] = (iu + iv) & 1 ? -1 : 1;
+    if (near(u, 0.5) && near(v, 0)) kind[i] = 1; // Pb–Br–Pb link along a2: the in-plane rotation moves it along a1
+    else if (near(u, 0) && near(v, 0.5)) kind[i] = 2; // link along a1: moves along a2
+    else kind[i] = 3; // apical Br, in the Pb–Br column
+  }
+  A.jitter = new Float32Array(n * 2);
+  for (let i = 0; i < n; i++) {
+    const r1 = (hash2(i, 1, 9) + 1) / 4294967297, r2 = hash2(i, 2, 9) / 4294967296, r = Math.sqrt(-2 * Math.log(r1));
+    A.jitter[2 * i] = r * Math.cos(6.2832 * r2); A.jitter[2 * i + 1] = r * Math.sin(6.2832 * r2);
+  }
+  const ph = { name: 'orth', thC: 0, thA: 0, cyc: 1, cycO: 1, sig: '' };
+  const dom = (g, u, v, seed) => { // stripes with {110} walls, wavy, a new pattern per cooling cycle
+    const s = hash2(seed, g, 31), w = 7 + (s % 7), off = (s >>> 8) % 61, dir = (s >>> 4) & 1 ? 1 : -1;
+    return Math.floor((u + dir * v + off + 1.2 * Math.sin((u - dir * v) / 6 + (s & 255))) / w);
+  };
+  // which way the c⁺ rotation axis points in this domain: 2 = along the beam, 0 = along a1, 1 = along a2
+  const cAxis = (g, u, v) => { const k = dom(g, u, v, ph.cyc); return [2, 0, 2, 1, 2][((k % 5) + 5) % 5]; };
+  const spec = {
+    id: 'cspb', name: 'CsPbBr₃ perovskite nanocubes on carbon', short: 'CsPbBr₃',
+    beamSensitive: true, Dc300: 400, dmgJitter: 1.4, thermalLimit: 720, alpha: 3.3e-5, filmOnly: true,
+    dmgLoss: (e) => (e === EI.Br ? 0.6 : e === EI.Cs ? 0.25 : 0),
+    grainRot: cubes.map((c) => c.rot),
+    grainAt(x, y) { for (let g = 0; g < cubes.length; g++) if (inCube(cubes[g], x, y)) return g; return -1; },
+    atoms: A, cubes, poly: true, period: a, center: [-30, 20], fov: 8, zone: '[001]',
+    grains: cubes.map((c) => ({ a1: rot([a, 0], c.rot), a2: rot([0, a], c.rot), label: (m, k) => `${bar(m)}${bar(k)}0` })),
+    elements: [EI.Cs, EI.Pb, EI.Br, EI.C],
+    amorph() { return 'C'; },
+    amorphThick: 30,
+    thicknessAt(x, y, t) { let s = 30; for (const c of cubes) if (inCube(c, x, y)) s += c.e; return s; },
+    tauAt(x, y, t, kV) { let s = 30 / (10 * imfp(kV, 6)); for (const c of cubes) if (inCube(c, x, y)) s += c.e / (10 * imfp(kV, 50)); return s; },
+    rings: [{ d: 5.87, hkl: '100' }, { d: 4.15, hkl: '110' }, { d: 2.935, hkl: '200' }, { d: 2.625, hkl: '210' }, { d: 2.396, hkl: '211' }],
+    labels: [{ x: -100, y: -122, text: 'CsPbBr₃ nanocube, [001]' }],
+    plasmon: [{ Ep: 13.5, G: 9, frac: 0.6 }, { Ep: 22, G: 12, frac: 0.4 }],
+    zeff: 40, dmg: 0, damageVer: 0, phase: ph,
+    shift(i, out) {
+      const k = kind[i];
+      if (!k || ph.name === 'cubic') return 0;
+      const g = A.g[i], u = fu[2 * i], v = fu[2 * i + 1], ax = cAxis(g, u, v);
+      const dC = (a / 2) * Math.tan(ph.thC);
+      if (ax === 2) {
+        if (k === 1) { out.dx = dC * par[i] * U1[g][0]; out.dy = dC * par[i] * U1[g][1]; return 1; }
+        if (k === 2) { out.dx = -dC * par[i] * U2[g][0]; out.dy = -dC * par[i] * U2[g][1]; return 1; }
+        if (ph.name === 'orth') { // a⁻a⁻ tilts about [110] or [1̄10]: the apical Br alternates along the beam
+          const dA = (a / 2) * Math.tan(ph.thA), d = dom(g, u + 3.7, -v, ph.cycO) & 1 ? D1[g] : D2[g];
+          out.dx = dA * d[0]; out.dy = dA * d[1]; return 2;
+        }
+        return 0;
+      }
+      if (k === 3) { const d = ax === 0 ? U2[g] : U1[g]; out.dx = dC * d[0]; out.dy = dC * d[1]; return 2; }
+      return 0;
+    },
+    // lead nanoparticles grow where bromine has left (beyond ~15 % of the critical dose)
+    blobs(x0, y0, x1, y1) {
+      const q = spec.dmg - 0.15;
+      if (q <= 0) return [];
+      const out = [], C = 50;
+      for (let j = Math.floor(y0 / C) - 1; j <= Math.floor(y1 / C) + 1; j++) for (let i = Math.floor(x0 / C) - 1; i <= Math.floor(x1 / C) + 1; i++) {
+        const h = hash2(i, j, 404) / 4294967296;
+        if (h > 0.55) continue;
+        const x = (i + 0.2 + 0.6 * frac1(h * 7.3)) * C, y = (j + 0.2 + 0.6 * frac1(h * 13.1)) * C;
+        if (spec.grainAt(x, y) < 0) continue;
+        const r = (3 + 22 * q) * (0.6 + 0.8 * frac1(h * 3.7));
+        out.push({ x, y, r, e: EI.Pb, n: (2 * r) / 3.5 });
+      }
+      return out;
+    },
+    evolve(T) {
+      let p = ph.name; // first-order transitions with a few kelvin of hysteresis
+      for (let k = 0; k < 3; k++) {
+        if (p === 'cubic' && T < 400) { p = 'tet'; ph.cyc++; } else if (p === 'tet' && T > 403) p = 'cubic';
+        else if (p === 'tet' && T < 358) { p = 'orth'; ph.cycO++; } else if (p === 'orth' && T > 361) p = 'tet';
+      }
+      ph.name = p;
+      const deg = Math.PI / 180;
+      ph.thC = p === 'cubic' ? 0 : p === 'tet' ? 4.5 * deg * Math.sqrt(Math.max(0.05, (403 - T) / 42)) : (7.5 + 1.5 * Math.max(0, (361 - T) / 361)) * deg;
+      ph.thA = p === 'orth' ? (6 + 2 * Math.max(0, (361 - T) / 361)) * deg : 0;
+      const sig = `${p}|${ph.cyc}|${ph.cycO}|${Math.round(ph.thC / deg * 4)}|${Math.round(ph.thA / deg * 4)}`;
+      if (sig === ph.sig) return false;
+      ph.sig = sig; return true;
+    },
+    status(T) {
+      const nm = { cubic: 'Cubic (Pm3̄m)', tet: 'Tetragonal (P4/mbm)', orth: 'Orthorhombic (Pnma)' }[ph.name];
+      const what = ph.name === 'cubic' ? 'no octahedral tilts and no domain walls; cool below 400 K and twin walls form'
+        : ph.name === 'tet' ? `PbBr₆ octahedra rotated ${(ph.thC * 180 / Math.PI).toFixed(1)}° in phase about one axis; 90° twin walls separate domains with the axis along the beam (Br checkerboard, ½{110} spots) from domains with it in the plane. Heat above 403 K and they vanish; cool below 358 K for orthorhombic twins`
+          : `octahedra rotated ${(ph.thC * 180 / Math.PI).toFixed(1)}° about one axis and tilted ${(ph.thA * 180 / Math.PI).toFixed(1)}° about the other two; tetragonal twin walls plus orthorhombic twins. Heat above 361 K and the orthorhombic twins vanish`;
+      return `${nm} at ${Math.round(T)} K: ${what}.${spec.dmg > 0.05 ? ` Beam damage ${Math.round(spec.dmg * 100)} %: bromine is leaving${spec.dmg > 0.15 ? ' and Pb nanoparticles are growing' : ''}.` : ''}`;
+    },
+  };
+  spec.evolve(293); // start in the room-temperature (orthorhombic) structure
+  return spec;
+}
+
+export const SPECIMENS = { au: makeGold(), si: makeSilicon(), sto: addSTOPhase(makeSTO()), gr: makeGraphene(), mof: makeUiO66(), bio: makeBio(), lib: makeLibrary(), hesi: makeHeSi(), cspb: makeCsPbBr3() };
 for (const s of Object.values(SPECIMENS)) {
   for (const g of s.grains) g.b = reciprocal(g.a1, g.a2);
 }
@@ -915,6 +1231,10 @@ export function projectMaps(spec, { cx, cy, n, dx, thick, tiltX = 0, tiltY = 0, 
   // needs no smearing, and zExp is how high-angle scattering grows with the atoms in a column
   if (spec.overview && n * dx > spec.overviewA) return spec.overview({ cx, cy, n, dx, thick, elements, part, tds });
   const A = spec.atoms, pad = 4, ox = A.ox, oy = A.oy, tanA = spec.ownTilt ? 0 : tanT, zExp = spec.zExp ?? 0.85;
+  // optional specimen hooks: voidAt(x, y) is the chord (Å) through empty cavities along the beam; shift(i, out)
+  // moves an atom column by (out.dx, out.dy) (1) or splits it into two half-columns at ±(dx, dy) (2), which is how
+  // octahedral rotations in a lower-symmetry phase look in projection
+  const sh = { dx: 0, dy: 0 };
   if (part !== 'amorph') A.query(ox + (x0 - pad - ox) / sc, oy + (y0 - pad - oy) / sc, ox + (x0 + n * dx + pad - ox) / sc, oy + (y0 + n * dx + pad - oy) / sc, (i) => {
     if (A.dead && A.dead[i]) return;
     const L = A.L[i] < 0 ? thick : A.L[i];
@@ -922,13 +1242,27 @@ export function projectMaps(spec, { cx, cy, n, dx, thick, tiltX = 0, tiltY = 0, 
     const e = A.e[i];
     const l = (L * tanA) / dx, l2 = (l * l) / 12;
     let ax = ox + A.x[i] * sc, ay = oy + A.y[i] * sc;
-    if (spec.dmg && A.jitter) { // radiolysis: atoms wander off their sites; linkers lose mass
-      const sd = 7 * spec.dmg;
+    if (spec.voidAt) { const c = spec.voidAt(ax, ay); if (c > 0) { N *= Math.max(0, 1 - c / L); if (N <= 0) return; } }
+    if (spec.dmg && A.jitter) { // radiolysis: atoms wander off their sites and lose mass
+      const sd = (spec.dmgJitter ?? 7) * spec.dmg;
       ax += sd * A.jitter[2 * i]; ay += sd * A.jitter[2 * i + 1];
-      if (e !== EI.Zr) N *= 1 - 0.35 * spec.dmg;
+      N *= 1 - (spec.dmgLoss ? spec.dmgLoss(e) : e !== EI.Zr ? 0.35 : 0) * spec.dmg;
     }
-    splat((ax - x0) / dx - 0.5, (ay - y0) / dx - 0.5, sA2, l2, e, VP[e] * N, ZH[e] * Math.pow(N, zExp) * tds, ZL[e] * N, N);
+    const k = spec.shift ? spec.shift(i, sh) : 0;
+    const px = (ax - x0) / dx - 0.5, py = (ay - y0) / dx - 0.5;
+    if (k === 2) {
+      const hN = N / 2, ux = sh.dx / dx, uy = sh.dy / dx;
+      splat(px + ux, py + uy, sA2, l2, e, VP[e] * hN, ZH[e] * Math.pow(N, zExp) * tds / 2, ZL[e] * hN, hN);
+      splat(px - ux, py - uy, sA2, l2, e, VP[e] * hN, ZH[e] * Math.pow(N, zExp) * tds / 2, ZL[e] * hN, hN);
+    } else if (k === 1) splat(px + sh.dx / dx, py + sh.dy / dx, sA2, l2, e, VP[e] * N, ZH[e] * Math.pow(N, zExp) * tds, ZL[e] * N, N);
+    else splat(px, py, sA2, l2, e, VP[e] * N, ZH[e] * Math.pow(N, zExp) * tds, ZL[e] * N, N);
   });
+  // extra compact objects, such as metal nanoparticles a beam-damaged crystal decomposes into: {x, y, r, e, n}
+  // with n atoms in the column through the centre
+  if (part !== 'amorph' && spec.blobs) for (const b of spec.blobs(x0, y0, x0 + n * dx, y0 + n * dx)) {
+    const s2 = Math.max(0.36, (b.r * b.r) / (4 * dx * dx));
+    splat((b.x - x0) / dx - 0.5, (b.y - y0) / dx - 0.5, s2, 0, b.e, VP[b.e] * b.n, ZH[b.e] * Math.pow(b.n, zExp) * tds, ZL[b.e] * b.n, b.n);
+  }
 
   // amorphous material: seeded per cell so it is stable as the stage moves. spec.amorph(x, y, ctx) returns a
   // material name (thickness from amorphThick or the slider) or a list of [material, thickness Å] pairs.
@@ -1040,6 +1374,14 @@ export const XRAY = [
   { el: 'Ni', line: 'Lα', E: 0.851, w: 0.1, y: 1.0 },
   { el: 'Ni', line: 'Kα', E: 7.478, w: 1, y: 1.0 },
   { el: 'Ni', line: 'Kβ', E: 8.265, w: 0.13, y: 1.0 },
+  { el: 'Cs', line: 'Lα', E: 4.286, w: 1, y: 1.0 },
+  { el: 'Cs', line: 'Lβ', E: 4.62, w: 0.55, y: 1.0 },
+  { el: 'Pb', line: 'Mα', E: 2.346, w: 0.6, y: 1.0 },
+  { el: 'Pb', line: 'Lα', E: 10.551, w: 1, y: 1.0 },
+  { el: 'Pb', line: 'Lβ', E: 12.614, w: 0.6, y: 1.0 },
+  { el: 'Br', line: 'Lα', E: 1.48, w: 0.6, y: 1.0 },
+  { el: 'Br', line: 'Kα', E: 11.924, w: 1, y: 1.0 },
+  { el: 'Br', line: 'Kβ', E: 13.292, w: 0.15, y: 1.0 },
 ];
 export const detEff = (E) => Math.exp(-Math.pow(0.35 / E, 2)) * Math.exp(-E / 40);
 // Energy-dispersive detector resolution (keV): Fano-limited statistics plus electronic noise, set so the
@@ -1070,6 +1412,10 @@ export const EDGES = [
   { key: 'Ni', el: 'Ni', name: 'Ni L₃,₂', E: 855, kind: 'sharp', h: 0.4, elnes: [[853.5, 1.2, 1.3], [871, 1.4, 0.6]] },
   { key: 'Cu', el: 'Cu', name: 'Cu L₃,₂', E: 931, kind: 'delayed', h: 0.45, delay: 8 }, // metallic Cu: filled 3d, no white lines
   { key: 'Ag', el: 'Ag', name: 'Ag M₄,₅', E: 367, kind: 'delayed', h: 0.9, delay: 30 },
+  { key: 'Br', el: 'Br', name: 'Br M₄,₅', E: 69, kind: 'delayed', h: 0.9, delay: 12 },
+  { key: 'Cs', el: 'Cs', name: 'Cs M₅,₄', E: 726, kind: 'sharp', h: 0.4, elnes: [[727.5, 1.6, 1.4], [741.5, 1.7, 1.0]] },
+  { key: 'Br', el: 'Br', name: 'Br L₃', E: 1550, kind: 'delayed', h: 0.1, delay: 25 },
+  { key: 'Pb', el: 'Pb', name: 'Pb M₅,₄', E: 2484, kind: 'delayed', h: 0.1, delay: 60 },
 ];
 const erf = (x) => {
   const t = 1 / (1 + 0.3275911 * Math.abs(x));

@@ -837,6 +837,7 @@ export class Sim {
         pl += Pk * p.frac * v * (2 / Math.PI) / Ep;
       }
     }
+    if (spec.extraLoss && E > 0) pl += P0 * tau * spec.extraLoss(E, res);
     const bg = E > 20 ? 0.012 * tau * Math.pow(E / 30, -3.1) * Math.min(1, (E - 20) / 12) : 0;
     let core = 0;
     const edgesOut = parts ? {} : null;
@@ -1082,6 +1083,7 @@ export class Sim {
   }
   restoreSpecimen() {
     const spec = this.spec;
+    if (spec.reset) { spec.reset(); this.invalidate('damage'); return; }
     if (!spec.atoms.dead) return;
     spec.atoms.dead.fill(0); spec.sputtered = 0; spec.damageVer++;
     this.invalidate('damage');
@@ -1097,6 +1099,18 @@ export class Sim {
     if (q !== this._driftQ) { this._driftQ = q; this.invalidate('drift'); this._soft = true; this.oah.stale = true; }
     const th = this.thermal(), tk = `${th.u2r}|${th.eps}`;
     if (tk !== this._thermQ) { const first = this._thermQ === undefined; this._thermQ = tk; if (!first) { this.invalidate('temp'); this._soft = true; } }
+    // specimens that change with temperature (bubbles coarsening, phase transitions): the specimen keeps its own
+    // state and says when it looks different; refresh at most ~3× a second, as for beam damage
+    const spec = this.spec;
+    if (spec.evolve?.(th.T, t)) this._evolved = true;
+    if (this._evolved) {
+      const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      if (now - (this._evT || 0) > Math.max(330, 3 * (this._mapsMs || 0))) {
+        this._evT = now; this._evolved = false;
+        spec.damageVer = (spec.damageVer ?? 0) + 1; this.invalidate('damage'); this._soft = true;
+        if (this.cbed) this.cbed.stale = true;
+      }
+    }
     if (this.spec.bio) {
       const T = th.T;
       if (T > DEVITRIFY_K && !this.devitrified) { this.devitrified = true; this.invalidate('damage'); this._soft = true; }

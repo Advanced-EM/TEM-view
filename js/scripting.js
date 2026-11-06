@@ -18,11 +18,11 @@ import { libGoto, stageMove, stagePos } from './ops.js';
 import * as ML from './megalibrary.js';
 
 export const SCRIPT_API = 1;
-const SPECS = ['au', 'si', 'sto', 'gr', 'mof', 'bio', 'lib'];
+const SPECS = ['au', 'si', 'sto', 'gr', 'mof', 'bio', 'lib', 'hesi', 'cspb'];
 // training tasks a script can run as a challenge (the direct-alignment task needs its on-screen controls)
 const CHALLENGES = ['tem-focus-stig', 'corrector-ronch'];
 const SETTINGS = {
-  mode: 'tem, stem, 4d, diff, cbed, eds, eels, ronch, oah, ilh, ltem, lstem', specimen: 'au, si, sto, gr, mof, bio, lib (nanoparticle megalibrary)', kV: '80, 200 or 300',
+  mode: 'tem, stem, 4d, diff, cbed, eds, eels, ronch, oah, ilh, ltem, lstem', specimen: 'au, si, sto, gr, mof, bio, lib (nanoparticle megalibrary), hesi (He bubbles in Si), cspb (CsPbBr₃ nanocubes)', kV: '80, 200 or 300',
   defocus_nm: 'C1 in nm, negative is underfocus', fov_nm: 'field of view in nm', dose: 'electrons per Å²', thickness_nm: 'specimen thickness',
   corrector: 'True or False', holder: 'room, ln2, lhe, heat', temperature_K: 'specimen temperature', realistic: 'shot noise and real detectors',
   detector: 'bf, abf, adf, haadf (STEM)', convergence_mrad: 'probe semi-angle', camera_length_mm: 'diffraction camera length',
