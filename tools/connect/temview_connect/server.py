@@ -220,6 +220,9 @@ def make_handler(svc: Service):
                 return self._json(405, {"error": "this connector cannot be driven"})
             except (ValueError, ProtocolError) as e:
                 return self._json(400, {"error": str(e)})
+            except RuntimeError as e:  # the device refused or failed (not armed, a hardware limit, no answer)
+                svc.log("device-error", error=str(e))
+                return self._json(409, {"error": str(e)})
 
         def log_message(self, fmt, *args):
             pass

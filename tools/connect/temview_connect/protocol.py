@@ -36,6 +36,9 @@ CONTROLS: dict[str, tuple[str, str, str]] = {
     "holder_temperature_K": ("K", "number", "specimen holder set temperature"),
     "detector_inner_mrad": ("mrad", "number", "annular detector inner angle"),
     "detector_outer_mrad": ("mrad", "number", "annular detector outer angle"),
+    "slit_width_eV": ("eV", "number", "energy-filter slit width"),
+    "slit_inserted": ("", "bool", "energy-filter slit inserted"),
+    "energy_shift_eV": ("eV", "number", "energy-filter energy shift"),
 }
 
 
