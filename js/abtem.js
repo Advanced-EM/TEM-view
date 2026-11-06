@@ -185,7 +185,7 @@ async function submit(url, request) {
 }
 
 // stored-entry zip (the bridge writes uncompressed .npz)
-function unzip(buf) {
+export function unzip(buf) {
   const u8 = new Uint8Array(buf), dv = new DataView(buf), out = {};
   let p = 0;
   while (p + 30 <= u8.length && dv.getUint32(p, true) === 0x04034b50) {

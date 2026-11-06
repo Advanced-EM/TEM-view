@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "temview-connect"
+version = "0.1.0"
+description = "temview-connect/1: connect simulators and instruments to the TEM-view microscope"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Proprietary: Copyright (c) 2026 Northwestern University. All Rights Reserved." }
+dependencies = ["numpy>=1.24"]
+
+[project.optional-dependencies]
+abtem = ["temview-abtem"]
+test = ["pytest>=7"]
+
+[project.scripts]
+temview-connect = "temview_connect.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["temview_connect*"]

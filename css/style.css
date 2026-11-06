@@ -611,3 +611,18 @@ body.stacked .support { margin: 8px 16px 0; }
 .abtem .abPair figure { margin: 0; }
 .abtem .abPair img, .abtem .abPair canvas { width: 100%; aspect-ratio: 1; object-fit: contain; background: #000; image-rendering: auto; }
 .abtem .abPair figcaption { font-size: 11.5px; color: var(--muted); margin-top: 4px; }
+
+/* Connections (temview-connect/1) */
+.connect .card { width: min(760px, 100%); }
+.connect .cnCard { border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 10px; padding: 10px 12px; margin: 10px 0; }
+.connect .cnCard.inst { border-color: rgba(255, 170, 90, 0.35); }
+.connect .cnCard header { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.connect .cnCard header .cnStop { margin-left: auto; background: #b3261e; border-color: #e5534b; color: #fff; font-weight: 600; }
+.connect .cnCard p { margin: 6px 0; font-size: 13px; }
+.connect .crow { flex-wrap: wrap; align-items: center; }
+.connect input { background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 6px; color: inherit; padding: 4px 6px; }
+.connect .cnTable { width: 100%; font-size: 12px; border-collapse: collapse; margin: 6px 0; }
+.connect .cnTable td, .connect .cnTable th { padding: 2px 6px; text-align: left; border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
+.connect .cnTable tr.diff td { color: #ffcf5a; }
+.connect .cnFig canvas { width: min(360px, 100%); height: auto; image-rendering: pixelated; }
+.connect .cnFig figcaption { font-size: 12px; color: var(--muted); }
