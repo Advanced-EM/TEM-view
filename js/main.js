@@ -23,6 +23,7 @@ import { ScriptCore, b64 } from './scripting.js';
 import { PythonIDE } from './ide.js';
 import { specState, modeState, setState, chipState, resetVdet as resetVdetState, optimalDefocus, dfLimits as dfLimitsOf, lorSet, tiltLimit, fovMax, libGoto } from './ops.js';
 import * as ML from './megalibrary.js';
+import { openAbTEM } from './abtem.js';
 import { MAGSPECS } from './lorentz.js';
 import { startUsage } from './usage.js';
 
@@ -208,6 +209,7 @@ const CONTROLS = [
   { buttons: [['calib', 'Calibrate from data…']] },
   { buttons: [['saveSession', 'Save session'], ['loadSession', 'Load session']] },
   { buttons: [['exportData', 'Export data (.npz)'], ['exportProfile', 'Export profile']] },
+  { buttons: [['abtem', 'Simulate with abTEM…']] },
   { sec: 'Instrument readout' },
   { table: true },
 ];
@@ -431,6 +433,7 @@ function action(id, el) {
   if (id === 'saveSession') saveSession();
   if (id === 'loadSession') $('#fileSession').click();
   if (id === 'exportData') exportData();
+  if (id === 'abtem') openAbTEM({ S, sim, mainCv, download });
   if (id === 'exportProfile') download(new Blob([JSON.stringify(S.profile, null, 1)], { type: 'application/json' }), `instrument-profile-${S.profile.preset}.json`);
   if (id === 'restore') { sim.restoreSpecimen(); explainChange('restore'); }
   if (id === 'lorReset') {
