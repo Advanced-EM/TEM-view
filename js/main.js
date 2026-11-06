@@ -64,7 +64,7 @@ const NOT_LOR = 'tem stem 4d diff cbed eds eels ronch oah ilh';
 const LOR = 'ltem lstem';
 const CONTROLS = [
   { sec: 'The specimen' },
-  { chips: 'spec', modes: NOT_LOR, opts: [['au', 'Gold on carbon'], ['si', 'Si / SiO₂'], ['sto', 'SrTiO₃ boundary'], ['gr', 'Graphene'], ['mof', 'UiO-66 (MOF)'], ['bio', 'Proteins in ice'], ['lib', 'NP megalibrary'], ['hesi', 'He bubbles in Si'], ['cspb', 'CsPbBr₃ nanocubes']] },
+  { chips: 'spec', modes: NOT_LOR, opts: [['au', 'Gold on carbon'], ['si', 'Si / SiO₂'], ['sto', 'SrTiO₃ boundary'], ['gr', 'Graphene'], ['mof', 'UiO-66 (MOF)'], ['bio', 'Proteins in ice'], ['lib', 'NP megalibrary'], ['hesi', 'He bubbles in Si'], ['cspb', 'CsPbBr₃ nanocubes'], ['mapb', 'MAPbBr₃ nanocubes']] },
   { modes: NOT_LOR, pFn: () => sim.spec.status?.(sim.temp()) ?? '', show: () => !!sim.spec.status },
   { buttons: [['restore', 'Fresh as-implanted sample']], modes: NOT_LOR, show: () => !!sim.spec.reset },
   { modes: NOT_LOR, pFn: () => { const ij = ML.nearest(S.cx / 1e4, S.cy / 1e4); return `Stage at (${(S.cx / 1e4).toFixed(3)}, ${(S.cy / 1e4).toFixed(3)}) µm: ${ij ? `particle (${ij[0]}, ${ij[1]}) of 1000 × 1000, pen block (${Math.floor(ij[0] / 100)}, ${Math.floor(ij[1] / 100)}). ${ML.describe(ML.particle(...ij))}` : 'outside the library'}. Thickness is the Si₃N₄ membrane. Script a screen with goto(i, j) in Python.`; }, show: () => S.spec === 'lib' },
@@ -83,7 +83,8 @@ const CONTROLS = [
   { buttons: [['restore', 'Restore pristine graphene']], modes: 'tem stem', show: () => S.spec === 'gr' },
   { modes: NOT_LOR, p: 'UiO-66 is destroyed by radiolysis after ~10 e⁻/Å² at 300 kV, and sooner at lower voltage. The dose per image accumulates while the beam is on: watch the high-order diffraction spots fade first.', show: () => S.spec === 'mof' },
   { modes: NOT_LOR, p: 'CsPbBr₃ is beam-sensitive: bromine leaves under the beam and the lead gathers into Pb nanoparticles (bright dots in HAADF) after a few hundred e⁻/Å². Use the heating or cryo holder to cross its phase transitions at 361 K and 403 K and watch the twin walls appear and vanish.', show: () => S.spec === 'cspb' },
-  { buttons: [['fresh', 'Move to a fresh area']], modes: NOT_LOR, show: () => S.spec === 'mof' || S.spec === 'cspb' },
+  { modes: NOT_LOR, p: 'MAPbBr₃ is very beam-sensitive (the methylammonium goes first, then bromine; lead gathers into nanoparticles), so it opens at low dose. It is cubic at room temperature: put in the liquid-nitrogen holder to cross its transitions near 237 K and 150 K, and watch twin walls form and the cations order.', show: () => S.spec === 'mapb' },
+  { buttons: [['fresh', 'Move to a fresh area']], modes: NOT_LOR, show: () => S.spec === 'mof' || S.spec === 'cspb' || S.spec === 'mapb' },
   { chips: 'magSpec', modes: LOR, opts: Object.entries(MAGSPECS).map(([k, v]) => [k, v.short]) },
   { modes: LOR, pFn: () => MAGSPECS[S.magSpec].about },
   { slider: 'lorThick', label: 'Film thickness', min: 10, max: 150, step: 1, fmt: (v) => `${v} nm`, modes: LOR, ends: ['thin', '', 'thick'] },

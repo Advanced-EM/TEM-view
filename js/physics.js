@@ -152,6 +152,8 @@ export const CRYST = {
   cspb: { a: 5.87, sg: 'Pm3̄m (pseudocubic)', name: 'CsPbBr₃ (perovskite)', basis: [[0, 0, 0, 55], [0.5, 0.5, 0.5, 82], [0.5, 0.5, 0, 35], [0.5, 0, 0.5, 35], [0, 0.5, 0.5, 35]], xAx: [1, 0, 0], yAx: [0, 1, 0] },
 };
 CRYST.hesi = CRYST.si; // helium bubbles sit in ordinary silicon
+// MAPbBr₃, cubic cell; the methylammonium cation (C + N) on the A site, tumbling, counted as its two heavy atoms
+CRYST.mapb = { a: 5.93, sg: 'Pm3̄m (pseudocubic)', name: 'MAPbBr₃ (hybrid perovskite)', basis: [[0, 0, 0, 13], [0.5, 0.5, 0.5, 82], [0.5, 0.5, 0, 35], [0.5, 0, 0.5, 35], [0, 0.5, 0.5, 35]], xAx: [1, 0, 0], yAx: [0, 1, 0] };
 for (const c of Object.values(CRYST)) {
   const n = (v) => { const l = Math.hypot(...v); return v.map((x) => x / l); };
   c.x = n(c.xAx); c.y = n(c.yAx);
@@ -1047,24 +1049,25 @@ function addSTOPhase(spec) {
   return spec;
 }
 
-// CsPbBr₃ perovskite nanocubes on carbon, viewed along the pseudocubic [001] (cubes lie flat on a facet).
-// Cubic above 403 K; tetragonal (P4/mbm, in-phase rotation of the PbBr₆ octahedra about one axis, a⁰a⁰c⁺)
-// from 361 to 403 K; orthorhombic (Pnma, a⁻a⁻c⁺) below 361 K, down to the lowest temperatures. Each phase change
-// breaks the crystal into domains: 90° twin walls appear on cooling through 403 K (rotation axis along the beam,
-// which gives a checkerboard of the Br columns and ½{110} superlattice spots, or in the plane, which only blurs
-// them), and orthorhombic twins (the extra tilts about [110] or [1̄10]) on cooling through 361 K. Heating back
-// removes them, and every cooling cycle draws a new pattern. Beam-sensitive: radiolysis drives off bromine and the
-// lead left behind gathers into Pb nanoparticles.
-function makeCsPbBr3() {
+// Lead-halide perovskite nanocubes on carbon, viewed along the pseudocubic [001] (cubes lie flat on a facet).
+// Each phase below the cubic one rotates or tilts the PbBr₆ octahedra and breaks the crystal into domains:
+//  · in-phase rotation about one axis (c⁺, P4/mbm): where the axis lies along the beam the Br columns shift into a
+//    checkerboard (superlattice spots such as (3/2 ½ 0) in diffraction); where it lies in the plane they only blur;
+//  · out-of-phase rotation (c⁻, I4/mcm): the rotation alternates along the beam too, so the columns only split;
+//  · orthorhombic (Pnma, a⁻a⁻c⁺): the c⁺ checkerboard plus extra tilts about [110] or [1̄10] (orthorhombic twins).
+// Cooling into a phase draws new domain walls; heating out of it removes them, and every cycle gives a new
+// pattern. Beam-sensitive: radiolysis drives off the halogen (and the organic cation) and the lead left behind
+// gathers into Pb nanoparticles.
+function makeHalide(cfg) {
   const A = new AtomList();
-  const a = 5.87, rng = mulberry32(5150);
+  const a = cfg.a, rng = mulberry32(cfg.seed);
   const cubes = [{ x: 0, y: 0, e: 190, rot: 0 }];
   for (let t = 0; cubes.length < 7 && t < 3000; t++) {
     const c = { x: (rng() * 2 - 1) * 320, y: (rng() * 2 - 1) * 320, e: 70 + 60 * rng(), rot: rng() * Math.PI / 2 };
     if (Math.abs(c.x) + 0.71 * c.e < 370 && Math.abs(c.y) + 0.71 * c.e < 370 && cubes.every((q) => Math.hypot(c.x - q.x, c.y - q.y) > (c.e + q.e) * 0.75 + 12)) cubes.push(c);
   }
   const inCube = (c, x, y) => { const dx = x - c.x, dy = y - c.y, cs = Math.cos(c.rot), sn = Math.sin(c.rot); return Math.abs(dx * cs + dy * sn) < c.e / 2 && Math.abs(-dx * sn + dy * cs) < c.e / 2; };
-  const basis = [[0, 0, [EI.Cs]], [0.5, 0.5, [EI.Pb, EI.Br]], [0.5, 0, [EI.Br]], [0, 0.5, [EI.Br]]];
+  const basis = [[0, 0, cfg.site], [0.5, 0.5, [EI.Pb, EI.Br]], [0.5, 0, [EI.Br]], [0, 0.5, [EI.Br]]];
   cubes.forEach((c, g) => fillLattice(A, { a1: [a, 0], a2: [0, a], basis, angle: c.rot, origin: [c.x - c.e / 2 + 0.3, c.y - c.e / 2 + 0.2], R: c.e * 1.5, g, inside: (x, y) => (inCube(c, x, y) ? c.e : false) }));
   A.finalize(380);
   const n = A.count, kind = new Uint8Array(n), par = new Int8Array(n), fu = new Float32Array(2 * n);
@@ -1075,51 +1078,64 @@ function makeCsPbBr3() {
     const g = A.g[i], c = cubes[g], x = A.x[i] - (c.x - c.e / 2 + 0.3), y = A.y[i] - (c.y - c.e / 2 + 0.2);
     const u = (x * U1[g][0] + y * U1[g][1]) / a, v = (x * U2[g][0] + y * U2[g][1]) / a;
     fu[2 * i] = u; fu[2 * i + 1] = v;
-    if (A.e[i] !== EI.Br) continue;
     const iu = Math.floor(u + 0.01), iv = Math.floor(v + 0.01);
     par[i] = (iu + iv) & 1 ? -1 : 1;
-    if (near(u, 0.5) && near(v, 0)) kind[i] = 1; // Pb–Br–Pb link along a2: the in-plane rotation moves it along a1
-    else if (near(u, 0) && near(v, 0.5)) kind[i] = 2; // link along a1: moves along a2
-    else kind[i] = 3; // apical Br, in the Pb–Br column
+    if (A.e[i] === EI.Br) {
+      if (near(u, 0.5) && near(v, 0)) kind[i] = 1; // Pb–Br–Pb link along a2: an in-plane rotation moves it along a1
+      else if (near(u, 0) && near(v, 0.5)) kind[i] = 2; // link along a1: moves along a2
+      else kind[i] = 3; // apical Br, in the Pb–Br column
+    } else if (cfg.organic && cfg.site.includes(A.e[i])) kind[i] = 4; // the organic cation on the A site
   }
   A.jitter = new Float32Array(n * 2);
   for (let i = 0; i < n; i++) {
     const r1 = (hash2(i, 1, 9) + 1) / 4294967297, r2 = hash2(i, 2, 9) / 4294967296, r = Math.sqrt(-2 * Math.log(r1));
     A.jitter[2 * i] = r * Math.cos(6.2832 * r2); A.jitter[2 * i + 1] = r * Math.sin(6.2832 * r2);
   }
-  const ph = { name: 'orth', thC: 0, thA: 0, cyc: 1, cycO: 1, sig: '' };
+  const P = cfg.phases; // from high temperature to low
+  const ph = { i: 0, name: P[0].key, thC: 0, thA: 0, cyc: 1, cycO: 1, sig: '' };
   const dom = (g, u, v, seed) => { // stripes with {110} walls, wavy, a new pattern per cooling cycle
     const s = hash2(seed, g, 31), w = 7 + (s % 7), off = (s >>> 8) % 61, dir = (s >>> 4) & 1 ? 1 : -1;
     return Math.floor((u + dir * v + off + 1.2 * Math.sin((u - dir * v) / 6 + (s & 255))) / w);
   };
-  // which way the c⁺ rotation axis points in this domain: 2 = along the beam, 0 = along a1, 1 = along a2
+  // which way the main rotation axis points in this domain: 2 = along the beam, 0 = along a1, 1 = along a2
   const cAxis = (g, u, v) => { const k = dom(g, u, v, ph.cyc); return [2, 0, 2, 1, 2][((k % 5) + 5) % 5]; };
+  const deg = Math.PI / 180;
   const spec = {
-    id: 'cspb', name: 'CsPbBr₃ perovskite nanocubes on carbon', short: 'CsPbBr₃',
-    beamSensitive: true, Dc300: 400, dmgJitter: 1.4, thermalLimit: 720, alpha: 3.3e-5, filmOnly: true,
-    dmgLoss: (e) => (e === EI.Br ? 0.6 : e === EI.Cs ? 0.25 : 0),
+    id: cfg.id, name: cfg.name, short: cfg.short,
+    beamSensitive: true, Dc300: cfg.Dc300, dmgJitter: 1.4, thermalLimit: cfg.thermalLimit, alpha: cfg.alpha, filmOnly: true,
+    dmgLoss: cfg.dmgLoss,
     grainRot: cubes.map((c) => c.rot),
     grainAt(x, y) { for (let g = 0; g < cubes.length; g++) if (inCube(cubes[g], x, y)) return g; return -1; },
     atoms: A, cubes, poly: true, period: a, center: [-30, 20], fov: 8, zone: '[001]',
     grains: cubes.map((c) => ({ a1: rot([a, 0], c.rot), a2: rot([0, a], c.rot), label: (m, k) => `${bar(m)}${bar(k)}0` })),
-    elements: [EI.Cs, EI.Pb, EI.Br, EI.C],
+    elements: cfg.elements,
     amorph() { return 'C'; },
     amorphThick: 30,
     thicknessAt(x, y, t) { let s = 30; for (const c of cubes) if (inCube(c, x, y)) s += c.e; return s; },
-    tauAt(x, y, t, kV) { let s = 30 / (10 * imfp(kV, 6)); for (const c of cubes) if (inCube(c, x, y)) s += c.e / (10 * imfp(kV, 50)); return s; },
-    rings: [{ d: 5.87, hkl: '100' }, { d: 4.15, hkl: '110' }, { d: 2.935, hkl: '200' }, { d: 2.625, hkl: '210' }, { d: 2.396, hkl: '211' }],
-    labels: [{ x: -100, y: -122, text: 'CsPbBr₃ nanocube, [001]' }],
+    tauAt(x, y, t, kV) { let s = 30 / (10 * imfp(kV, 6)); for (const c of cubes) if (inCube(c, x, y)) s += c.e / (10 * imfp(kV, cfg.zeff)); return s; },
+    rings: [[1, 0, '100'], [1, 1, '110'], [2, 0, '200'], [2, 1, '210'], [2, 2, '220']].map(([h, k, hkl]) => ({ d: a / Math.hypot(h, k), hkl })),
+    labels: [{ x: -100, y: -122, text: `${cfg.short} nanocube, [001]` }],
     plasmon: [{ Ep: 13.5, G: 9, frac: 0.6 }, { Ep: 22, G: 12, frac: 0.4 }],
-    zeff: 40, dmg: 0, damageVer: 0, phase: ph,
+    zeff: cfg.zeff, dmg: 0, damageVer: 0, phase: ph,
     shift(i, out) {
       const k = kind[i];
-      if (!k || ph.name === 'cubic') return 0;
-      const g = A.g[i], u = fu[2 * i], v = fu[2 * i + 1], ax = cAxis(g, u, v);
-      const dC = (a / 2) * Math.tan(ph.thC);
+      if (!k) return 0;
+      const P0 = P[ph.i], g = A.g[i], u = fu[2 * i], v = fu[2 * i + 1];
+      if (k === 4) { // orientationally disordered cation: smeared over a few positions until it orders
+        const s = P0.cation ?? 0;
+        if (!s) return 0;
+        const d = hash2(Math.floor(u + 0.5), Math.floor(v + 0.5), 17) & 1 ? D1[g] : D2[g];
+        out.dx = s * d[0]; out.dy = s * d[1]; return 2;
+      }
+      if (!P0.tilt) return 0;
+      const ax = cAxis(g, u, v), dC = (a / 2) * Math.tan(ph.thC);
       if (ax === 2) {
-        if (k === 1) { out.dx = dC * par[i] * U1[g][0]; out.dy = dC * par[i] * U1[g][1]; return 1; }
-        if (k === 2) { out.dx = -dC * par[i] * U2[g][0]; out.dy = -dC * par[i] * U2[g][1]; return 1; }
-        if (ph.name === 'orth') { // a⁻a⁻ tilts about [110] or [1̄10]: the apical Br alternates along the beam
+        if (k === 1 || k === 2) {
+          const d = k === 1 ? U1[g] : U2[g], sg = P0.tilt === 'minus' ? 1 : k === 1 ? par[i] : -par[i];
+          out.dx = dC * sg * d[0]; out.dy = dC * sg * d[1];
+          return P0.tilt === 'minus' ? 2 : 1; // out of phase along the beam: the column splits instead of shifting
+        }
+        if (P0.tilt === 'orth') { // a⁻a⁻ tilts about [110] or [1̄10]: the apical Br alternates along the beam
           const dA = (a / 2) * Math.tan(ph.thA), d = dom(g, u + 3.7, -v, ph.cycO) & 1 ? D1[g] : D2[g];
           out.dx = dA * d[0]; out.dy = dA * d[1]; return 2;
         }
@@ -1128,13 +1144,13 @@ function makeCsPbBr3() {
       if (k === 3) { const d = ax === 0 ? U2[g] : U1[g]; out.dx = dC * d[0]; out.dy = dC * d[1]; return 2; }
       return 0;
     },
-    // lead nanoparticles grow where bromine has left (beyond ~15 % of the critical dose)
+    // lead nanoparticles grow where the halogen has left (beyond ~15 % of the critical dose)
     blobs(x0, y0, x1, y1) {
       const q = spec.dmg - 0.15;
       if (q <= 0) return [];
       const out = [], C = 50;
       for (let j = Math.floor(y0 / C) - 1; j <= Math.floor(y1 / C) + 1; j++) for (let i = Math.floor(x0 / C) - 1; i <= Math.floor(x1 / C) + 1; i++) {
-        const h = hash2(i, j, 404) / 4294967296;
+        const h = hash2(i, j, 404 + cfg.seed) / 4294967296;
         if (h > 0.55) continue;
         const x = (i + 0.2 + 0.6 * frac1(h * 7.3)) * C, y = (j + 0.2 + 0.6 * frac1(h * 13.1)) * C;
         if (spec.grainAt(x, y) < 0) continue;
@@ -1143,33 +1159,65 @@ function makeCsPbBr3() {
       }
       return out;
     },
+    // first-order transitions: a phase is entered on cooling below `down` and left on heating above `up`
     evolve(T) {
-      let p = ph.name; // first-order transitions with a few kelvin of hysteresis
-      for (let k = 0; k < 3; k++) {
-        if (p === 'cubic' && T < 400) { p = 'tet'; ph.cyc++; } else if (p === 'tet' && T > 403) p = 'cubic';
-        else if (p === 'tet' && T < 358) { p = 'orth'; ph.cycO++; } else if (p === 'orth' && T > 361) p = 'tet';
+      let i = ph.i;
+      for (let k = 0; k < P.length; k++) {
+        if (i + 1 < P.length && T < P[i + 1].down) { i++; if (P[i].newDomains) ph.cyc++; if (P[i].newSub) ph.cycO++; }
+        else if (i > 0 && T > P[i].up) i--;
+        else break;
       }
-      ph.name = p;
-      const deg = Math.PI / 180;
-      ph.thC = p === 'cubic' ? 0 : p === 'tet' ? 4.5 * deg * Math.sqrt(Math.max(0.05, (403 - T) / 42)) : (7.5 + 1.5 * Math.max(0, (361 - T) / 361)) * deg;
-      ph.thA = p === 'orth' ? (6 + 2 * Math.max(0, (361 - T) / 361)) * deg : 0;
-      const sig = `${p}|${ph.cyc}|${ph.cycO}|${Math.round(ph.thC / deg * 4)}|${Math.round(ph.thA / deg * 4)}`;
+      ph.i = i; ph.name = P[i].key;
+      ph.thC = (P[i].thC?.(T) ?? 0) * deg; ph.thA = (P[i].thA?.(T) ?? 0) * deg;
+      const sig = `${i}|${ph.cyc}|${ph.cycO}|${Math.round(ph.thC / deg * 4)}|${Math.round(ph.thA / deg * 4)}`;
       if (sig === ph.sig) return false;
       ph.sig = sig; return true;
     },
     status(T) {
-      const nm = { cubic: 'Cubic (Pm3̄m)', tet: 'Tetragonal (P4/mbm)', orth: 'Orthorhombic (Pnma)' }[ph.name];
-      const what = ph.name === 'cubic' ? 'no octahedral tilts and no domain walls; cool below 400 K and twin walls form'
-        : ph.name === 'tet' ? `PbBr₆ octahedra rotated ${(ph.thC * 180 / Math.PI).toFixed(1)}° in phase about one axis; 90° twin walls separate domains with the axis along the beam (Br checkerboard, ½{110} spots) from domains with it in the plane. Heat above 403 K and they vanish; cool below 358 K for orthorhombic twins`
-          : `octahedra rotated ${(ph.thC * 180 / Math.PI).toFixed(1)}° about one axis and tilted ${(ph.thA * 180 / Math.PI).toFixed(1)}° about the other two; tetragonal twin walls plus orthorhombic twins. Heat above 361 K and the orthorhombic twins vanish`;
-      return `${nm} at ${Math.round(T)} K: ${what}.${spec.dmg > 0.05 ? ` Beam damage ${Math.round(spec.dmg * 100)} %: bromine is leaving${spec.dmg > 0.15 ? ' and Pb nanoparticles are growing' : ''}.` : ''}`;
+      const P0 = P[ph.i];
+      return `${P0.name} at ${Math.round(T)} K: ${P0.text(ph.thC / deg, ph.thA / deg)}.${spec.dmg > 0.05 ? ` Beam damage ${Math.round(spec.dmg * 100)} %: ${cfg.loses} leaving${spec.dmg > 0.15 ? ' and Pb nanoparticles are growing' : ''}.` : ''}`;
     },
   };
-  spec.evolve(293); // start in the room-temperature (orthorhombic) structure
+  spec.evolve(293); // start in the room-temperature structure
   return spec;
 }
 
-export const SPECIMENS = { au: makeGold(), si: makeSilicon(), sto: addSTOPhase(makeSTO()), gr: makeGraphene(), mof: makeUiO66(), bio: makeBio(), lib: makeLibrary(), hesi: makeHeSi(), cspb: makeCsPbBr3() };
+// CsPbBr₃: cubic above 403 K, tetragonal P4/mbm (a⁰a⁰c⁺) from 361 to 403 K, orthorhombic Pnma below 361 K down to
+// the lowest temperatures (it has no transition below room temperature)
+const makeCsPbBr3 = () => makeHalide({
+  id: 'cspb', name: 'CsPbBr₃ perovskite nanocubes on carbon', short: 'CsPbBr₃', a: 5.87, seed: 5150, site: [EI.Cs],
+  Dc300: 400, thermalLimit: 720, alpha: 3.3e-5, zeff: 50, elements: [EI.Cs, EI.Pb, EI.Br, EI.C], loses: 'bromine is',
+  dmgLoss: (e) => (e === EI.Br ? 0.6 : e === EI.Cs ? 0.25 : 0),
+  phases: [
+    { key: 'cubic', name: 'Cubic (Pm3̄m)', text: () => 'no octahedral tilts and no domain walls; cool below 400 K and twin walls form' },
+    { key: 'tet', name: 'Tetragonal (P4/mbm)', down: 400, up: 403, tilt: 'plus', newDomains: true, thC: (T) => 4.5 * Math.sqrt(Math.max(0.05, (403 - T) / 42)),
+      text: (c) => `PbBr₆ octahedra rotated ${c.toFixed(1)}° in phase about one axis; 90° twin walls separate domains with the axis along the beam (Br checkerboard, superlattice spots) from domains with it in the plane. Heat above 403 K and they vanish; cool below 358 K for orthorhombic twins` },
+    { key: 'orth', name: 'Orthorhombic (Pnma)', down: 358, up: 361, tilt: 'orth', newSub: true, thC: (T) => 7.5 + 1.5 * Math.max(0, (361 - T) / 361), thA: (T) => 6 + 2 * Math.max(0, (361 - T) / 361),
+      text: (c, t) => `octahedra rotated ${c.toFixed(1)}° about one axis and tilted ${t.toFixed(1)}° about the other two; tetragonal twin walls plus orthorhombic twins. Heat above 361 K and the orthorhombic twins vanish` },
+  ],
+});
+
+// MAPbBr₃ (CH₃NH₃PbBr₃): cubic at room temperature with the methylammonium cation tumbling freely; tetragonal
+// I4/mcm (a⁰a⁰c⁻, out-of-phase rotation) below ~237 K; a narrow second tetragonal phase (P4/mmm) at ~150–155 K;
+// orthorhombic Pnma (a⁻a⁻c⁺) below ~145 K on cooling (~150 K on heating), where the cation orders. The liquid-nitrogen
+// holder reaches all of them. Angles are representative of reported structures. Far more beam-sensitive than
+// CsPbBr₃: the organic cation goes first.
+const makeMAPbBr3 = () => makeHalide({
+  id: 'mapb', name: 'MAPbBr₃ (methylammonium lead bromide) nanocubes on carbon', short: 'MAPbBr₃', a: 5.93, seed: 7321, site: [EI.C, EI.N], organic: true,
+  Dc300: 60, thermalLimit: 470, alpha: 3.6e-5, zeff: 45, elements: [EI.Pb, EI.Br, EI.C, EI.N], loses: 'methylammonium and bromine are',
+  dmgLoss: (e) => (e === EI.Br ? 0.5 : e === EI.C || e === EI.N ? 0.8 : 0),
+  phases: [
+    { key: 'cubic', name: 'Cubic (Pm3̄m)', cation: 0.7, text: () => 'no octahedral tilts and no domain walls; the methylammonium cations tumble freely, so the A-site columns are smeared. Cool below ~237 K (liquid-nitrogen holder) and twin walls form' },
+    { key: 'tet1', name: 'Tetragonal I (I4/mcm)', down: 236, up: 237.5, tilt: 'minus', newDomains: true, cation: 0.55, thC: (T) => 7.5 * Math.pow(Math.max(0.03, (237 - T) / 82), 0.35),
+      text: (c) => `PbBr₆ octahedra rotated ${c.toFixed(1)}° about one axis, alternating along it (out of phase), so along [001] the Br columns split rather than shift and no new spots appear in this zone; 90° twin walls separate the domains. Heat above ~237 K and they vanish` },
+    { key: 'tet2', name: 'Tetragonal II (P4/mmm)', down: 155, up: 155.5, tilt: 'minus', cation: 0.45, thC: () => 7.8,
+      text: (c) => `a narrow intermediate phase (~150–155 K) on the way to orthorhombic; rotations ${c.toFixed(1)}°, twin walls kept` },
+    { key: 'orth', name: 'Orthorhombic (Pnma)', down: 145, up: 149.5, tilt: 'orth', newDomains: true, newSub: true, cation: 0.15, thC: (T) => 9 + 1.5 * Math.max(0, (145 - T) / 145), thA: (T) => 7 + 1.5 * Math.max(0, (145 - T) / 145),
+      text: (c, t) => `the methylammonium cations order and the octahedra rotate ${c.toFixed(1)}° in phase about one axis (Br checkerboard, superlattice spots where it lies along the beam) and tilt ${t.toFixed(1)}° about the other two; the domains rearrange into a new pattern of twins. Heat above ~150 K and they revert` },
+  ],
+});
+
+export const SPECIMENS = { au: makeGold(), si: makeSilicon(), sto: addSTOPhase(makeSTO()), gr: makeGraphene(), mof: makeUiO66(), bio: makeBio(), lib: makeLibrary(), hesi: makeHeSi(), cspb: makeCsPbBr3(), mapb: makeMAPbBr3() };
 for (const s of Object.values(SPECIMENS)) {
   for (const g of s.grains) g.b = reciprocal(g.a1, g.a2);
 }
