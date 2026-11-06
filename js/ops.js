@@ -16,7 +16,7 @@ export const fam = (m) => (['tem', 'diff', 'oah', 'ilh', 'ltem'].includes(m) ? '
 // widest field of view, nm: 120 for the atomic-scale specimens; the megalibrary zooms out to the whole chip
 export const fovMax = (S) => P.SPECIMENS[S.spec]?.fovMax ?? 120;
 export const tiltLimit = (S) => (S.mode === 'ltem' || S.mode === 'lstem' || P.SPECIMENS[S.spec]?.ownTilt ? 30 : 3);
-const coreEdge = (spec) => (spec === 'sto' ? 462 : spec === 'si' || spec === 'hesi' ? 102 : spec === 'cspb' ? 726 : spec === 'gr' ? 287 : spec === 'mof' ? 200 : spec === 'bio' ? 405 : spec === 'lib' ? 855 : 100);
+const coreEdge = (spec) => (spec === 'sto' ? 462 : spec === 'si' || spec === 'hesi' ? 102 : spec === 'cspb' ? 726 : spec === 'mapb' ? 401 : spec === 'gr' ? 287 : spec === 'mof' ? 200 : spec === 'bio' ? 405 : spec === 'lib' ? 855 : 100);
 
 export function resetVdet(S, sim) {
   const a = S.alpha4d, mp = sim.fd?.mradPx ?? (P.wavelength(S.kV) * 1000) / (64 * 0.18);
@@ -42,12 +42,13 @@ export function specState(S, sim, v) {
   S.eelsRange = 'core';
   S.eelsDisp = 0.25; S.eelsOffset = Math.max(50, coreEdge(v) - 200);
   S.eelsWin = coreEdge(v);
-  S.eelsWidth = v === 'si' || v === 'hesi' ? 5 : v === 'cspb' ? 30 : v === 'au' ? 24 : v === 'gr' ? 6 : v === 'mof' ? 30 : v === 'bio' ? 20 : 16;
+  S.eelsWidth = v === 'si' || v === 'hesi' ? 5 : v === 'cspb' ? 30 : v === 'mapb' ? 20 : v === 'au' ? 24 : v === 'gr' ? 6 : v === 'mof' ? 30 : v === 'bio' ? 20 : 16;
   // a MOF needs low-dose conditions; other specimens go back to a normal dose
   if (v === 'mof') { S.dose = 2; S.kV = 300; S.thick = 20; S.camL = 4000; }
   else if (v === 'xyz') { S.thick = 3; if (S.dose < 20) S.dose = 400; } // thickness: the carbon support
   else if (v === 'lib') { S.thick = 10; if (S.dose < 20) S.dose = 400; } // thickness: the Si₃N₄ membrane
   else if (v === 'cspb') { S.dose = 10; S.kV = 300; S.thick = 3; } // low dose; thickness: the carbon support
+  else if (v === 'mapb') { S.dose = 2; S.kV = 300; S.thick = 3; }
   else if (v === 'hesi') { S.thick = 30; if (S.dose < 20) S.dose = 400; }
   else if (v === 'bio') {
     // single-particle cryo-EM conditions: frozen grid, 300 kV, no corrector, ~1.5 µm underfocus, ~30 e⁻/Å²
@@ -151,7 +152,7 @@ export function chipState(S, sim, key, v) {
     // each preset is a dispersion and an offset, as a microscopist would set them
     [S.eelsDisp, S.eelsOffset, S.eelsExp] = { zlp: [0.01, -5, 0.001], low: [0.05, -5, 0.001], core: [0.25, Math.max(50, coreEdge(S.spec) - 200), 0.5], high: [1, 1300, 2] }[v];
     const [a, b] = sim.eelsRangeBounds();
-    const def = { zlp: [0, 3], low: [22, 12], core: [coreEdge(S.spec), S.spec === 'si' || S.spec === 'hesi' ? 5 : S.spec === 'cspb' ? 30 : S.spec === 'gr' ? 6 : S.spec === 'mof' ? 30 : S.spec === 'bio' ? 20 : 16], high: [S.spec === 'au' ? 2260 : S.spec === 'si' || S.spec === 'hesi' ? 1860 : S.spec === 'cspb' ? 1570 : 1960, 60] }[v];
+    const def = { zlp: [0, 3], low: [22, 12], core: [coreEdge(S.spec), S.spec === 'si' || S.spec === 'hesi' ? 5 : S.spec === 'cspb' ? 30 : S.spec === 'mapb' ? 20 : S.spec === 'gr' ? 6 : S.spec === 'mof' ? 30 : S.spec === 'bio' ? 20 : 16], high: [S.spec === 'au' ? 2260 : S.spec === 'si' || S.spec === 'hesi' ? 1860 : S.spec === 'cspb' || S.spec === 'mapb' ? 1570 : 1960, 60] }[v];
     S.eelsWin = clamp(def[0], a, b); S.eelsWidth = def[1];
     sim.invalidate('eelsRange');
     return 'eelsRange';
