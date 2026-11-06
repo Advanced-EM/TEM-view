@@ -156,7 +156,7 @@ export class Panel {
     if (acc.focus) {
       // one detent: 0.2 nm (corrected), 1 nm (uncorrected) or 10 nm (cryo-EM range); coarse ×5
       const step = (S.corrector ? 0.2 : S.spec === 'bio' ? 10 : 1) * (this.fine ? 1 : 5) * sens.focus;
-      const lim = S.corrector ? [-CORR_RANGE.df, CORR_RANGE.df] : S.spec === 'bio' ? [-4000, 500] : [-150, 150];
+      const lim = S.spec === 'hesi' ? [-1500, 1500] : S.corrector ? [-CORR_RANGE.df, CORR_RANGE.df] : S.spec === 'bio' ? [-4000, 500] : [-150, 150];
       if (this.wob) this.wob.base = clamp(this.wob.base + acc.focus * step, ...lim);
       else this.api.set('df', +clamp(S.df + acc.focus * step, ...lim).toFixed(2), 'df');
       this.say(`Focus ${S.df > 0 ? '+' : ''}${S.df.toFixed(1)} nm`);

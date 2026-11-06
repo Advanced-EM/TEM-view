@@ -22,6 +22,8 @@ const MODES = [
 ];
 const SPECS = [
   ['au', /\b(gold|au|carbon\s*film)\b/],
+  ['hesi', /\b(helium|bubbles?)\b/],
+  ['cspb', /\b(perovskite\s*nano\s*cubes?|cspbbr3|caesium|cesium|lead\s*bromide|halide)\b/],
   ['si', /\b(silicon|si)\b/],
   ['sto', /\b(strontium|titanate|sto|grain\s*boundary|perovskite)\b/],
   ['gr', /\b(graphene)\b/],
@@ -30,7 +32,7 @@ const SPECS = [
   ['lib', /\b(mega\s*-?\s*librar(y|ies)|nanoparticle\s*librar(y|ies)|library)\b/],
 ];
 const MODE_NAMES = { tem: 'TEM', stem: 'STEM', '4d': '4D-STEM', diff: 'SAED', cbed: 'CBED', eds: 'EDS', eels: 'EELS', ronch: 'Ronchigram', oah: 'off-axis holography', ilh: 'in-line holography', ltem: 'Lorentz TEM', lstem: 'Lorentz STEM' };
-const SPEC_NAMES = { au: 'gold on carbon', si: 'silicon', sto: 'the SrTiO₃ grain boundary', gr: 'graphene', mof: 'the UiO-66 MOF', bio: 'proteins in ice', lib: 'the nanoparticle megalibrary' };
+const SPEC_NAMES = { au: 'gold on carbon', si: 'silicon', sto: 'the SrTiO₃ grain boundary', gr: 'graphene', mof: 'the UiO-66 MOF', bio: 'proteins in ice', lib: 'the nanoparticle megalibrary', hesi: 'helium bubbles in silicon', cspb: 'the CsPbBr₃ nanocubes' };
 
 // "minus fifty two point five" → "-52.5"; digits pass through
 const SMALL = { zero: 0, oh: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19 };

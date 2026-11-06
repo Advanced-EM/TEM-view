@@ -545,7 +545,7 @@ export class Scene3D {
     const spec = P.SPECIMENS[S.spec], gr = spec.grains[0], out = [];
     const refl = spec.twoD ? [[1, 0], [0, 1], [-1, 1], [-1, 0], [0, -1], [1, -1]]
       : spec.id === 'sto' ? [[1, 0], [0, 1], [-1, 0], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]]
-      : spec.id === 'si' ? [[1, 1], [-1, -1], [1, -1], [-1, 1], [2, 0], [-2, 0]]
+      : (spec.like ?? spec.id) === 'si' ? [[1, 1], [-1, -1], [1, -1], [-1, 1], [2, 0], [-2, 0]]
         : [[1, 1], [-1, -1], [1, -1], [-1, 1], [0, 2], [0, -2]];
     for (const [a, b] of refl) {
       const gx = a * gr.b[0][0] + b * gr.b[1][0], gy = a * gr.b[0][1] + b * gr.b[1][1];
