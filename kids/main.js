@@ -459,7 +459,7 @@ addEventListener('pointerdown', (e) => { if (!e.target.closest('#a11yPop, #a11yB
 function voiceLabel() {
   $('voiceIcon').textContent = S.voice === 'male' ? '👦' : '👧';
   $('voiceTxt').textContent = tr(S.voice === 'male' ? ['Boy voice', 'Voz de niño'] : ['Girl voice', 'Voz de niña']);
-  $('voiceBtn').setAttribute('aria-label', `${tr(['Zip\'s voice', 'La voz de Zip'])}: ${$('voiceTxt').textContent} (${VOICES[lang][S.voice].name})`);
+  $('voiceBtn').setAttribute('aria-label', `${tr(['Zip\'s voice', 'La voz de Zip'])}: ${$('voiceTxt').textContent}${VOICES[lang][S.voice].name ? ` (${VOICES[lang][S.voice].name})` : ''}`);
 }
 $('voiceBtn').addEventListener('click', () => {
   S.voice = S.voice === 'male' ? 'female' : 'male'; store('kids-voice', S.voice); voiceLabel();

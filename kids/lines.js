@@ -9,10 +9,9 @@ import { msg, trIn } from './i18n.js';
 export const VOICES = {
   en: { female: { id: 'eppqEXVumQ3CfdndcIBd', name: 'Minnie' }, male: { id: 'fBD19tfE58bkETeiwUoC', name: 'Little Dude' } },
   es: { female: { id: 'iV6xDQ4wcM3ZcXDx30GB', name: 'Betty' }, male: { id: '4g0zcFn3Yhp86jjySzFf', name: 'Junior' } },
-  // voice ids still to choose; until then these languages use the browser's voice
-  pt: { female: { id: null, name: '' }, male: { id: null, name: '' } },
-  fr: { female: { id: null, name: '' }, male: { id: null, name: '' } },
-  de: { female: { id: null, name: '' }, male: { id: null, name: '' } },
+  pt: { female: { id: 'iTvRNZPNPS0EiSgOCQG0', name: '' }, male: { id: 'fqxJm1hoJoe9YcGuwtGY', name: '' } }, // Brazilian Portuguese
+  fr: { female: { id: 'O31r762Gb3WFygrEOGh0', name: '' }, male: { id: 'BUJMBsQ3Oq4cEeWSb48y', name: '' } },
+  de: { female: { id: 'LB5G0Z4EP98YaEgL654m', name: '' }, male: { id: 'ygoBNrnmTEdu5NtDTmAY', name: '' } },
 };
 // ElevenLabs model per language: English and Spanish were recorded with Multilingual v2; the newer languages use
 // Flash v2.5, which costs half as many credits per character

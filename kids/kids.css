@@ -140,9 +140,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .bubble::after { content: ''; position: absolute; left: -8px; top: 24px; border: 8px solid transparent; border-right: 10px solid #fff; border-left: 0; }
 .bubble.pop { animation: pop .35s ease-out; }
 .quest { background: #eef4ff; }
-.qhead { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.qhead { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
 .qhead h2 { margin: 0; font-size: 1.25rem; }
-.badges { display: flex; gap: 4px; }
+.badges { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
 .badges span { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%; border: 2.5px solid var(--ink); background: #fff; font-size: .95rem; color: var(--muted); }
 .badges .got { background: var(--yellow); } .badges .now { background: var(--pink); animation: pulse 1.6s infinite; }
 .quest h3 { margin-top: 10px; font-size: 1.2rem; }
