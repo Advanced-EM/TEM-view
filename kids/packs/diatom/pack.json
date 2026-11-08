@@ -1,0 +1,52 @@
+{
+ "id": "diatom",
+ "icon": "💠",
+ "default": true,
+ "credit": "Drawn for Electron Explorer (make_svgs.py), after the centric diatom Coscinodiscus.",
+ "name": { "en": "Diatom", "es": "Diatomea", "pt": "Diatomácea", "fr": "Diatomée", "de": "Kieselalge" },
+ "blurb": {
+  "en": "Diatoms are tiny algae that live inside a shell made of glass. The shell is full of holes in beautiful patterns. Diatoms make about a fifth of the oxygen we breathe!",
+  "es": "Las diatomeas son algas diminutas que viven dentro de una concha de vidrio. La concha está llena de agujeros con dibujos preciosos. ¡Las diatomeas producen cerca de una quinta parte del oxígeno que respiramos!",
+  "pt": "As diatomáceas são algas minúsculas que vivem dentro de uma casca de vidro. A casca é cheia de furinhos em desenhos lindos. As diatomáceas produzem cerca de um quinto do oxigênio que respiramos!",
+  "fr": "Les diatomées sont de minuscules algues qui vivent dans une coquille en verre. La coquille est pleine de trous qui forment de jolis motifs. Les diatomées fabriquent environ un cinquième de l'oxygène que nous respirons !",
+  "de": "Kieselalgen sind winzige Algen, die in einer Schale aus Glas wohnen. Die Schale ist voller Löcher in wunderschönen Mustern. Kieselalgen machen etwa ein Fünftel des Sauerstoffs, den wir atmen!"
+ },
+ "fovMax": 140000, "fovMin": 300,
+ "start": { "cx": 0, "cy": 0, "fov": 90000 },
+ "bound": 40000,
+ "soft": false,
+ "background": { "color": "#eaf7ff", "mono": "#dedede" },
+ "layers": [
+  { "src": "whole.svg", "x": 0, "y": 0, "width": 64000 },
+  { "src": "chambers.svg", "x": 8000, "y": -6000, "width": 8000, "maxFov": 24000 },
+  { "src": "pores.svg", "x": 8000, "y": -5542.6, "width": 2000, "maxFov": 5000 }
+ ],
+ "what": { "en": "a diatom's glass shell", "es": "la concha de vidrio de una diatomea", "pt": "a casca de vidro de uma diatomácea", "fr": "la coquille de verre d'une diatomée", "de": "die Glasschale einer Kieselalge" },
+ "regions": [
+  { "x": 8000, "y": -5542.6, "r": 700, "maxFov": 3000,
+    "what": { "en": "tiny pores, about 40 nanometres wide: water and food get in through them", "es": "poros diminutos, de unos 40 nanómetros: por ellos entran el agua y la comida", "pt": "poros minúsculos, com uns 40 nanômetros: por eles entram a água e a comida", "fr": "de minuscules pores, larges d'environ 40 nanomètres : l'eau et la nourriture entrent par là", "de": "winzige Poren, etwa 40 Nanometer breit: durch sie kommen Wasser und Nahrung hinein" } },
+  { "x": 8000, "y": -6000, "r": 4000, "maxFov": 20000,
+    "what": { "en": "honeycomb chambers in the glass", "es": "cámaras en forma de panal dentro del vidrio", "pt": "câmaras em forma de favo de mel no vidro", "fr": "des chambres en nid d'abeille dans le verre", "de": "Wabenkammern im Glas" } },
+  { "x": 0, "y": 0, "r": 2500,
+    "what": { "en": "the middle, where the shell started to grow", "es": "el centro, donde la concha empezó a crecer", "pt": "o centro, onde a casca começou a crescer", "fr": "le centre, là où la coquille a commencé à pousser", "de": "die Mitte, wo die Schale zu wachsen begann" } }
+ ],
+ "mission": {
+  "icon": "🔎",
+  "title": { "en": "Glass house", "es": "Casa de vidrio", "pt": "Casa de vidro", "fr": "Maison de verre", "de": "Glashaus" },
+  "text": {
+   "en": "This diatom lives in a shell of glass. Zoom into one <b>honeycomb chamber</b> until you see its <b>tiny holes</b>, then <b>SNAP</b> it!",
+   "es": "Esta diatomea vive en una concha de vidrio. Haz zoom en una <b>cámara del panal</b> hasta ver sus <b>agujeritos</b>. ¡Y tómale una <b>FOTO</b>!",
+   "pt": "Esta diatomácea mora numa casca de vidro. Dê zoom numa <b>câmara do favo</b> até ver os <b>furinhos</b>. Depois tire uma <b>FOTO</b>!",
+   "fr": "Cette diatomée vit dans une coquille de verre. Zoome sur une <b>chambre du nid d'abeille</b> jusqu'à voir ses <b>tout petits trous</b>, puis prends une <b>PHOTO</b> !",
+   "de": "Diese Kieselalge wohnt in einer Schale aus Glas. Zoome in eine <b>Wabenkammer</b>, bis du ihre <b>winzigen Löcher</b> siehst, und mach ein <b>FOTO</b>!"
+  },
+  "win": {
+   "en": "Those pores are only about 40 nanometres wide. They let water and food in but keep bigger things out, like a sieve.",
+   "es": "Esos poros miden solo unos 40 nanómetros. Dejan entrar el agua y la comida, pero no las cosas más grandes, como un colador.",
+   "pt": "Esses poros têm só uns 40 nanômetros. Deixam entrar a água e a comida, mas barram coisas maiores, como uma peneira.",
+   "fr": "Ces pores ne font qu'environ 40 nanomètres. Ils laissent entrer l'eau et la nourriture mais retiennent les choses plus grosses, comme une passoire.",
+   "de": "Diese Poren sind nur etwa 40 Nanometer breit. Sie lassen Wasser und Nahrung hinein, halten aber größere Dinge draußen, wie ein Sieb."
+  },
+  "target": [8000, -5542.6], "maxFov": 3000, "r": 600
+ }
+}

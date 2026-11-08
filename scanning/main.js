@@ -455,3 +455,6 @@ requestAnimationFrame((t) => { lastT = t; tick(t); });
 // for automated checks
 window.scanning = { S, get D() { return D; }, K, startMission: (id) => startMission(MISSIONS.find((m) => m.id === id)), hint,
   run(sec) { for (let t = 0; t < sec; t += 1 / 30) update(lastT + 1000 / 30); } };
+
+// offline support (../sw.js): keeps the exhibit running when a museum's network drops; off on localhost unless ?sw
+if ('serviceWorker' in navigator && (!/^(localhost|127\.|\[::1\])/.test(location.hostname) || new URLSearchParams(location.search).has('sw'))) navigator.serviceWorker.register('../sw.js').catch(() => { /* optional */ });

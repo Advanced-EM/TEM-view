@@ -59,7 +59,7 @@
     <li>No cookies, no advertising, no tracking across other sites, and no device fingerprinting.</li>
     <li>Nothing you type, say or record: commands, voice, scripts, images and structure files stay in your browser.</li>
     <li>No name, email or account. The records cannot be linked to you.</li>
-    <li><b>TEM-view Kids (Electron Explorer) counts nothing.</b></li>
+    <li><b>TEM-view Kids (Electron Explorer) sends nothing.</b> On a museum kiosk it keeps anonymous daily totals for the museum (visits, time spent, missions, pictures, stickers printed, languages) on that device only; they never leave it. Its take-home QR code holds only the picture's settings: no name, time, place or photo.</li>
   </ul>
 
   <h2>Where it goes</h2>
@@ -80,16 +80,16 @@
   <ul>
     <li><b>Training sessions:</b> during a training task you can choose to record your session. <i>Record only</i> keeps it in your browser. <i>Record and share</i> sends it, with an anonymous id and the experience level you chose, to a private research dataset on alignment.</li>
     <li><b>News:</b> if you subscribe, your name, email, role and optional institution are kept privately to send you news, and nowhere else. Ask to be removed at any time.</li>
-    <li><b>Hosting:</b> the site is served by GitHub Pages, and its fonts and 3D library come from Google Fonts and jsDelivr. Like any website, these services receive your IP address when they deliver the files; their own privacy policies apply.</li>
+    <li><b>Hosting:</b> the site is served by GitHub Pages, which receives your IP address when it delivers the files, like any website; its own privacy policy applies. The fonts and the 3D library are served from this site. The Python editor, when you open it, loads Pyodide and CodeMirror from jsDelivr and cdnjs.</li>
   </ul>
 
   <h2>Your rights</h2>
   <p>The usage records are anonymous: they carry no IP address or identifier that leads back to you, so we cannot find or delete records about a particular person. You can stop them at any time as described above. For questions, write to <a href="mailto:roberto.reis@northwestern.edu">roberto.reis@northwestern.edu</a> or open an issue on <a href="https://github.com/Advanced-EM/TEM-view/issues">GitHub</a>.</p>
 
   <h2 lang="de">Kurz auf Deutsch</h2>
-  <p lang="de">Die Ausstellungen zählen ihre Nutzung anonym: welche Ausstellung, welche Teile wie lange genutzt werden, Geräteart und Sprache, dazu die ungefähre Stadt, die Cloudflare aus der Verbindung ableitet. Die IP-Adresse wird nicht gespeichert, es gibt keine Cookies und keine Verfolgung über andere Seiten. TEM-view Kids zählt nichts. Verantwortlich: Roberto dos Reis (roberto.reis@northwestern.edu). Die Daten liegen bis zu 90 Tage bei Cloudflare und danach in einem privaten Hugging-Face-Datensatz für Nutzungsstatistiken. Ausschalten: mit der Schaltfläche oben, mit „Do Not Track“ oder „Global Privacy Control“ im Browser, oder mit <code>?notrack</code> in der Adresse.</p>
+  <p lang="de">Die Ausstellungen zählen ihre Nutzung anonym: welche Ausstellung, welche Teile wie lange genutzt werden, Geräteart und Sprache, dazu die ungefähre Stadt, die Cloudflare aus der Verbindung ableitet. Die IP-Adresse wird nicht gespeichert, es gibt keine Cookies und keine Verfolgung über andere Seiten. TEM-view Kids sendet nichts; an einem Museumskiosk zählt es anonyme Tagessummen nur auf diesem Gerät. Verantwortlich: Roberto dos Reis (roberto.reis@northwestern.edu). Die Daten liegen bis zu 90 Tage bei Cloudflare und danach in einem privaten Hugging-Face-Datensatz für Nutzungsstatistiken. Ausschalten: mit der Schaltfläche oben, mit „Do Not Track“ oder „Global Privacy Control“ im Browser, oder mit <code>?notrack</code> in der Adresse.</p>
 
-  <footer>Updated 3 November 2026<br>Part of <b>Seeing with Electrons</b> · <a href="./">TEM-view</a> · <a href="ruska/">Ruska 1933</a> · <a href="scanning/">Scanning 1938–2002</a> · <a href="kids/">TEM-view Kids</a> · <span aria-current="page">Privacy</span><br>Copyright © 2026 by Northwestern University. All Rights Reserved.</footer>
+  <footer>Updated 7 November 2026<br>Part of <b>Seeing with Electrons</b> · <a href="./">TEM-view</a> · <a href="ruska/">Ruska 1933</a> · <a href="scanning/">Scanning 1938–2002</a> · <a href="kids/">TEM-view Kids</a> · <span aria-current="page">Privacy</span><br>Copyright © 2026 by Northwestern University. All Rights Reserved.</footer>
 </main>
 <script type="module">
   import { usageAllowed, setUsageOff } from './js/usage.js';

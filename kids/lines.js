@@ -3,12 +3,19 @@
 // A clip is found by language, voice and spoken text: clipId(lang, voice, text). No DOM here: the narration tool
 // imports this file in Node.
 import { SPECIMENS } from './specimens.js';
+import { msg, trIn } from './i18n.js';
 
 // ElevenLabs voices for Zip: a girl's and a boy's, in each language
 export const VOICES = {
   en: { female: { id: 'eppqEXVumQ3CfdndcIBd', name: 'Minnie' }, male: { id: 'fBD19tfE58bkETeiwUoC', name: 'Little Dude' } },
   es: { female: { id: 'iV6xDQ4wcM3ZcXDx30GB', name: 'Betty' }, male: { id: '4g0zcFn3Yhp86jjySzFf', name: 'Junior' } },
+  pt: { female: { id: 'iTvRNZPNPS0EiSgOCQG0', name: '' }, male: { id: 'fqxJm1hoJoe9YcGuwtGY', name: '' } }, // Brazilian Portuguese
+  fr: { female: { id: 'O31r762Gb3WFygrEOGh0', name: '' }, male: { id: 'BUJMBsQ3Oq4cEeWSb48y', name: '' } },
+  de: { female: { id: 'LB5G0Z4EP98YaEgL654m', name: '' }, male: { id: 'ygoBNrnmTEdu5NtDTmAY', name: '' } },
 };
+// ElevenLabs model per language: English and Spanish were recorded with Multilingual v2; the newer languages use
+// Flash v2.5, which costs half as many credits per character
+export const MODEL = { en: 'eleven_multilingual_v2', es: 'eleven_multilingual_v2', pt: 'eleven_flash_v2_5', fr: 'eleven_flash_v2_5', de: 'eleven_flash_v2_5' };
 
 export const HELLO = ['<b>Hi, I\'m Zip!</b> I\'m an electron. Let\'s explore things way too small to see.', '<b>¡Hola, soy Zip!</b> Soy un electrón. Exploremos cosas demasiado pequeñas para verlas.'];
 export const HELLO_START = ['Press <b>BEAM</b> to start!', '¡Presiona <b>HAZ</b> para empezar!'];
@@ -41,10 +48,10 @@ export const T = {
   fineOff: ['Focus knob: big steps (fast).', 'Perilla de enfoque: pasos grandes (rápido).'],
   consoleHi: ['A Console is plugged in! Turn a knob.', '¡Hay una Consola conectada! Gira una perilla.'],
 };
-export const lookingAt = (w) => [`You're looking at <b>${w[0]}</b>.`, `Estás viendo <b>${w[1]}</b>.`];
-export const needsSample = (n) => [`This mission needs the <b>${n[0]}</b> sample. Press its button above the screen.`, `Esta misión necesita la muestra de <b>${n[1]}</b>. Presiona su botón arriba de la pantalla.`];
-export const nextMission = (t) => [`<b>Next mission: ${t[0]}.</b>`, `<b>Siguiente misión: ${t[1]}.</b>`];
-export const sampleName = (sp) => [`<b>${sp.icon} ${sp.name[0]}.</b>`, `<b>${sp.icon} ${sp.name[1]}.</b>`];
+export const lookingAt = (what) => msg(['You\'re looking at <b>{what}</b>.', 'Estás viendo <b>{what}</b>.'], { what });
+export const needsSample = (name) => msg(['This mission needs the <b>{name}</b> sample. Press its button above the screen.', 'Esta misión necesita la muestra de <b>{name}</b>. Presiona su botón arriba de la pantalla.'], { name });
+export const nextMission = (title) => msg(['<b>Next mission: {title}.</b>', '<b>Siguiente misión: {title}.</b>'], { title });
+export const sampleName = (sp) => msg('<b>{icon} {name}.</b>', { icon: sp.icon, name: sp.name });
 
 export const QUESTS = {
   beam: { icon: '⚡', title: ['Wake up the microscope', 'Despierta al microscopio'],
@@ -95,9 +102,10 @@ export const FACTS = {
 
 // ------------------------------------------------------------------ spoken text and clip ids
 // the words as spoken: no tags, no emoji, symbols a voice would trip on spelled out
+const TIMES = { en: ' times ', es: ' por ', pt: ' vezes ', fr: ' fois ', de: ' mal ' };
 export function plain(html, lang = 'en') {
   return String(html).replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
-    .replace(/[\p{Extended_Pictographic}\u{FE0F}\u{200D}\u{2B50}\u{2606}]/gu, '').replace(/×/g, lang === 'es' ? ' por ' : ' times ')
+    .replace(/[\p{Extended_Pictographic}\u{FE0F}\u{200D}\u{2B50}\u{2606}]/gu, '').replace(/×/g, TIMES[lang] ?? ' ')
     .replace(/\s+/g, ' ').replace(/\s+([.,!?:])/g, '$1').trim();
 }
 export function clipKey(text) {
@@ -107,11 +115,12 @@ export function clipKey(text) {
 }
 export const clipId = (lang, voice, text) => `${lang}/${voice}/${clipKey(text)}`;
 
-// every line Zip can say in a language, as spoken text (what the narration tool records)
-export function allLines(lang) {
-  const k = lang === 'es' ? 1 : 0, L = [HELLO, HELLO_START, ...Object.values(T), ...Object.values(PARTS)];
+// every line Zip can say in a language, as spoken text (what the narration tool records); extra: more messages,
+// such as the lines of the sample packs
+export function allLines(lang, extra = []) {
+  const L = [HELLO, HELLO_START, ...Object.values(T), ...Object.values(PARTS), ...extra];
   for (const sp of SPECIMENS) L.push(sampleName(sp), sp.blurb, needsSample(sp.name), ...sp.whats.map(lookingAt));
   for (const q of Object.values(QUESTS)) L.push(nextMission(q.title), q.text, q.win, ...(q.hints ?? []));
   for (const list of Object.values(FACTS)) for (const [, t] of list) L.push(t);
-  return [...new Set(L.map((p) => plain(p[k], lang)).filter(Boolean))];
+  return [...new Set(L.map((m) => plain(trIn(lang, m), lang)).filter(Boolean))];
 }
