@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Field-trip guide</title>
+<meta name="description" content="A field-trip and classroom guide for Electron Explorer, with learning goals, a 45-minute plan, discussion questions and the NGSS alignment.">
+<link rel="stylesheet" href="../../fonts/fonts.css">
+<style>
+  :root { --ink: #1d2340; --muted: #5a6285; --line: #c9cfe6; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 16px/1.55 'Nunito', system-ui, sans-serif; color: var(--ink); background: #eef4ff; }
+  main { background: #fff; max-width: 860px; margin: 20px auto; padding: 32px 44px; border: 2px solid var(--ink); border-radius: 18px; }
+  h1 { font: 700 30px 'Fredoka', sans-serif; margin: 0 0 6px; } h2 { font: 700 21px 'Fredoka', sans-serif; margin: 28px 0 8px; } h3 { font: 700 17px 'Fredoka', sans-serif; margin: 16px 0 4px; }
+  .lede { color: var(--muted); font-size: 17px; }
+  table { border-collapse: collapse; width: 100%; font-size: 15px; } th, td { border: 1px solid var(--line); padding: 6px 10px; text-align: left; vertical-align: top; } th { background: #f4f7ff; }
+  code { background: #f4f7ff; padding: 0 4px; border-radius: 4px; }
+  .muted { color: var(--muted); font-size: 14px; }
+  .bar { text-align: center; margin: 12px 0 0; } .bar button, .bar a { font: 700 14px 'Fredoka', sans-serif; border: 2px solid var(--ink); border-radius: 999px; background: #fff; padding: 4px 12px; color: var(--ink); text-decoration: none; cursor: pointer; }
+  @media print { body { background: #fff; } main { border: 0; margin: 0; max-width: none; padding: 0; } .bar { display: none; } h2 { break-after: avoid; } table { break-inside: avoid; } @page { margin: 16mm; } }
+</style>
+</head>
+<body>
+<p class="bar"><button onclick="print()">🖨️ Print</button> <a href="worksheet.html">Worksheet</a> <a href="../">Open Electron Explorer</a></p>
+<main>
+  <h1>Electron Explorer: field-trip and classroom guide</h1>
+  <p class="lede">Electron Explorer is a cartoon electron microscope for grades K-12. Students turn on the beam, focus, zoom from a pollen grain down to single atoms, and take pictures for a sticker book, guided by Zip, a talking electron, in English, Spanish, Portuguese, French or German.</p>
+
+  <h2>Learning goals</h2>
+  <ul>
+    <li><b>Scale.</b> Students order objects from a hair (about 80 µm) to an atom (about 0.3 nm), and say how many times smaller each is.</li>
+    <li><b>Why electrons.</b> Light waves are too long to show atoms. Electrons behave like much shorter waves, so an electron microscope shows far smaller things.</li>
+    <li><b>How a picture is made.</b> Magnetic lenses bend electrons; thick parts of a sample stop more electrons and look dark. Real images are grey, and colors are added.</li>
+    <li><b>Scientific practice.</b> Focus by trial and correction; use as little beam as possible, because a strong beam damages soft samples.</li>
+  </ul>
+
+  <h2>A 45-minute plan</h2>
+  <table>
+    <tr><th>Time</th><th>Activity</th></tr>
+    <tr><td>Before (10 min)</td><td>Ask: "What is the smallest thing you have ever seen?" Show a hair under a magnifying glass. Students draw a guess for the size of a virus next to the hair (worksheet question 1).</td></tr>
+    <tr><td>Explore (20 min)</td><td>In pairs, students play the missions: wake up the microscope, make it sharp, a close-up of pollen spikes, catch a virus, see real atoms, find the odd atom. One student drives, the other reads the mission and fills in the worksheet; swap halfway. Younger students can turn on <i>Read aloud</i>.</td></tr>
+    <tr><td>Discuss (10 min)</td><td>Use the questions below. Compare stickers in cartoon colors and in "Real (grey)".</td></tr>
+    <tr><td>Wrap up (5 min)</td><td>Each student names one thing they saw and how much smaller it is than a hair.</td></tr>
+  </table>
+  <p class="muted">In a museum, plan for 3 to 5 minutes per visitor at the kiosk; the missions are short and can be done in any order after the first two.</p>
+
+  <h2>Discussion questions</h2>
+  <ul>
+    <li>Why did the picture get blurry when you zoomed in, even though it was sharp before? (Focus matters more at high zoom.)</li>
+    <li>What happened when you turned the brightness all the way up on pollen? Why do scientists care? (Beam damage.)</li>
+    <li>The real pictures are grey. Is a picture with added colors still true? What should a scientist tell readers about it?</li>
+    <li>The phage injects DNA into a bacterium. Why might phages be useful to doctors? (Phage therapy against bacteria.)</li>
+    <li>Graphene is one atom thick. Can you think of something that is very thin but strong?</li>
+  </ul>
+
+  <h2>NGSS alignment</h2>
+  <p>Electron Explorer supports these Next Generation Science Standards. It does not cover a standard on its own; use it with the activities above.</p>
+  <table>
+    <tr><th>Standard</th><th>Statement (summary)</th><th>In Electron Explorer</th></tr>
+    <tr><td>5-PS1-1</td><td>Develop a model to describe that matter is made of particles too small to be seen.</td><td>Zoom from a gold speck to rows of gold atoms; graphene's honeycomb of carbon atoms.</td></tr>
+    <tr><td>MS-LS1-1</td><td>Conduct an investigation to provide evidence that living things are made of cells.</td><td>A bacterium is one living cell; compare its size with a pollen grain and a hair.</td></tr>
+    <tr><td>MS-PS1-1</td><td>Develop models to describe the atomic composition of simple molecules and extended structures.</td><td>Graphene as an extended structure of carbon atoms, with one silicon atom in it; gold as a crystal.</td></tr>
+    <tr><td>MS-PS4-2</td><td>Develop and use a model to describe that waves are reflected, absorbed, or transmitted through various materials.</td><td>Electrons pass through thin parts of a sample and are stopped by thick parts: that is the picture's contrast.</td></tr>
+    <tr><td>Crosscutting concept</td><td>Scale, proportion, and quantity.</td><td>The "How small is it?" ladder, the scale bar, and "About N bacteria fit across the screen".</td></tr>
+    <tr><td>Crosscutting concept</td><td>Structure and function.</td><td>Pollen spikes stick to bees; the phage's legs and tail; the diatom's pores let water in.</td></tr>
+    <tr><td>Practices</td><td>Developing and using models; planning and carrying out investigations.</td><td>Students focus by testing and correcting, and record what they see with a size.</td></tr>
+  </table>
+
+  <h2>Good to know</h2>
+  <ul>
+    <li>The samples are drawn to scale from simple shapes, after real electron microscope images. They are not recorded images.</li>
+    <li>Nothing about students is collected online. On a museum kiosk, only anonymous daily totals are kept on that device.</li>
+    <li>For older students, the <a href="../../">full simulator</a> computes every image from the physics of a real transmission electron microscope.</li>
+  </ul>
+  <p class="muted">Electron Explorer · <a href="../">TEM-view Kids</a> · Copyright © 2026 by Northwestern University. All Rights Reserved.</p>
+</main>
+</body>
+</html>

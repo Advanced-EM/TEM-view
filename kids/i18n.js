@@ -1,19 +1,42 @@
-// English and Spanish. Visible strings in code are [English, Spanish] pairs; tr() picks the current language.
-// The page's own text keeps its English in index.html (data-i18n keys) and its Spanish here.
-// Language: ?lang=es or ?lang=en, else the last choice in this browser, else the browser's language.
+// Five languages: English, Spanish, Brazilian Portuguese, French and German.
+// A message is a plain string (the same in every language), an [English, Spanish] pair, a template
+// msg('… {name} …', { name }) whose values are messages too, or join(a, b, …). Portuguese, French and German
+// come from kids/lang/<lang>.js, keyed by the English text (strings) and by the page's data-i18n keys (static);
+// tools/kids-i18n-check.mjs lists anything missing. A string not yet translated falls back to English.
+// Language: ?lang=…, else the kiosk's or this browser's last choice, else the browser's language.
+import PT from './lang/pt.js';
+import FR from './lang/fr.js';
+import DE from './lang/de.js';
 
+export const LANGS = ['en', 'es', 'pt', 'fr', 'de'];
+export const LANG_NAMES = { en: 'English', es: 'Español', pt: 'Português', fr: 'Français', de: 'Deutsch' };
+const LOCALES = { en: 'en-US', es: 'es-MX', pt: 'pt-BR', fr: 'fr-FR', de: 'de-DE' };
 const store = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch { /* private mode */ } return null; };
+const ok = (l) => LANGS.includes(l);
 const urlLang = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('lang') : null;
-export let lang = ['en', 'es'].includes(urlLang) ? urlLang : store('kids-lang') ?? (typeof navigator !== 'undefined' && /^es/i.test(navigator.language) ? 'es' : 'en');
-if (!['en', 'es'].includes(lang)) lang = 'en';
-export const LANGS = ['en', 'es'];
-export const tr = (p) => (Array.isArray(p) ? (lang === 'es' ? p[1] ?? p[0] : p[0]) : p);
-export const locale = () => (lang === 'es' ? 'es-MX' : 'en-US');
+const navLang = typeof navigator !== 'undefined' ? (navigator.language || '').slice(0, 2).toLowerCase() : 'en';
+export let lang = ok(urlLang) ? urlLang : ok(store('kids-lang')) ? store('kids-lang') : ok(navLang) ? navLang : 'en';
+export const locale = (l = lang) => LOCALES[l];
+
+const DICT = { pt: PT, fr: FR, de: DE };
+export const msg = (t, v) => ({ t, v });
+export const join = (...ms) => ({ join: ms.filter(Boolean) });
+export function trIn(l, m) {
+  if (m == null) return '';
+  if (typeof m === 'string' || typeof m === 'number') return String(m);
+  if (Array.isArray(m)) return l === 'en' ? m[0] : l === 'es' ? m[1] ?? m[0] : DICT[l]?.strings?.[m[0]] ?? m[0];
+  if (m.join) return m.join.map((x) => trIn(l, x)).filter(Boolean).join(' ');
+  if (m.t) return trIn(l, m.t).replace(/\{(\w+)\}/g, (_, k) => trIn(l, m.v?.[k]));
+  if (typeof m === 'object' && (m.en != null)) return m[l] ?? m.en; // pack texts: { en, es, pt, fr, de }
+  return String(m);
+}
+export const tr = (m) => trIn(lang, m);
+
 const subs = [];
 export const onLang = (f) => subs.push(f);
-export function setLang(l) {
-  if (!LANGS.includes(l) || l === lang) return;
-  lang = l; store('kids-lang', l); applyStatic(); subs.forEach((f) => f(l));
+export function setLang(l, remember = true) {
+  if (!ok(l) || l === lang) return;
+  lang = l; if (remember) store('kids-lang', l); applyStatic(); subs.forEach((f) => f(l));
 }
 
 const ES = {
@@ -40,17 +63,28 @@ const ES = {
   g2: '<b>Grados 3-5:</b> usen la escalera <em>¿Qué tan pequeño es?</em> para ordenar un cabello, una célula, un virus y un átomo. Se relaciona con <i>5-PS1-1</i> (la materia está hecha de partículas demasiado pequeñas para verse).',
   g3: '<b>Grados 6-8:</b> células y virus (<i>MS-LS1-1</i>); el grafeno como una estructura hecha de átomos (<i>MS-PS1-1</i>); el concepto transversal <i>Escala, proporción y cantidad</i>.',
   g4: '<b>Grados 9-12:</b> por qué enfocar es más difícil con mucho zoom, por qué el brillo causa daño y por qué la imagen "real" es gris. Después, pasen al <a href="../">simulador completo</a>.',
-  teach2: 'En un stand o un museo, añade <code>?kiosk</code> a la dirección: la exhibición vuelve a empezar después de tres minutos sin que nadie la toque. Funciona con mouse, pantalla táctil, teclado, control de videojuegos o la <a href="../console/">Consola TEM-view</a>. Las muestras están dibujadas a escala con formas sencillas; no son imágenes reales grabadas.',
+  teach3: '<b>Para imprimir:</b> una <a href="educators/worksheet.html">hoja de trabajo</a> en cinco idiomas y una <a href="educators/guide.html">guía para la excursión con la alineación a los NGSS</a>.',
+  teach2: 'Para museos y centros de ciencia, la <a href="museums.html">guía para museos</a> explica el modo quiosco (<code>?kiosk</code>), el uso sin conexión, el menú del personal, la impresión de stickers, las visitas, la accesibilidad y los paquetes de muestras. Funciona con mouse, pantalla táctil, teclado, control de videojuegos o la <a href="../console/">Consola TEM-view</a>. Las muestras están dibujadas a escala con formas sencillas; no son imágenes reales grabadas.',
   foot: 'Parte de <b>Seeing with Electrons</b> · <a href="../">TEM-view</a> · <a href="../ruska/">Ruska 1933</a> · <a href="../scanning/">Scanning 1938–2002</a> · <span aria-current="page">TEM-view Kids</span> · <a href="../privacy.html">Privacidad</a><br>Copyright © 2026 by Northwestern University. All Rights Reserved.',
   yourPics: 'Tus fotos', noStickers: 'Todavía no hay stickers. ¡Presiona <b>FOTO</b> para tomar una!', done: '¡Misión cumplida!', close: 'Cerrar',
 };
+Object.assign(ES, {
+  a11y: 'Más fácil de ver', a11yT: 'Alto contraste, texto más grande, movimiento tranquilo', hc: 'Alto contraste', big: 'Texto más grande', calm: 'Movimiento tranquilo',
+  thPrint: 'Imprimir mi sticker', thQR: 'Llévatelo a casa', qrEyebrow: 'Llévate tu foto a casa', qrTitle: 'Escanéame con la cámara de un teléfono', qrA: 'Código QR',
+  qrNote: 'Abre tu sticker en el teléfono. El código solo contiene los ajustes de la imagen, nada sobre ti.', pinTitle: 'PIN del personal',
+  stEyebrow: 'Explorador de Electrones', stTitle: 'Mi sticker del microscopio electrónico', stSave: '⬇️ Guardar la imagen', stShare: '📤 Compartir', stPlay: '🔬 Jugar a Explorador de Electrones',
+  stNote: 'Esta imagen se volvió a dibujar en tu teléfono a partir de unos números de la dirección. No se guardó nada sobre ti.',
+});
+// keys used only by sticker.html (tools/kids-i18n-check.mjs reads this list)
+export const STATIC_KEYS = ['stEyebrow', 'stTitle', 'stSave', 'stShare', 'stPlay', 'stNote'];
+const STATIC = { es: ES, pt: PT.static, fr: FR.static, de: DE.static };
 const EN = new Map();
 export function applyStatic() {
   if (typeof document === 'undefined') return;
   document.documentElement.lang = lang;
   const swap = (sel, attr, get, set) => document.querySelectorAll(sel).forEach((el) => {
     const k = el.dataset[attr]; if (!EN.has(attr + k)) EN.set(attr + k, get(el));
-    set(el, lang === 'es' && ES[k] != null ? ES[k] : EN.get(attr + k));
+    set(el, STATIC[lang]?.[k] ?? EN.get(attr + k));
   });
   swap('[data-i18n]', 'i18n', (e) => e.innerHTML, (e, v) => { e.innerHTML = v; });
   swap('[data-i18n-aria]', 'i18nAria', (e) => e.getAttribute('aria-label'), (e, v) => e.setAttribute('aria-label', v));

@@ -1296,3 +1296,6 @@ window.__tem = { S, sim, scene, panel: hwPanel, vpanel: vPanel, scn, voice, agen
 { const id = new URLSearchParams(location.search).get('train'); if (id && /^[a-z0-9-]+$/.test(id)) setTimeout(() => { try { scn.start(id); } catch { /* unknown id */ } }, 600); }
 // ?script=<example> opens the Python IDE with that example (tools/temview-py/examples/<example>.py); ?script alone opens it
 { const q = new URLSearchParams(location.search); if (q.has('script')) { const ex = q.get('script'); setTimeout(() => { ide.toggle(true); if (ex && /^[a-z0-9_]+$/.test(ex)) ide.loadExample(`${ex}.py`); }, 800); } }
+
+// offline support (../sw.js): keeps the exhibit running when a museum's network drops; off on localhost unless ?sw
+if ('serviceWorker' in navigator && (!/^(localhost|127\.|\[::1\])/.test(location.hostname) || new URLSearchParams(location.search).has('sw'))) navigator.serviceWorker.register('./sw.js').catch(() => { /* optional */ });

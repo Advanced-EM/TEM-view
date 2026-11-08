@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Electron Explorer worksheet</title>
+<meta name="description" content="A printable worksheet for Electron Explorer, the cartoon electron microscope, in English, Spanish, Portuguese, French and German.">
+<link rel="stylesheet" href="../../fonts/fonts.css">
+<style>
+  :root { --ink: #1d2340; --muted: #5a6285; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.45 'Nunito', system-ui, sans-serif; color: var(--ink); background: #eef4ff; }
+  .bar { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; padding: 12px; }
+  .bar button, .bar a { font: 700 14px 'Fredoka', sans-serif; border: 2px solid var(--ink); border-radius: 999px; background: #fff; padding: 4px 12px; cursor: pointer; color: var(--ink); text-decoration: none; }
+  .bar button[aria-pressed="true"] { background: var(--ink); color: #fff; }
+  .page { background: #fff; max-width: 820px; margin: 0 auto 24px; padding: 32px 40px; border: 2px solid var(--ink); border-radius: 18px; }
+  h1 { font: 700 26px 'Fredoka', sans-serif; margin: 0 0 4px; } h2 { font: 700 18px 'Fredoka', sans-serif; margin: 22px 0 6px; }
+  .who { display: flex; gap: 24px; margin: 12px 0 4px; } .who span { flex: 1; border-bottom: 1.5px solid var(--ink); padding-bottom: 2px; }
+  .q { margin: 14px 0; } .q b { font-family: 'Fredoka', sans-serif; }
+  .lines { border-bottom: 1.5px dotted var(--muted); height: 30px; } .box { border: 2px dashed var(--muted); border-radius: 12px; height: 150px; margin-top: 6px; }
+  .order { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; } .order span { flex: 1 1 120px; border-bottom: 1.5px solid var(--ink); padding: 18px 0 2px; color: var(--muted); font-size: 12px; }
+  .chips { color: var(--muted); font-size: 14px; } .muted { color: var(--muted); font-size: 13px; }
+  .key { font-size: 14px; } .key li { margin-bottom: 4px; }
+  @media print { body { background: #fff; } .bar { display: none; } .page { border: 0; margin: 0; max-width: none; padding: 0 6mm; } .page + .page { break-before: page; } @page { margin: 14mm; } }
+</style>
+</head>
+<body>
+<div class="bar" role="group" aria-label="Language">
+  <button data-l="en">English</button><button data-l="es">Español</button><button data-l="pt">Português</button><button data-l="fr">Français</button><button data-l="de">Deutsch</button>
+  <button id="print">🖨️ <span data-t="print"></span></button><a href="../" data-t="open"></a>
+</div>
+<main>
+  <section class="page">
+    <h1 data-t="title"></h1>
+    <p class="muted" data-t="intro"></p>
+    <div class="who"><span data-t="name"></span><span data-t="date"></span></div>
+    <div class="q"><b>1.</b> <span data-t="q1"></span><div class="box"></div></div>
+    <div class="q"><b>2.</b> <span data-t="q2"></span><div class="lines"></div></div>
+    <div class="q"><b>3.</b> <span data-t="q3"></span><div class="lines"></div><div class="lines"></div></div>
+    <div class="q"><b>4.</b> <span data-t="q4"></span><p class="chips" data-t="q4c"></p><div class="order"><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span></div></div>
+    <div class="q"><b>5.</b> <span data-t="q5"></span><div class="lines"></div></div>
+    <div class="q"><b>6.</b> <span data-t="q6"></span><div class="lines"></div><div class="lines"></div></div>
+    <div class="q"><b>7.</b> <span data-t="q7"></span><div class="box"></div></div>
+    <div class="q"><b>8.</b> <span data-t="q8"></span><div class="lines"></div><div class="lines"></div></div>
+  </section>
+  <section class="page key">
+    <h2 data-t="keyT"></h2>
+    <ol><li data-t="k1"></li><li data-t="k2"></li><li data-t="k3"></li><li data-t="k4"></li><li data-t="k5"></li><li data-t="k6"></li><li data-t="k7"></li><li data-t="k8"></li></ol>
+    <p class="muted">Electron Explorer · <a href="../">TEM-view Kids</a> · Copyright © 2026 by Northwestern University. All Rights Reserved.</p>
+  </section>
+</main>
+<script>
+const T = {
+  en: { print: 'Print', open: 'Open Electron Explorer', title: 'Electron Explorer: my microscope missions', intro: 'Use Electron Explorer, the cartoon electron microscope, to answer these questions.', name: 'Name:', date: 'Date:',
+    q1: 'Before you start: how small do you think a virus is? Draw a hair, then draw a virus next to it at the size you think it is.',
+    q2: 'Press BEAM. What color is the beam inside the microscope?',
+    q3: 'Turn the FOCUS knob too far one way. What happens to the picture? How do you make it sharp again?',
+    q4: 'Use the "How small is it?" ladder. Put these in order, from the biggest to the smallest:', q4c: 'atom · bacterium · hair · virus · pollen grain',
+    q5: 'Zoom way in on a gold speck. What are the dots in rows?',
+    q6: 'Pick pollen and turn BRIGHT all the way up. What happens? Why do scientists use as little beam as they can?',
+    q7: 'Draw your favorite picture from the microscope. Label what it shows and how wide the screen was.',
+    q8: 'Real electron microscope pictures are grey. Why do you think scientists add colors? Is a colored picture still true?',
+    keyT: 'Answer key (for grown-ups)',
+    k1: 'Any drawing works. A real virus is about 100 nanometres: a hair is roughly 800 times wider.',
+    k2: 'Green. Electrons are invisible; the color in the drawing just shows where the beam goes.',
+    k3: 'The picture gets blurry. Turn FOCUS slowly back; if it gets worse, turn the other way until the Sharp-o-meter is full.',
+    k4: 'Hair (about 80 µm), pollen grain (about 25 µm), bacterium (about 2 µm), virus (about 100 nm), atom (about 0.3 nm).',
+    k5: 'Columns of gold atoms, seen end-on, lined up in a crystal.',
+    k6: 'The sample "cooks": it turns brown and bubbles. A strong beam heats and breaks soft samples, so scientists use as few electrons as they can.',
+    k7: 'Look for a label (for example "spikes of a pollen grain") and a size from the scale bar or the "How small is it?" ladder.',
+    k8: 'The detector only counts electrons, so the image has no color. Colors make parts easier to tell apart; the picture stays true as long as we say the colors were added.' },
+  es: { print: 'Imprimir', open: 'Abrir Explorador de Electrones', title: 'Explorador de Electrones: mis misiones en el microscopio', intro: 'Usa Explorador de Electrones, el microscopio electrónico de caricatura, para responder estas preguntas.', name: 'Nombre:', date: 'Fecha:',
+    q1: 'Antes de empezar: ¿qué tan pequeño crees que es un virus? Dibuja un cabello y, a su lado, un virus del tamaño que crees que tiene.',
+    q2: 'Presiona HAZ. ¿De qué color es el haz dentro del microscopio?',
+    q3: 'Gira demasiado la perilla de ENFOQUE hacia un lado. ¿Qué le pasa a la imagen? ¿Cómo vuelves a hacerla nítida?',
+    q4: 'Usa la escalera "¿Qué tan pequeño es?". Ordena estas cosas de la más grande a la más pequeña:', q4c: 'átomo · bacteria · cabello · virus · grano de polen',
+    q5: 'Haz muchísimo zoom en una mota de oro. ¿Qué son los puntos en filas?',
+    q6: 'Elige el polen y sube el BRILLO al máximo. ¿Qué pasa? ¿Por qué los científicos usan el menor haz posible?',
+    q7: 'Dibuja tu imagen favorita del microscopio. Escribe qué muestra y qué tan ancha era la pantalla.',
+    q8: 'Las imágenes reales del microscopio electrónico son grises. ¿Por qué crees que los científicos les añaden colores? ¿Una imagen con colores sigue siendo verdadera?',
+    keyT: 'Respuestas (para adultos)',
+    k1: 'Cualquier dibujo vale. Un virus real mide unos 100 nanómetros: un cabello es unas 800 veces más ancho.',
+    k2: 'Verde. Los electrones son invisibles; el color del dibujo solo muestra por dónde va el haz.',
+    k3: 'La imagen se pone borrosa. Gira el ENFOQUE despacio de vuelta; si empeora, gira hacia el otro lado hasta que el Nitidómetro se llene.',
+    k4: 'Cabello (unos 80 µm), grano de polen (unos 25 µm), bacteria (unos 2 µm), virus (unos 100 nm), átomo (unos 0,3 nm).',
+    k5: 'Columnas de átomos de oro, vistas desde la punta, ordenadas en un cristal.',
+    k6: 'La muestra "se cocina": se pone café y hace burbujas. Un haz fuerte calienta y rompe las muestras blandas, así que los científicos usan los menos electrones posibles.',
+    k7: 'Busca una etiqueta (por ejemplo "púas de un grano de polen") y un tamaño tomado de la barra de escala o de la escalera "¿Qué tan pequeño es?".',
+    k8: 'El detector solo cuenta electrones, así que la imagen no tiene color. Los colores ayudan a distinguir las partes; la imagen sigue siendo verdadera si decimos que los colores se añadieron.' },
+  pt: { print: 'Imprimir', open: 'Abrir o Explorador de Elétrons', title: 'Explorador de Elétrons: minhas missões no microscópio', intro: 'Use o Explorador de Elétrons, o microscópio eletrônico de desenho animado, para responder a estas perguntas.', name: 'Nome:', date: 'Data:',
+    q1: 'Antes de começar: quão pequeno você acha que é um vírus? Desenhe um fio de cabelo e, ao lado, um vírus do tamanho que você acha que ele tem.',
+    q2: 'Aperte FEIXE. De que cor é o feixe dentro do microscópio?',
+    q3: 'Gire demais o botão de FOCO para um lado. O que acontece com a imagem? Como você a deixa nítida de novo?',
+    q4: 'Use a escada "Quão pequeno é?". Coloque em ordem, da maior para a menor:', q4c: 'átomo · bactéria · fio de cabelo · vírus · grão de pólen',
+    q5: 'Dê muito zoom num pontinho de ouro. O que são os pontos em fileiras?',
+    q6: 'Escolha o pólen e coloque o BRILHO no máximo. O que acontece? Por que os cientistas usam o mínimo de feixe possível?',
+    q7: 'Desenhe sua imagem favorita do microscópio. Escreva o que ela mostra e qual era a largura da tela.',
+    q8: 'As imagens reais do microscópio eletrônico são cinza. Por que você acha que os cientistas colocam cores? Uma imagem colorida continua sendo verdadeira?',
+    keyT: 'Respostas (para adultos)',
+    k1: 'Qualquer desenho vale. Um vírus de verdade tem uns 100 nanômetros: um fio de cabelo é umas 800 vezes mais largo.',
+    k2: 'Verde. Os elétrons são invisíveis; a cor do desenho só mostra por onde o feixe passa.',
+    k3: 'A imagem fica borrada. Gire o FOCO devagar de volta; se piorar, gire para o outro lado até o Nitidômetro encher.',
+    k4: 'Fio de cabelo (uns 80 µm), grão de pólen (uns 25 µm), bactéria (uns 2 µm), vírus (uns 100 nm), átomo (uns 0,3 nm).',
+    k5: 'Colunas de átomos de ouro, vistas de ponta, arrumadas num cristal.',
+    k6: 'A amostra "cozinha": fica marrom e faz bolhas. Um feixe forte esquenta e quebra amostras moles, então os cientistas usam o mínimo de elétrons possível.',
+    k7: 'Procure uma legenda (por exemplo "espinhos de um grão de pólen") e um tamanho tirado da barra de escala ou da escada "Quão pequeno é?".',
+    k8: 'O detector só conta elétrons, então a imagem não tem cor. As cores ajudam a distinguir as partes; a imagem continua verdadeira se dissermos que as cores foram acrescentadas.' },
+  fr: { print: 'Imprimer', open: 'Ouvrir l’Explorateur d’électrons', title: 'Explorateur d’électrons : mes missions au microscope', intro: 'Utilise l’Explorateur d’électrons, le microscope électronique en dessin animé, pour répondre à ces questions.', name: 'Nom :', date: 'Date :',
+    q1: 'Avant de commencer : à ton avis, quelle est la taille d’un virus ? Dessine un cheveu, puis un virus à côté, de la taille que tu imagines.',
+    q2: 'Appuie sur FAISCEAU. De quelle couleur est le faisceau dans le microscope ?',
+    q3: 'Tourne trop le bouton NETTETÉ d’un côté. Que devient l’image ? Comment la rends-tu nette à nouveau ?',
+    q4: 'Utilise l’échelle « C’est petit comment ? ». Range ces choses de la plus grande à la plus petite :', q4c: 'atome · bactérie · cheveu · virus · grain de pollen',
+    q5: 'Zoome très fort sur un grain d’or. Que sont les points en rangées ?',
+    q6: 'Choisis le pollen et mets la LUMIÈRE au maximum. Que se passe-t-il ? Pourquoi les scientifiques utilisent-ils le moins de faisceau possible ?',
+    q7: 'Dessine ton image préférée du microscope. Écris ce qu’elle montre et la largeur de l’écran.',
+    q8: 'Les vraies images de microscope électronique sont grises. Pourquoi les scientifiques ajoutent-ils des couleurs, à ton avis ? Une image en couleurs est-elle toujours vraie ?',
+    keyT: 'Corrigé (pour les adultes)',
+    k1: 'Tous les dessins conviennent. Un vrai virus mesure environ 100 nanomètres : un cheveu est environ 800 fois plus large.',
+    k2: 'Vert. Les électrons sont invisibles ; la couleur du dessin montre seulement où passe le faisceau.',
+    k3: 'L’image devient floue. Tourne doucement la NETTETÉ dans l’autre sens ; si c’est pire, change de sens jusqu’à ce que le Nettomètre soit plein.',
+    k4: 'Cheveu (environ 80 µm), grain de pollen (environ 25 µm), bactérie (environ 2 µm), virus (environ 100 nm), atome (environ 0,3 nm).',
+    k5: 'Des colonnes d’atomes d’or, vues par le bout, rangées dans un cristal.',
+    k6: 'L’échantillon « cuit » : il brunit et fait des bulles. Un faisceau fort chauffe et casse les échantillons mous, alors les scientifiques utilisent le moins d’électrons possible.',
+    k7: 'Cherche une légende (par exemple « piquants d’un grain de pollen ») et une taille lue sur la barre d’échelle ou l’échelle « C’est petit comment ? ».',
+    k8: 'Le détecteur compte seulement les électrons : l’image n’a pas de couleur. Les couleurs aident à distinguer les parties ; l’image reste vraie si l’on dit que les couleurs ont été ajoutées.' },
+  de: { print: 'Drucken', open: 'Elektronen-Entdecker öffnen', title: 'Elektronen-Entdecker: meine Missionen am Mikroskop', intro: 'Beantworte diese Fragen mit dem Elektronen-Entdecker, dem Comic-Elektronenmikroskop.', name: 'Name:', date: 'Datum:',
+    q1: 'Bevor du anfängst: Wie klein ist wohl ein Virus? Mal ein Haar und daneben ein Virus so groß, wie du es dir vorstellst.',
+    q2: 'Drück STRAHL. Welche Farbe hat der Strahl im Mikroskop?',
+    q3: 'Dreh den Knopf SCHÄRFE zu weit in eine Richtung. Was passiert mit dem Bild? Wie machst du es wieder scharf?',
+    q4: 'Nimm die Leiter „Wie klein ist das?“. Ordne vom größten zum kleinsten:', q4c: 'Atom · Bakterium · Haar · Virus · Pollenkorn',
+    q5: 'Zoom ganz tief in ein Goldkörnchen. Was sind die Punkte in Reihen?',
+    q6: 'Wähl den Pollen und dreh das LICHT ganz auf. Was passiert? Warum benutzen Forscher so wenig Strahl wie möglich?',
+    q7: 'Mal dein Lieblingsbild aus dem Mikroskop. Schreib dazu, was es zeigt und wie breit der Bildschirm war.',
+    q8: 'Echte Bilder aus dem Elektronenmikroskop sind grau. Warum geben Forscher ihnen wohl Farben? Ist ein farbiges Bild trotzdem wahr?',
+    keyT: 'Lösungen (für Erwachsene)',
+    k1: 'Jede Zeichnung zählt. Ein echtes Virus ist etwa 100 Nanometer groß: Ein Haar ist ungefähr 800-mal dicker.',
+    k2: 'Grün. Elektronen sind unsichtbar; die Farbe in der Zeichnung zeigt nur, wo der Strahl entlangläuft.',
+    k3: 'Das Bild wird unscharf. Dreh die SCHÄRFE langsam zurück; wird es schlechter, dreh in die andere Richtung, bis das Schärfometer voll ist.',
+    k4: 'Haar (etwa 80 µm), Pollenkorn (etwa 25 µm), Bakterium (etwa 2 µm), Virus (etwa 100 nm), Atom (etwa 0,3 nm).',
+    k5: 'Säulen aus Goldatomen, von vorne gesehen, geordnet in einem Kristall.',
+    k6: 'Die Probe „verbrennt“: Sie wird braun und wirft Blasen. Ein starker Strahl erhitzt und zerstört weiche Proben, deshalb benutzen Forscher so wenige Elektronen wie möglich.',
+    k7: 'Achte auf eine Beschriftung (zum Beispiel „Stacheln eines Pollenkorns“) und eine Größe vom Maßstab oder von der Leiter „Wie klein ist das?“.',
+    k8: 'Der Detektor zählt nur Elektronen, deshalb hat das Bild keine Farbe. Farben helfen, die Teile zu unterscheiden; das Bild bleibt wahr, wenn man sagt, dass die Farben hinzugefügt wurden.' },
+};
+const ok = (l) => l in T;
+let lang = new URLSearchParams(location.search).get('lang'); if (!ok(lang)) { try { lang = localStorage.getItem('kids-lang'); } catch { lang = null; } } if (!ok(lang)) lang = ok(navigator.language.slice(0, 2)) ? navigator.language.slice(0, 2) : 'en';
+function show(l) {
+  lang = l; document.documentElement.lang = l;
+  document.querySelectorAll('[data-t]').forEach((e) => { e.textContent = T[l][e.dataset.t] ?? T.en[e.dataset.t]; });
+  document.querySelectorAll('[data-l]').forEach((b) => b.setAttribute('aria-pressed', b.dataset.l === l));
+  document.title = T[l].title; document.querySelector('[data-t="open"]').href = `../?lang=${l}`;
+}
+document.querySelectorAll('[data-l]').forEach((b) => b.addEventListener('click', () => show(b.dataset.l)));
+document.getElementById('print').addEventListener('click', () => print());
+show(lang);
+</script>
+</body>
+</html>

@@ -2,26 +2,28 @@
 // camera, missions with a guide (Zip the electron), a sticker book, and the TEM-view Console.
 // The physics kept: focus blur grows with zoom; squeezing the beam (brightness) shrinks the lit spot and cooks soft
 // samples; a dim beam gives a grainy picture (few electrons); a new sample needs refocusing.
-import { SPECIMENS, rng } from './specimens.js';
+import { SPECIMENS } from './specimens.js';
+import { W, Picture, optics, viewOf, encodeSnap } from './render.js';
+import { initKiosk } from './kiosk.js';
+import { settings } from './settings.js';
+import { loadPacks, packList, packMissions } from './packs.js';
+await loadPacks(); // museum sample packs join the built-in samples before anything is built
 import { Console, shortName } from './console.js';
 import { HELLO, HELLO_START, T, QUESTS as QT, PARTS, FACTS, VOICES, lookingAt, needsSample, nextMission, sampleName, plain, clipId } from './lines.js';
-import { lang, tr, locale, setLang, onLang, applyStatic } from './i18n.js';
+import { lang, tr, locale, setLang, onLang, applyStatic, msg, join } from './i18n.js';
 
 const $ = (id) => document.getElementById(id);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const TAU = Math.PI * 2;
-const W = 720;
-const KIOSK = new URLSearchParams(location.search).has('kiosk');
 const store = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch { /* private mode */ } return null; };
-// join [English, Spanish] pairs (or plain strings, the same in both) into one pair
-const cat = (...ps) => [0, 1].map((k) => ps.filter(Boolean).map((p) => (Array.isArray(p) ? p[k] ?? p[0] : p)).join(' '));
 
 // ------------------------------------------------------------------ state
 const S = {
-  si: 0, beam: false, focus: 0, f0: 0, bright: 0.5, pal: 'color', sound: true, read: false, voice: store('kids-voice') === 'male' ? 'male' : 'female',
+  si: 0, beam: false, focus: 0, f0: 0, bright: 0.5, pal: 'color', sound: true, read: false, volume: 1, voice: store('kids-voice') === 'male' ? 'male' : 'female',
   views: SPECIMENS.map((sp) => ({ ...sp.start })), burns: SPECIMENS.map(() => []), facts: SPECIMENS.map(() => new Set()),
-  snaps: [], done: new Set(), hint: false, joy: [0, 0], sharpT: 0, warnT: {}, idle: 0,
+  snaps: [], done: new Set(), hint: false, joy: [0, 0], sharpT: 0, warnT: {},
 };
+let K = null; // the kiosk (kiosk.js), set up at the end
 const spec = () => SPECIMENS[S.si];
 const view = () => S.views[S.si];
 S.f0 = (Math.random() < 0.5 ? -1 : 1) * (40 + Math.random() * 40);
@@ -31,7 +33,7 @@ const A = { ctx: null };
 function audio() {
   if (A.ctx || !S.sound) return A.ctx;
   try {
-    const ctx = new AudioContext(); A.ctx = ctx; A.out = ctx.createGain(); A.out.gain.value = 0.35; A.out.connect(ctx.destination);
+    const ctx = new AudioContext(); A.ctx = ctx; A.out = ctx.createGain(); A.out.gain.value = 0.35 * S.volume; A.out.connect(ctx.destination);
     const nb = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate), d = nb.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; A.noise = nb;
     // a sizzle that plays while a soft sample cooks
     const src = ctx.createBufferSource(); src.buffer = nb; src.loop = true; const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 3000;
@@ -83,7 +85,7 @@ const Voice = {
       await (f ? this.play(`audio/${f}`) : this.tts(text));
     }
   },
-  play(src) { return new Promise((res) => { const a = (this.el ||= new Audio()); a.src = src; a.onended = a.onerror = () => res(); a.play().catch(() => res()); }); },
+  play(src) { return new Promise((res) => { const a = (this.el ||= new Audio()); a.src = src; a.volume = S.volume; a.onended = a.onerror = () => res(); a.play().catch(() => res()); }); },
   // the browser's voices: prefer natural or enhanced ones in the page's language and Zip's voice, pitched up
   pick() {
     const vs = speechSynthesis.getVoices().filter((v) => v.lang.toLowerCase().startsWith(lang)); if (!vs.length) return null;
@@ -95,7 +97,7 @@ const Voice = {
   },
   tts(text) {
     if (!('speechSynthesis' in window)) return Promise.resolve();
-    return new Promise((res) => { const u = new SpeechSynthesisUtterance(text); const v = this.pick(); u.lang = locale(); if (v) u.voice = v; u.pitch = 1.6; u.rate = 1.04; u.onend = u.onerror = () => res(); speechSynthesis.speak(u); });
+    return new Promise((res) => { const u = new SpeechSynthesisUtterance(text); const v = this.pick(); u.lang = locale(); if (v) u.voice = v; u.pitch = 1.6; u.volume = S.volume; u.rate = 1.04; u.onend = u.onerror = () => res(); speechSynthesis.speak(u); });
   },
 };
 Voice.load();
@@ -103,68 +105,15 @@ if ('speechSynthesis' in window) speechSynthesis.getVoices(); // some browsers o
 // say something only once in a while
 function nag(key, html, mood, every = 12000) { const n = performance.now(); if ((S.warnT[key] ?? -1e9) + every < n) { S.warnT[key] = n; say(html, mood); } }
 
-// ------------------------------------------------------------------ the picture
-const canvas = $('screen'), ctx = canvas.getContext('2d');
-const buf = document.createElement('canvas'); buf.width = buf.height = W; const bctx = buf.getContext('2d');
-const hasFilter = 'filter' in ctx;
-const noise = [0, 1, 2].map((k) => {
-  const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d'), im = g.createImageData(256, 256), r = rng(k + 3);
-  for (let i = 0; i < 256 * 256; i++) { const l = r() < 0.5 ? 0 : 255; im.data.set([l, l, l, r() * 255], i * 4); }
-  g.putImageData(im, 0, 0); return c;
-});
+// ------------------------------------------------------------------ the picture (render.js)
+const canvas = $('screen'), pic = new Picture(canvas);
 let dirty = true;
-
-function vobj() {
-  const v = view(), s = W / v.fov;
-  return { cx: v.cx, cy: v.cy, fov: v.fov, s, x0: v.cx - v.fov / 2, x1: v.cx + v.fov / 2, y0: v.cy - v.fov / 2, y1: v.cy + v.fov / 2, mono: S.pal !== 'color' };
-}
-// optics in kid units
-const blurPx = () => Math.min(26, Math.abs(S.focus - S.f0) * 0.22 * Math.pow(spec().fovMax / view().fov, 0.18));
-const sharpness = () => Math.exp(-((blurPx() / 2.2) ** 2));
-const gain = () => 0.08 + 2.2 * Math.pow(S.bright, 1.3);          // picture brightness
-const spot = () => 1.5 - S.bright;                                 // lit disc radius / screen radius
-const grain = () => clamp((0.45 - S.bright) / 0.45, 0, 1) * 0.5 + (S.pal === 'color' ? 0.02 : 0.07);
-
-function drawSpecimen() {
-  const sp = spec(), v = vobj();
-  bctx.setTransform(1, 0, 0, 1, 0, 0); bctx.fillStyle = sp.bg(v.mono); bctx.fillRect(0, 0, W, W);
-  bctx.setTransform(v.s, 0, 0, v.s, W / 2 - v.cx * v.s, W / 2 - v.cy * v.s);
-  sp.draw(bctx, v);
-  // cooked spots
-  for (const b of S.burns[S.si]) {
-    if (b.x + b.r < v.x0 || b.x - b.r > v.x1 || b.y + b.r < v.y0 || b.y - b.r > v.y1) continue;
-    const g = bctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, b.r), c = v.mono ? '15,15,15' : '95,45,10';
-    g.addColorStop(0, `rgba(${c},${0.8 * b.amt})`); g.addColorStop(0.75, `rgba(${c},${0.55 * b.amt})`); g.addColorStop(1, `rgba(${c},0)`);
-    bctx.fillStyle = g; bctx.beginPath(); bctx.arc(b.x, b.y, b.r, 0, TAU); bctx.fill();
-    if (b.amt > 0.35) { // bubbles: real organic samples bubble under a strong beam
-      const r = rng(b.seed); bctx.fillStyle = `rgba(255,240,215,${0.55 * b.amt})`; bctx.strokeStyle = `rgba(${c},${0.8 * b.amt})`; bctx.lineWidth = b.r * 0.012;
-      for (let k = 0; k < 16 * b.amt; k++) { const a = r() * TAU, d = Math.sqrt(r()) * b.r * 0.65, rr = b.r * (0.03 + r() * 0.07); bctx.beginPath(); bctx.arc(b.x + Math.cos(a) * d, b.y + Math.sin(a) * d, rr, 0, TAU); bctx.fill(); bctx.stroke(); }
-    }
-  }
-  dirty = false;
-}
-
-function composite() {
-  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
-  ctx.fillStyle = '#04060c'; ctx.fillRect(0, 0, W, W);
-  if (!S.beam) return;
-  const b = blurPx(), k = gain();
-  const tint = S.pal === 'green' ? ' sepia(1) hue-rotate(55deg) saturate(2.6)' : S.pal === 'mono' ? ' contrast(1.08)' : '';
-  if (hasFilter) { ctx.filter = `blur(${b.toFixed(2)}px) brightness(${k.toFixed(3)})${tint}`; ctx.drawImage(buf, 0, 0); ctx.filter = 'none'; }
-  else { // no canvas filters: blur by shrinking and stretching, brightness by a veil
-    const sc = 1 / (1 + b / 2), w = Math.max(8, Math.round(W * sc)); tmp.width = tmp.height = w;
-    tmp.getContext('2d').drawImage(buf, 0, 0, w, w); ctx.imageSmoothingQuality = 'high'; ctx.drawImage(tmp, 0, 0, W, W);
-    if (k < 1) { ctx.fillStyle = `rgba(0,0,0,${1 - k})`; ctx.fillRect(0, 0, W, W); } else { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = Math.min(1, k - 1); ctx.drawImage(tmp, 0, 0, W, W); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; }
-  }
-  // grain: with few electrons, each spot gets a random number of them
-  const n = grain();
-  if (n > 0.02) { ctx.globalAlpha = n; const t = noise[(Math.random() * 3) | 0], ox = -Math.random() * 256, oy = -Math.random() * 256; for (let y = oy; y < W; y += 256) for (let x = ox; x < W; x += 256) ctx.drawImage(t, x, y); ctx.globalAlpha = 1; }
-  // the lit disc: a squeezed beam lights only the middle
-  const R = (W / 2) * spot(), g = ctx.createRadialGradient(W / 2, W / 2, R * 0.8, W / 2, W / 2, R * 1.04);
-  g.addColorStop(0, 'rgba(4,6,12,0)'); g.addColorStop(1, 'rgba(4,6,12,.96)');
-  ctx.fillStyle = g; ctx.fillRect(0, 0, W, W);
-}
-const tmp = document.createElement('canvas');
+const vobj = () => { const v = view(); return viewOf(v.cx, v.cy, v.fov, S.pal); };
+const blurPx = () => optics.blur(S.focus - S.f0, spec(), view().fov);
+const sharpness = () => optics.sharp(blurPx());
+const spot = () => optics.spot(S.bright);
+function drawSpecimen() { pic.draw(spec(), vobj(), S.burns[S.si]); dirty = false; }
+const composite = () => pic.show({ beam: S.beam, blur: blurPx(), bright: S.bright, pal: S.pal });
 
 // ------------------------------------------------------------------ readouts
 const fmtLen = (nm) => nm >= 1e6 ? `${+(nm / 1e6).toPrecision(2)} mm` : nm >= 1e3 ? `${+(nm / 1e3).toPrecision(2)} µm` : nm >= 1 ? `${+nm.toPrecision(2)} nm` : `${+nm.toPrecision(2)} nm`;
@@ -200,8 +149,8 @@ function readouts() {
   $('scaleBar').style.width = `${(L / v.fov) * 100}%`; $('scaleTxt').textContent = fmtLen(L);
   $('scaleTxt').title = tr(UNITS[fmtLen(L).split(' ')[1]] ?? '');
   const th = thing(v.fov), n = v.fov / th.size, N = n < 10 ? Math.round(n) : Math.round(n / 5) * 5;
-  $('fitTxt').textContent = n < 1.6 ? tr([`The screen is about as wide as ${th.one[0]} ${th.icon}`, `La pantalla mide más o menos lo mismo que ${th.one[1]} ${th.icon}`])
-    : tr([`About ${N} ${th.many[0]} ${th.icon} fit across the screen`, `Caben unos ${N} ${th.many[1]} ${th.icon} a lo ancho de la pantalla`]);
+  $('fitTxt').textContent = n < 1.6 ? tr(msg(['The screen is about as wide as {one} {icon}', 'La pantalla mide más o menos lo mismo que {one} {icon}'], { one: th.one, icon: th.icon }))
+    : tr(msg(['About {n} {many} {icon} fit across the screen', 'Caben unos {n} {many} {icon} a lo ancho de la pantalla'], { n: N.toLocaleString(locale()), many: th.many, icon: th.icon }));
   // the ladder
   $('ladMark').style.top = `${ladderPos(v.fov)}%`;
   THINGS.forEach((t, i) => $('ladder').children[i].classList.toggle('seen', t.size <= v.fov * 1.2 && t.size >= v.fov / 60));
@@ -211,6 +160,9 @@ function readouts() {
   $('liteBar').style.width = `${S.bright * 100}%`;
   $('liteWord').textContent = tr(!S.beam ? ['beam off', 'haz apagado'] : S.bright < 0.22 ? ['too dark', 'muy oscuro'] : S.bright < 0.36 ? ['a bit dark', 'algo oscuro'] : S.bright <= 0.7 ? ['just right', 'perfecto'] : S.bright <= 0.82 ? ['very bright', 'muy brillante'] : ['too bright!', '¡demasiado!']);
   $('screenGlow').setAttribute('opacity', S.beam ? 0.25 + 0.75 * S.bright : 0.12);
+  // what a screen reader announces for each knob
+  const vt = (k, t) => { const d = knobs[k]?.el.querySelector('.kdial'); if (d && d.getAttribute('aria-valuetext') !== t) d.setAttribute('aria-valuetext', t); };
+  vt('focus', `${Math.round(sh * 100)} %`); vt('mag', $('magNum').textContent); vt('intensity', $('liteWord').textContent);
 }
 
 // ------------------------------------------------------------------ the column cartoon: beam and electrons
@@ -239,7 +191,7 @@ const glow = (id) => { const e = $(id); e.classList.add('hot'); clearTimeout(e._
 
 // ------------------------------------------------------------------ controls (shared by the on-screen console, the real Console and the keyboard)
 function turn(axis, n, fine = true) {
-  S.idle = 0;
+  K?.activity();
   if (axis === 'focus') { S.focus = clamp(S.focus + n * (fine ? 1 : 5), -200, 200); glow('lensFocus'); tick(520 + (S.focus % 12) * 12); knobs.focus?.spin(n); }
   else if (axis === 'mag') { zoomBy(Math.pow(1.13, n)); glow('lensZoom'); tick(330 + n * 10); knobs.mag?.spin(n); }
   else if (axis === 'intensity') { S.bright = clamp(S.bright + n * 0.025, 0, 1); glow('lensBright'); tick(700 + S.bright * 400); knobs.intensity?.spin(n); }
@@ -252,23 +204,23 @@ function zoomBy(f, at) {
   v.fov = nf; clampView(); dirty = true;
 }
 function clampView() { const v = view(), B = spec().bound; v.cx = clamp(v.cx, -B, B); v.cy = clamp(v.cy, -B, B); }
-function stage(vx, vy, dt) { const v = view(); v.cx += vx * v.fov * 0.6 * dt; v.cy += vy * v.fov * 0.6 * dt; clampView(); dirty = true; S.idle = 0; }
+function stage(vx, vy, dt) { const v = view(); v.cx += vx * v.fov * 0.6 * dt; v.cy += vy * v.fov * 0.6 * dt; clampView(); dirty = true; K?.activity(); }
 
 function setBeam(on) {
-  if (S.beam === on) return; S.beam = on; S.idle = 0;
+  if (S.beam === on) return; S.beam = on; K?.activity();
   $('beamBtn').setAttribute('aria-pressed', on); $('sleep').hidden = on;
   if (on) { tone(180, 0.35, 'sawtooth', 0.12, 0, 4); noiseBurst(0.3, 900, 0.2); } else tone(500, 0.3, 'sine', 0.15, 0, 0.3);
 }
 function setSample(i, quiet = false) {
   i = (i + SPECIMENS.length) % SPECIMENS.length; if (i === S.si && !quiet) return;
-  S.si = i; S.idle = 0;
+  S.si = i; K?.activity(); K?.track('sample', SPECIMENS[i].id);
   // a new sample sits at a slightly different height: focus again
   const dir = S.focus > 60 ? -1 : S.focus < -60 ? 1 : Math.random() < 0.5 ? -1 : 1;
   S.f0 = S.focus + dir * (35 + Math.random() * 45);
   document.querySelectorAll('#samples button').forEach((b, k) => b.setAttribute('aria-checked', k === i));
   $('sampleIcon').textContent = spec().icon;
   dirty = true; noiseBurst(0.18, 600, 0.25);
-  if (!quiet) say(cat(sampleName(spec()), spec().blurb), 'happy', [sampleName(spec()), spec().blurb]);
+  if (!quiet) say(join(sampleName(spec()), spec().blurb), 'happy', [sampleName(spec()), spec().blurb]);
   showQuest();
 }
 function setPal(p) { S.pal = p; document.querySelectorAll('[data-pal]').forEach((b) => b.setAttribute('aria-pressed', b.dataset.pal === p)); dirty = true; }
@@ -277,19 +229,19 @@ const PALS = ['color', 'mono', 'green'];
 function whatsThis() {
   if (!S.beam) { say(T.beamOffWhat, 'worry'); return; }
   const v = vobj(), th = thing(v.fov), l = lookingAt(spec().what(v)), n = Math.max(1, Math.round(v.fov / th.size));
-  say(cat(l, [`The screen is ${fmtLen(v.fov)} wide: that's about ${n} × ${th.one[0]}.`, `La pantalla mide ${fmtLen(v.fov)} de ancho: como ${n} × ${th.one[1]}.`]), 'wow', [l]);
+  say(join(l, msg(['The screen is {w} wide: that\'s about {n} × {one}.', 'La pantalla mide {w} de ancho: como {n} × {one}.'], { w: fmtLen(v.fov), n, one: th.one })), 'wow', [l]);
 }
 function focusHelp() {
   if (!S.beam) { say(T.beamFirst, 'worry'); return; }
   const s = sharpness();
   if (s > 0.85) say(T.superSharp, 'happy');
-  else { const a = s > 0.4 ? T.almostSharp : T.prettyBlurry; say(cat(a, T.focusHow), 'worry', [a, T.focusHow]); }
+  else { const a = s > 0.4 ? T.almostSharp : T.prettyBlurry; say(join(a, T.focusHow), 'worry', [a, T.focusHow]); }
 }
 
 const consoleApi = {
   turn, stage, say: (m) => say(T[m] ?? m),
   button(k) {
-    S.idle = 0;
+    K?.activity();
     if (k === 'pause') setBeam(!S.beam);
     else if (k === 'acquire') snap();
     else if (k === 'modePrev') setSample(S.si - 1);
@@ -332,7 +284,7 @@ class Knob {
   text() {
     const l = tr(this.label), s = tr(this.sub), [m, p] = this.el.querySelectorAll('.kpm button');
     this.el.querySelector('.klabel').textContent = l; this.el.querySelector('small').textContent = s;
-    this.el.querySelector('.kdial').setAttribute('aria-label', tr([`${l} knob: ${s}. Use the arrow keys or drag around it.`, `Perilla ${l}: ${s}. Usa las flechas o arrastra alrededor.`]));
+    this.el.querySelector('.kdial').setAttribute('aria-label', tr(msg(['{l} knob: {s}. Use the arrow keys or drag around it.', 'Perilla {l}: {s}. Usa las flechas o arrastra alrededor.'], { l, s })));
     m.setAttribute('aria-label', `${l} −`); p.setAttribute('aria-label', `${l} +`);
   }
 }
@@ -358,13 +310,13 @@ knobs.intensity = new Knob($('knobs'), 'intensity', ['BRIGHT', 'BRILLO'], ['more
   canvas.addEventListener('pointermove', (e) => {
     const p = pts.get(e.pointerId); if (!p) return;
     const r = canvas.getBoundingClientRect(), v = view();
-    if (pts.size === 1) { v.cx -= ((e.clientX - p[0]) / r.width) * v.fov; v.cy -= ((e.clientY - p[1]) / r.height) * v.fov; clampView(); dirty = true; S.idle = 0; }
+    if (pts.size === 1) { v.cx -= ((e.clientX - p[0]) / r.width) * v.fov; v.cy -= ((e.clientY - p[1]) / r.height) * v.fov; clampView(); dirty = true; K?.activity(); }
     pts.set(e.pointerId, [e.clientX, e.clientY]);
     if (pts.size === 2 && pinch) { const [a, b] = [...pts.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]); zoomBy(d / pinch); pinch = d; glow('lensZoom'); }
   });
   const up = (e) => { pts.delete(e.pointerId); if (pts.size < 2) pinch = null; };
   canvas.addEventListener('pointerup', up); canvas.addEventListener('pointercancel', up);
-  canvas.addEventListener('wheel', (e) => { e.preventDefault(); zoomBy(Math.pow(1.0015, -e.deltaY), world(e)); glow('lensZoom'); S.idle = 0; }, { passive: false });
+  canvas.addEventListener('wheel', (e) => { e.preventDefault(); zoomBy(Math.pow(1.0015, -e.deltaY), world(e)); glow('lensZoom'); K?.activity(); }, { passive: false });
   canvas.addEventListener('dblclick', (e) => { zoomBy(2, world(e)); glow('lensZoom'); });
 }
 
@@ -392,6 +344,9 @@ const QUESTS = [
     snap: () => { const v = view(), s = SPECIMENS[SP.graphene].si; if (v.fov > 5) return 'zoom'; return near(s[0], s[1], v.fov * 0.3) ? true : 'aim'; },
   },
 ].map((q) => ({ ...QT[q.id], ...q }));
+// missions brought by sample packs: find the target, zoom in and snap it
+for (const m of packMissions()) QUESTS.push({ ...m, target: () => m.target,
+  snap: () => { const v = view(); if (v.fov > m.maxFov) return 'zoom'; return near(m.target[0], m.target[1], Math.max(m.r ?? 0, v.fov * 0.3)) ? true : 'aim'; } });
 let qHold = 0;
 const current = () => QUESTS.find((q) => !S.done.has(q.id));
 function showQuest() {
@@ -400,10 +355,10 @@ function showQuest() {
   if (!q) { $('qTitle').textContent = tr(['🏆 Electron Explorer!', '🏆 ¡Explorador de Electrones!']); $('qText').innerHTML = tr(['You finished every mission. Explore anything you like, and fill your sticker book!', 'Completaste todas las misiones. ¡Explora lo que quieras y llena tu álbum de stickers!']); $('hintBtn').hidden = true; $('loadBtn').hidden = true; return; }
   $('qTitle').textContent = `${q.icon} ${tr(q.title)}`; $('qText').innerHTML = tr(q.text); $('hintBtn').hidden = false;
   const wrong = q.spec && SP[q.spec] !== S.si;
-  $('loadBtn').hidden = !wrong; if (wrong) { const t = SPECIMENS[SP[q.spec]]; $('loadBtn').textContent = `${t.icon} ${tr([`Load ${t.name[0].toLowerCase()}`, `Cargar ${t.name[1].toLowerCase()}`])}`; }
+  $('loadBtn').hidden = !wrong; if (wrong) { const t = SPECIMENS[SP[q.spec]]; $('loadBtn').textContent = `${t.icon} ${tr(msg(['Load: {name}', 'Cargar: {name}'], { name: t.name }))}`; }
 }
 function hint() {
-  const q = current(); S.idle = 0;
+  const q = current(); K?.activity();
   if (!q) { say(T.noMore); return; }
   if (q.id !== 'beam' && !S.beam) { say(T.beamFirstQuest, 'worry'); return; }
   if (q.spec && SP[q.spec] !== S.si) { say(needsSample(SPECIMENS[SP[q.spec]].name)); return; }
@@ -417,16 +372,16 @@ function hint() {
   else say(T.snapNow);
 }
 function complete(q, img, stars) {
-  S.done.add(q.id); fanfare();
+  S.done.add(q.id); fanfare(); K?.track('mission', q.id);
   $('wTitle').textContent = `${q.icon} ${tr(q.title)}`; $('wText').innerHTML = tr(q.win);
-  $('wImg').hidden = !img; if (img) { $('wImg').src = img; $('wImg').alt = tr([`Your picture for ${q.title[0]}`, `Tu foto para ${q.title[1]}`]); }
+  $('wImg').hidden = !img; if (img) { $('wImg').src = img; $('wImg').alt = tr(msg(['Your picture for {title}', 'Tu foto para {title}'], { title: q.title })); }
   $('wStars').textContent = stars ? '⭐'.repeat(stars) + '☆'.repeat(3 - stars) : '⭐⭐⭐';
   const cf = $('confetti'); cf.innerHTML = Array.from({ length: 40 }, (_, i) => `<i style="--x:${Math.random() * 100}%;--d:${(Math.random() * 0.8).toFixed(2)}s;--c:${['#ff6b9a', '#ffd23f', '#3b82f6', '#22c55e', '#8b5cf6', '#ff8a1f'][i % 6]};--r:${Math.random() * 360}deg"></i>`).join('');
   const nx = current(); $('winDlg').querySelector('.go').textContent = tr(nx ? ['Next mission ▶', 'Siguiente misión ▶'] : ['Keep exploring ▶', 'Sigue explorando ▶']);
   // a mission finished by a snap: the picture still goes into the sticker book first
-  $('winDlg').showModal(); if (img) say(cat(T.snapped, q.win), 'wow', [T.snapped, q.win]); else say(q.win, 'wow'); showQuest();
+  $('winDlg').showModal(); if (img) say(join(T.snapped, q.win), 'wow', [T.snapped, q.win]); else say(q.win, 'wow'); showQuest();
 }
-$('winDlg').addEventListener('close', () => { const q = current(); if (q) { say(cat(nextMission(q.title), q.text), 'happy', [nextMission(q.title), q.text]); if (q.spec && SP[q.spec] !== S.si) setSample(SP[q.spec], true); showQuest(); } });
+$('winDlg').addEventListener('close', () => { const q = current(); if (q) { say(join(nextMission(q.title), q.text), 'happy', [nextMission(q.title), q.text]); if (q.spec && SP[q.spec] !== S.si) setSample(SP[q.spec], true); showQuest(); } });
 
 function checkQuests(dt) {
   const q = current(); if (!q || !q.check) return;
@@ -435,32 +390,32 @@ function checkQuests(dt) {
 
 // ------------------------------------------------------------------ snapshots and the sticker book
 function snap() {
-  S.idle = 0;
+  K?.activity();
   if (!S.beam) { say(T.snapDark, 'worry'); tone(200, 0.2, 'square', 0.1); return; }
   noiseBurst(0.09, 3200, 0.6); setTimeout(() => noiseBurst(0.07, 2200, 0.4), 90);
   const f = $('flash'); f.classList.remove('on'); void f.offsetWidth; f.classList.add('on');
   const sh = sharpness(), v = vobj(), sp = spec();
   const cooked = S.burns[S.si].some((b) => b.amt > 0.3 && Math.hypot(b.x - v.cx, b.y - v.cy) < b.r);
   const stars = 1 + (sh > 0.8 ? 1 : 0) + (S.bright >= 0.3 && S.bright <= 0.75 && !cooked ? 1 : 0);
-  // a round sticker
-  const c = document.createElement('canvas'); c.width = c.height = 360; const g = c.getContext('2d');
-  g.beginPath(); g.arc(180, 180, 176, 0, TAU); g.clip(); g.drawImage(canvas, 0, 0, 360, 360);
-  g.lineWidth = 10; g.strokeStyle = '#fff'; g.stroke();
-  const img = c.toDataURL('image/png');
+  const img = pic.sticker();
   const mm = canvas.getBoundingClientRect().width * 0.2646 || 150;
-  S.snaps.push({ img, sp: sp.name, icon: sp.icon, what: sp.what(v), fov: v.fov, mag: (mm * 1e6) / v.fov, stars, n: S.snaps.length + 1 });
+  // the take-home code: enough to redraw this picture on sticker.html, nothing about the visitor
+  const code = encodeSnap({ sample: sp.id, cx: v.cx, cy: v.cy, fov: v.fov, err: S.focus - S.f0, bright: S.bright, pal: S.pal, stars, lang,
+    burns: S.burns[S.si].filter((b) => Math.hypot(b.x - v.cx, b.y - v.cy) < b.r + v.fov) });
+  const shot = { img, code, sp: sp.name, icon: sp.icon, what: sp.what(v), fov: v.fov, mag: (mm * 1e6) / v.fov, stars, n: S.snaps.length + 1 };
+  S.snaps.push(shot); K.snapped(shot);
   $('bookCount').textContent = S.snaps.length; $('bookBtn').classList.remove('bump'); void $('bookBtn').offsetWidth; $('bookBtn').classList.add('bump');
   const q = current();
   if (q?.snap && SP[q.spec] === S.si) {
     const r = q.snap();
-    if (r === true && sh < 0.6) { say(cat(T.snapped, T.snapBlurry), 'worry', [T.snapped, T.snapBlurry]); return; }
+    if (r === true && sh < 0.6) { say(join(T.snapped, T.snapBlurry), 'worry', [T.snapped, T.snapBlurry]); return; }
     if (r === true) { complete(q, img, stars); return; }
     const fb = r === 'zoom' ? T.snapZoom : T.snapAim;
-    say(cat(T.snapped, fb), 'happy', [T.snapped, fb]);
+    say(join(T.snapped, fb), 'happy', [T.snapped, fb]);
     return;
   }
   const tip = stars < 3 ? (sh <= 0.8 ? T.tipFocus : T.tipLight) : '';
-  say(cat('⭐'.repeat(stars), T.snapped, tip), 'happy', [T.snapped, tip]);
+  say(join('⭐'.repeat(stars), T.snapped, tip || null), 'happy', [T.snapped, tip]);
 }
 function openBook() {
   const box = $('stickers'); $('bookEmpty').hidden = S.snaps.length > 0;
@@ -496,7 +451,10 @@ $('hintBtn').addEventListener('click', hint);
 $('loadBtn').addEventListener('click', () => { const q = current(); if (q?.spec) setSample(SP[q.spec]); });
 document.querySelectorAll('[data-pal]').forEach((b) => b.addEventListener('click', () => setPal(b.dataset.pal)));
 $('soundBtn').addEventListener('click', () => { S.sound = !S.sound; $('soundBtn').setAttribute('aria-pressed', S.sound); if (!S.sound) { A.ctx?.suspend?.(); speechSynthesis?.cancel?.(); } else { audio(); A.ctx?.resume?.(); } });
-$('readBtn').addEventListener('click', () => { S.read = !S.read; $('readBtn').setAttribute('aria-pressed', S.read); if (S.read) say(last.msg, last.mood, last.parts); else Voice.stop(); });
+$('readBtn').addEventListener('click', () => { setRead(!S.read); if (S.read) say(last.msg, last.mood, last.parts); });
+// visitor options: the Aa button opens high contrast, bigger text and calm motion (kiosk.js applies them)
+$('a11yBtn').addEventListener('click', (e) => { const p = $('a11yPop'); p.hidden = !p.hidden; e.currentTarget.setAttribute('aria-expanded', !p.hidden); });
+addEventListener('pointerdown', (e) => { if (!e.target.closest('#a11yPop, #a11yBtn')) { $('a11yPop').hidden = true; $('a11yBtn').setAttribute('aria-expanded', false); } });
 // Zip's voice: a girl's or a boy's (each language has its own pair of recorded voices)
 function voiceLabel() {
   $('voiceIcon').textContent = S.voice === 'male' ? '👦' : '👧';
@@ -509,7 +467,7 @@ $('voiceBtn').addEventListener('click', () => {
 });
 document.querySelectorAll('[data-lang]').forEach((b) => b.addEventListener('click', () => setLang(b.dataset.lang)));
 onLang(() => {
-  Voice.stop(); samplesAndLadder(); voiceLabel(); showQuest(); con.onChange();
+  Voice.stop(); samplesAndLadder(); voiceLabel(); showQuest(); con.onChange(); K?.track('lang', lang);
   Object.values(knobs).forEach((k) => k.text());
   bubble.innerHTML = tr(last.msg); dirty = true;
 });
@@ -550,16 +508,33 @@ function damage(dt) {
   if (S.beam && S.bright < 0.2) nag('dark', T.dark, 'worry', 20000);
   if (S.beam && !sp.soft && S.bright > 0.88) nag('bright', T.bright, 'worry', 20000);
 }
-function kiosk(dt) {
-  if (!KIOSK) return;
-  S.idle += dt;
-  if (S.idle > 180) {
-    S.idle = 0; S.done.clear(); S.snaps = []; $('bookCount').textContent = 0; S.views = SPECIMENS.map((sp) => ({ ...sp.start })); S.burns = SPECIMENS.map(() => []); S.facts = SPECIMENS.map(() => new Set());
-    S.bright = 0.5; setBeam(false); setPal('color'); setSample(0, true); for (const d of document.querySelectorAll('dialog[open]')) d.close();
-    say(cat(HELLO, HELLO_START), 'happy', [HELLO, HELLO_START]);
-  }
+// a visit starts over (kiosk idle, or staff): everything back to how a new visitor finds it
+function resetVisit() {
+  S.done.clear(); S.snaps = []; $('bookCount').textContent = 0; S.views = SPECIMENS.map((sp) => ({ ...sp.start })); S.burns = SPECIMENS.map(() => []); S.facts = SPECIMENS.map(() => new Set());
+  S.bright = 0.5; S.focus = 0; S.hint = false; setBeam(false); setPal(settings.pal); setSample(0, true); qHold = 0;
+  if (K?.active) { setLang(settings.lang || lang, false); S.voice = settings.voice; voiceLabel(); setRead(settings.read); K.resetA11y(); }
+  Voice.stop(); $('takeHome').hidden = true; showQuest(); say(join(HELLO, HELLO_START), 'happy', [HELLO, HELLO_START]);
 }
-['pointerdown', 'keydown', 'wheel'].forEach((ev) => addEventListener(ev, () => (S.idle = 0), { passive: true }));
+function setRead(on) { S.read = !!on; $('readBtn').setAttribute('aria-pressed', S.read); if (!S.read) Voice.stop(); }
+function setVolume(x) { S.volume = Math.max(0, Math.min(1, x)); if (A.out) A.out.gain.value = 0.35 * S.volume; if (Voice.el) Voice.el.volume = S.volume; }
+
+// offline: ask the service worker (../sw.js) to keep every file this exhibit needs, with Zip's voice in the offered
+// languages, so the kiosk keeps working with the network unplugged
+async function precache(progress) {
+  const reg = await navigator.serviceWorker?.ready; if (!reg?.active) throw new Error(tr(['Offline storage is not available in this browser.', 'El almacenamiento sin conexión no está disponible en este navegador.']));
+  const here = new URL('.', location.href), urls = [here.href, ...[...document.querySelectorAll('script[src], link[rel=stylesheet][href], link[rel=icon][href]')].map((e) => e.src || e.href)];
+  const map = JSON.parse(document.querySelector('script[type=importmap]')?.textContent || '{"imports":{}}').imports; for (const v of Object.values(map)) urls.push(new URL(v, here).href);
+  for (const f of ['audio/manifest.json', 'sticker.html', 'packs/index.json']) urls.push(new URL(f, here).href);
+  const langs = K.offered();
+  for (const [id, f] of Object.entries(Voice.clips)) if (langs.includes(id.split('/')[0])) urls.push(new URL(`audio/${f}`, here).href);
+  urls.push(...packUrls().map((u) => new URL(u, here).href));
+  return new Promise((res, rej) => {
+    const ch = new MessageChannel();
+    ch.port1.onmessage = (e) => { if (e.data.error) rej(new Error(e.data.error)); else if (e.data.done === e.data.all) res(e.data.all); else progress?.(e.data.done, e.data.all); };
+    reg.active.postMessage({ type: 'precache', urls: [...new Set(urls)] }, [ch.port2]);
+  });
+}
+const packUrls = () => packList.cached.flatMap((p) => (p.on ? p.files : []));
 
 // ------------------------------------------------------------------ loop
 let t0 = performance.now();
@@ -569,11 +544,18 @@ export function step(dt) {
   if (S.joy[0] || S.joy[1]) stage(S.joy[0], S.joy[1], dt);
   damage(dt);
   if (dirty) drawSpecimen();
-  composite(); readouts(); column(dt); pointer(); checkQuests(dt); facts(); kiosk(dt);
+  composite(); readouts(); column(dt); pointer(); checkQuests(dt); facts(); K.tick(dt);
   if ($('consoleDlg').open) con.live($('cLive'));
 }
 function frame(t) { step(Math.min(0.1, (t - t0) / 1000)); t0 = t; requestAnimationFrame(frame); }
 export { S, SPECIMENS };
 applyStatic(); voiceLabel(); con.onChange(); say(HELLO);
-setSample(0, true); setPal('color'); showQuest();
+setSample(0, true); setPal(settings.pal); showQuest();
+K = initKiosk({
+  reset: resetVisit, greet: () => say(join(HELLO, HELLO_START), 'happy', [HELLO, HELLO_START]),
+  setLang: (l) => setLang(l, false), setVoice: (v) => { S.voice = v; voiceLabel(); }, setRead, setVolume, setPal,
+  missions: QUESTS.length, packList, precache,
+});
+// offline support (../sw.js); on localhost only for a kiosk or with ?sw, so it never hides a developer's edits
+if ('serviceWorker' in navigator && (K.active || !/^(localhost|127\.|\[::1\])/.test(location.hostname) || new URLSearchParams(location.search).has('sw'))) navigator.serviceWorker.register('../sw.js').catch(() => { /* optional */ });
 requestAnimationFrame(frame);

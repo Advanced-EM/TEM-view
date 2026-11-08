@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Museum guide</title>
+<meta name="description" content="How to run Electron Explorer as a museum kiosk: setup, offline use, the staff menu, sticker printing, visitor numbers, accessibility, sample packs and licensing.">
+<link rel="stylesheet" href="../fonts/fonts.css">
+<style>
+  :root { --ink: #1d2340; --muted: #5a6285; --line: #c9cfe6; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 16px/1.55 'Nunito', system-ui, sans-serif; color: var(--ink); background: #eef4ff; }
+  main { background: #fff; max-width: 900px; margin: 20px auto; padding: 32px 44px; border: 2px solid var(--ink); border-radius: 18px; }
+  h1 { font: 700 30px 'Fredoka', sans-serif; margin: 0 0 6px; } h2 { font: 700 21px 'Fredoka', sans-serif; margin: 30px 0 8px; padding-top: 10px; border-top: 2px dashed var(--line); }
+  .lede { color: var(--muted); font-size: 17px; }
+  table { border-collapse: collapse; width: 100%; font-size: 15px; } th, td { border: 1px solid var(--line); padding: 6px 10px; text-align: left; vertical-align: top; } th { background: #f4f7ff; }
+  pre { background: #f4f7ff; padding: 10px 12px; border-radius: 10px; overflow-x: auto; font-size: 13px; } code { background: #f4f7ff; padding: 0 4px; border-radius: 4px; }
+  .note { background: #fffbe6; border: 2px solid #f2d25c; border-radius: 12px; padding: 10px 14px; }
+  .muted { color: var(--muted); font-size: 14px; }
+  nav ol { columns: 2; }
+  @media (max-width: 700px) { main { padding: 20px; } nav ol { columns: 1; } }
+  @media print { body { background: #fff; } main { border: 0; margin: 0; padding: 0; max-width: none; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Electron Explorer in your museum</h1>
+  <p class="lede">A cartoon electron microscope for visitors aged 5 and up: they turn on the beam, focus, zoom from a pollen grain to single atoms, complete missions with Zip the electron, and take home a sticker of what they saw. Five languages with recorded voices; touch screen, keyboard, game controller or the TEM-view Console.</p>
+  <nav><ol>
+    <li><a href="#license">License</a></li><li><a href="#setup">Set up a kiosk</a></li><li><a href="#offline">Running offline</a></li><li><a href="#staff">The staff menu</a></li>
+    <li><a href="#stickers">Take-home stickers</a></li><li><a href="#numbers">Visitor numbers</a></li><li><a href="#access">Accessibility</a></li><li><a href="#languages">Languages and voices</a></li>
+    <li><a href="#packs">Your own samples</a></li><li><a href="#hardware">Hardware</a></li><li><a href="#updates">Updates</a></li>
+  </ol></nav>
+
+  <h2 id="license">License</h2>
+  <p>Electron Explorer is free to use online for education, at <a href="./">this address</a>. Installing it as a kiosk in a museum, science center or exhibition needs a license for each installation from Advanced-EM. To ask about one, <a href="https://github.com/Advanced-EM/TEM-view/issues">open an issue on GitHub</a>.</p>
+
+  <h2 id="setup">Set up a kiosk</h2>
+  <ol>
+    <li>Open the exhibit in Google Chrome or Microsoft Edge with <code>?kiosk</code> at the end of the address, and optionally a starting language:
+      <pre>https://advanced-em.github.io/TEM-view/kids/?kiosk&amp;lang=es</pre></li>
+    <li>Start the browser full screen, with printing that doesn't ask (for stickers) and without pinch zoom:
+      <pre># Windows (in a shortcut, or the Startup folder)
+"C:\Program Files\Google\Chrome\Application\chrome.exe" --kiosk --kiosk-printing --disable-pinch --overscroll-history-navigation=0 --noerrdialogs --disable-features=Translate "https://advanced-em.github.io/TEM-view/kids/?kiosk"
+
+# macOS
+open -a "Google Chrome" --args --kiosk --kiosk-printing --disable-pinch --overscroll-history-navigation=0 --noerrdialogs "https://advanced-em.github.io/TEM-view/kids/?kiosk"
+
+# Linux
+google-chrome --kiosk --kiosk-printing --disable-pinch --overscroll-history-navigation=0 --noerrdialogs "https://advanced-em.github.io/TEM-view/kids/?kiosk"</pre></li>
+    <li>Open the staff menu (below), <b>change the PIN</b>, and choose the languages, voice, volume and take-home options.</li>
+    <li>Press <i>Save everything for offline use</i> in the staff menu while the kiosk is online.</li>
+  </ol>
+  <p>In kiosk mode the exhibit hides links that leave it, the teacher notes and the footer, and blocks right-click, text selection and page zoom. When nobody has touched it for the reset time (3 minutes by default), it starts over behind an attract screen that invites visitors in, with a button for each language.</p>
+
+  <h2 id="offline">Running offline</h2>
+  <p>The exhibit, its fonts and Zip's voice are kept in the browser after <i>Save everything for offline use</i>, so the kiosk keeps working if the network drops. The QR code for take-home stickers needs the visitor's phone to be online, not the kiosk.</p>
+  <p>For a kiosk that is never online, copy the <code>TEM-view</code> folder to the computer and serve it locally, for example with Python, then open <code>http://localhost:8000/kids/?kiosk</code>:</p>
+  <pre>cd TEM-view
+python3 -m http.server 8000</pre>
+
+  <h2 id="staff">The staff menu</h2>
+  <p><b>Press and hold the Zip logo</b> at the top left for 3 seconds (or press <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>S</kbd>), then enter the PIN on the keypad. <b>The default PIN is 1933; change it on the first day.</b> Settings are kept in that browser.</p>
+  <table>
+    <tr><th>Setting</th><th>What it does</th></tr>
+    <tr><td>Kiosk mode</td><td>Kiosk mode on this computer, without <code>?kiosk</code> in the address.</td></tr>
+    <tr><td>Start over after</td><td>Idle time before the exhibit resets: 1 to 10 minutes.</td></tr>
+    <tr><td>Languages</td><td>The language visitors start in, and which languages are offered.</td></tr>
+    <tr><td>Zip's voice and sound</td><td>Girl or boy voice, whether <i>Read aloud</i> is on at the start, and the volume.</td></tr>
+    <tr><td>Picture and access</td><td>Default colors; high contrast, bigger text and calm motion by default.</td></tr>
+    <tr><td>Take-home sticker</td><td>Offer a printed sticker, a QR code, both or nothing; printer paper; stickers per visitor; the page the QR code opens.</td></tr>
+    <tr><td>Sample packs</td><td>Turn installed packs on or off.</td></tr>
+    <tr><td>Offline</td><td>Save every file, with the voices for the offered languages.</td></tr>
+    <tr><td>Visitor numbers</td><td>The last 14 days, CSV export, and clearing them.</td></tr>
+    <tr><td>PIN</td><td>A new PIN, 4 to 8 digits. <i>Factory settings</i> resets everything, including the PIN.</td></tr>
+  </table>
+
+  <h2 id="stickers">Take-home stickers</h2>
+  <p>After each picture, visitors see <b>Print my sticker</b> and <b>Take it home</b>.</p>
+  <ul>
+    <li><b>Printed sticker.</b> Set the printer as the computer's default, start Chrome with <code>--kiosk-printing</code> so it prints without a dialog, and choose the paper in the staff menu: 2-inch round labels (for example on a Brother QL or DYMO label printer), a 58 mm receipt roll (thermal receipt printer), or 4 × 6 inch photo paper. Limit the stickers per visitor to control paper use.</li>
+    <li><b>QR code.</b> A parent scans it with a phone; it opens a page that redraws the picture and lets them save or share it. The code holds only the picture's settings (sample, position, zoom, focus, brightness, colors, stars and language): no name, time, place or photo. If you add your own sample packs, host a copy of the exhibit online with them and put its sticker page address in the staff menu.</li>
+  </ul>
+
+  <h2 id="numbers">Visitor numbers</h2>
+  <p>In kiosk mode the exhibit counts, for each day: visits, time spent (average and in bands from under 30 seconds to over 10 minutes), missions completed, visitors who finished every mission, pictures, stickers printed, QR codes shown, languages, samples used, and use of the accessibility options. A visit starts when someone touches the attract screen and ends when the exhibit starts over.</p>
+  <p class="note"><b>Privacy.</b> The numbers are totals kept only on that computer, in the browser. Nothing is sent anywhere; there are no cookies, identifiers, names, photos or recordings. Online (not in kiosk mode) Electron Explorer counts nothing. This is designed to meet children's privacy rules such as COPPA and the GDPR, but check with your own privacy officer.</p>
+
+  <h2 id="access">Accessibility</h2>
+  <p>Built in: Zip's speech bubble works as captions for every spoken line; <i>Easier to see</i> offers high contrast, bigger text and calm motion (staff can make them the default); every control works from a keyboard, a game controller or the Console, as well as by touch; knobs have − and + buttons for visitors who cannot turn or drag; nothing has a time limit except the idle reset; and the page respects the system's reduced-motion setting.</p>
+  <p>For the installation, follow the <i>Smithsonian Guidelines for Accessible Exhibition Design</i> and your local accessibility standards (in the US, the 2010 ADA Standards):</p>
+  <ul>
+    <li>Put the touch screen and any Console within a forward reach of 15 to 48 inches (380 to 1220 mm) from the floor, and angle the screen so seated visitors and children can see it.</li>
+    <li>Leave knee space under the kiosk (about 27 inches, 685 mm, high and 30 inches, 760 mm, wide) so a wheelchair user can pull up.</li>
+    <li>Offer headphones with a volume limit or a directional speaker, and a printed label with the main instructions near the screen.</li>
+    <li>Avoid glare on the screen and keep the light even.</li>
+  </ul>
+
+  <h2 id="languages">Languages and voices</h2>
+  <p>The exhibit speaks English, Spanish, Brazilian Portuguese, French and German. Each has a girl's and a boy's voice for Zip, recorded with ElevenLabs; a line without a recording is read by the computer's own voice. The texts are in <code>kids/lines.js</code> and <code>kids/lang/</code>, and <code>tools/kids-i18n-check.mjs</code> lists anything untranslated. Another language can be added the same way.</p>
+
+  <h2 id="packs">Your own samples</h2>
+  <p>A <b>sample pack</b> adds a sample without code: a folder in <code>kids/packs/</code> with a <code>pack.json</code> and its images (SVG, PNG or JPEG, for instance real micrographs from your collection at three zooms), plus an entry in <code>kids/packs/index.json</code>. A pack can bring its own descriptions, "What's this?" answers and a mission, in each language. The example pack is a diatom, from the whole glass shell down to its 40-nanometre pores. The format is in <a href="https://github.com/Advanced-EM/TEM-view/blob/main/kids/packs/README.md">kids/packs/README.md</a>.</p>
+
+  <h2 id="hardware">Hardware</h2>
+  <table>
+    <tr><th>Part</th><th>Suggestion</th></tr>
+    <tr><td>Screen</td><td>A 21 to 32 inch touch screen; a sturdy, angled mount.</td></tr>
+    <tr><td>Computer</td><td>Any small PC or mini computer that runs a current Chrome or Edge.</td></tr>
+    <tr><td>Controls</td><td>The <a href="../console/">TEM-view Console</a> (in development), or a rugged game controller; or touch only.</td></tr>
+    <tr><td>Sound</td><td>Volume-limited headphones or a directional speaker.</td></tr>
+    <tr><td>Printer (optional)</td><td>A label printer with 2-inch round labels, or a 58 mm thermal receipt printer.</td></tr>
+  </table>
+
+  <h2 id="updates">Updates</h2>
+  <p>A kiosk that loads the online address gets updates on its own the next time it starts online. A local copy is updated by replacing the folder. Settings, PIN and visitor numbers are kept in the browser and survive updates; clearing the browser's data erases them, so export the visitor numbers first.</p>
+
+  <p class="muted"><a href="./">Electron Explorer</a> · <a href="educators/guide.html">Field-trip guide</a> · <a href="educators/worksheet.html">Worksheet</a> · <a href="../privacy.html">Privacy</a><br>Copyright © 2026 by Northwestern University. All Rights Reserved.</p>
+</main>
+</body>
+</html>
