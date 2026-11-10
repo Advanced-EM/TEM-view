@@ -1,6 +1,9 @@
 .DS_Store
 .claude/
 build/
+# but keep the vendored three.js core module (its dir is named build/)
+!vendor/three@0.160.0/build/
+!vendor/three@0.160.0/build/three.module.js
 __pycache__/
 node_modules/
 .wrangler/
