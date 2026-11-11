@@ -60,7 +60,7 @@ export function initKiosk(api) {
 
   // ---------------------------------------------------------------- idle reset and the attract screen
   const at = document.createElement('div'); at.id = 'attract'; at.className = 'attract'; at.hidden = true;
-  at.innerHTML = `<div class="atzip" aria-hidden="true">${document.querySelector('.zipmini')?.outerHTML ?? ''}</div><h1 id="atTitle"></h1><p id="atSub"></p><div class="atlangs" id="atLangs"></div><div class="atdots" aria-hidden="true">${'<i></i>'.repeat(14)}</div>`;
+  at.innerHTML = `<div class="atzip" aria-hidden="true">${document.querySelector('.zipmini')?.outerHTML ?? ''}</div><h1 id="atTitle"></h1><p id="atSub"></p><div class="atlangs" id="atLangs"></div><div class="atdots" aria-hidden="true">${'<i></i>'.repeat(14)}</div><p class="atcredit">Conceived and designed by Roberto dos Reis · © 2026 Northwestern University</p>`;
   document.body.appendChild(at);
   let atI = 0, atTimer = null;
   const offered = () => LANGS.filter((l) => settings.langs.includes(l));
