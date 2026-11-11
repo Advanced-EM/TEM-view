@@ -4,6 +4,10 @@
 
 **Live exhibit: https://advanced-em.github.io/TEM-view/**
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24124292.svg)](https://doi.org/10.5281/zenodo.24124292)
+
+**Cite:** dos Reis, R. (2026). *Seeing with Electrons (TEM-view): a physics-based transmission electron microscope simulator and digital twin.* Zenodo. https://doi.org/10.5281/zenodo.24124292 (see `CITATION.cff`; GitHub's "Cite this repository").
+
 An interactive transmission electron microscope in the browser, built as a small science-museum exhibit.
 
 - **3D cutaway column:** gun, condensers, scan coils, objective, apertures, projector, fluorescent screen, direct electron detector, ADF/BF detectors, EDS detector, EELS prism. The beam path reconfigures for each mode.
