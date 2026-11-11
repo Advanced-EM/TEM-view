@@ -281,6 +281,8 @@ body.kiosk input, body.kiosk textarea { -webkit-user-select: text; user-select: 
 .attract { position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; text-align: center; padding: 24px;
   background: radial-gradient(circle at 50% 40%, #3a3f8f, #1d2340 70%); color: #fff; cursor: pointer; overflow: hidden; }
 .attract[hidden] { display: none; }
+/* the kiosk hides the page footer, so the credit sits on the attract screen */
+.attract .atcredit { position: absolute; bottom: 14px; left: 0; right: 0; font-size: clamp(0.75rem, 1.4vw, 0.95rem); font-weight: 600; color: #cfe3ffb3; }
 .attract .atzip svg { width: min(38vmin, 300px); height: auto; animation: wave 1.6s ease-in-out infinite; filter: drop-shadow(0 10px 0 #0006); }
 .attract h1 { font: 700 clamp(2rem, 6vw, 4.2rem)/1.1 'Fredoka', sans-serif; margin: 0; text-shadow: 0 4px 0 #0007; animation: pop .5s ease-out; }
 .attract p { font-size: clamp(1.1rem, 2.6vw, 1.7rem); margin: 0; color: #cfe3ff; font-weight: 700; }
