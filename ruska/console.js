@@ -1,5 +1,5 @@
 // The TEM-view Console (or any game controller) on Ruska's instrument. Same USB protocol as the main exhibit
-// (hardware/panel/README.md): a HID joystick named "TEM-view Panel/Console", 8 axes, 16 buttons; axes 0–1 are the
+// (the Console protocol): a HID joystick named "TEM-view Panel/Console", 8 axes, 16 buttons; axes 0–1 are the
 // stage joystick, axes 2–7 encoders sent as wrapping 16-bit counters. The knobs keep their roles, mapped to 1933:
 //   focus → objective (fine / coarse with the focus push), magnification → projector, intensity → condenser
 //   (discharge current on the 1931 tube), context → high voltage, multifunction → hand magnet or discharge,
@@ -124,7 +124,7 @@ export class Console {
       <li>${T(['Arrows', 'Pfeiltasten'])}: ${T(['stage', 'Objekt verschieben'])}</li><li><kbd>,</kbd>/<kbd>.</kbd> ${T(['intermediate / final screen', 'Zwischen- / Endbildschirm'])}</li>
       <li><kbd>B</kbd> ${T(['pumps', 'Pumpen'])} · <kbd>Space</kbd> ${T(['discharge', 'Entladung'])}</li><li><kbd>I</kbd> ${T(['expose a plate', 'Platte belichten'])} · <kbd>G</kbd> ${T(['hint', 'Hinweis'])}</li></ul>
       <p class="muted">${T(['Shift turns a knob five detents at a time.', 'Mit Umschalt dreht ein Knopf fünf Rasten auf einmal.'])}</p>`;
-    const link = `<p>${T(['The TEM-view Console', 'Die TEM-view Console'])}: ${T(['the physical panel, in development for Kickstarter. Protocol and firmware:', 'das Bedienpult zum Anfassen, in Entwicklung für Kickstarter. Protokoll und Firmware:'])} <a href="https://github.com/Advanced-EM/TEM-view/tree/main/hardware/panel">hardware/panel</a>.</p>`;
+    const link = `<p>${T(['The TEM-view Console', 'Die TEM-view Console'])}: ${T(['a physical control panel, in development.', 'ein Bedienpult zum Anfassen, in Entwicklung.'])}</p>`;
     if (!gp) {
       el.innerHTML = `<p class="eyebrow">${T(['TEM-view Console', 'TEM-view Console'])}</p><h2 id="cTitle">${T(['Connect the <em>Console</em>', 'Die <em>Konsole</em> verbinden'])}</h2>
         <p>${T(['Plug in a TEM-view Console, a TEM-view panel or any game controller over USB or Bluetooth, then <b>press one of its buttons</b>: browsers only reveal a controller after it has been used. No drivers are needed.', 'Schließen Sie eine TEM-view Console, ein TEM-view-Pult oder einen beliebigen Gamecontroller über USB oder Bluetooth an und <b>drücken Sie eine Taste</b>: Browser zeigen einen Controller erst, wenn er benutzt wurde. Treiber sind nicht nötig.'])}</p>

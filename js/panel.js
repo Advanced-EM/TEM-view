@@ -1,6 +1,6 @@
 // Hardware control panel support (and ordinary game controllers as a stand-in).
 //
-// Protocol of the TEM-view panel (see hardware/panel/README.md): a USB HID joystick named "TEM-view Panel"
+// Protocol of the TEM-view panel: a USB HID joystick named "TEM-view Panel"
 // with 8 axes and 16 buttons. Axes 0–1 are the stage joystick (absolute); axes 2–7 are rotary encoders sent as
 // 16-bit wrapping counters, so the browser reads how far each knob turned since the last poll. Any browser
 // with the Gamepad API works, without drivers.
@@ -258,7 +258,7 @@ export class Panel {
     if (!gp) {
       el.innerHTML = `<p class="eyebrow">Control panel</p><h2>Connect a <em>panel</em>, or use the keyboard</h2>${vbtns}
         <p>Plug in a TEM-view panel or any game controller over USB or Bluetooth, then <b>press one of its buttons</b>: browsers only reveal a controller after it has been used.</p>
-        <p class="muted">The panel is a USB joystick ("TEM-view Panel", 8 axes, 16 buttons). Its reference firmware and wiring are in the repository under <code>hardware/panel</code>.</p>`;
+        <p class="muted">The panel is a USB joystick ("TEM-view Panel", 8 axes, 16 buttons).</p>`;
       wireV();
       return;
     }
