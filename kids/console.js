@@ -1,5 +1,5 @@
 // The TEM-view Console (or any game controller, or the keyboard) on the kids' microscope. Same USB protocol as
-// the main exhibit (hardware/panel/README.md): a HID joystick named "TEM-view Panel/Console", 8 axes, 16 buttons;
+// the main exhibit (js/panel.js): a HID joystick named "TEM-view Panel/Console", 8 axes, 16 buttons;
 // axes 0–1 are the stage joystick, axes 2–7 encoders sent as wrapping 16-bit counters. Kept to the basics:
 //   focus → focus (fine / coarse with the focus push), magnification → zoom, intensity → brightness,
 //   joystick and multifunction knobs → move the sample, MODE ◀ ▶ → sample, BEAM → beam on/off, ACQUIRE → snap.
