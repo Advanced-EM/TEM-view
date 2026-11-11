@@ -1,0 +1,29 @@
+cff-version: 1.2.0
+message: >-
+  If you use TEM-view (Seeing with Electrons) in teaching, outreach or research, please cite it as below.
+  Software copyright © 2026 by Northwestern University. All Rights Reserved.
+title: "Seeing with Electrons (TEM-view): a physics-based transmission electron microscope simulator and digital twin"
+type: software
+authors:
+  - family-names: dos Reis
+    given-names: Roberto
+    orcid: "https://orcid.org/0000-0002-6011-6078"
+    affiliation: Northwestern University
+repository-code: "https://github.com/Advanced-EM/TEM-view"
+url: "https://advanced-em.github.io/TEM-view/"
+abstract: >-
+  Interactive exhibits that let anyone operate an electron microscope in a web browser: TEM-view, a
+  physics-based simulator of transmission electron microscopy (TEM, STEM, 4D-STEM, diffraction,
+  spectroscopy, holography and Lorentz modes) that also serves as a digital twin; Ruska 1933 and
+  Scanning 1938–2002, historical instruments; and TEM-view Kids (Electron Explorer), a K-12 and museum
+  version.
+keywords:
+  - transmission electron microscopy
+  - electron microscopy simulation
+  - digital twin
+  - STEM
+  - 4D-STEM
+  - science education
+  - museum exhibit
+version: 1.0.0
+date-released: "2026-11-10"
