@@ -4,6 +4,14 @@ message: >-
   Software copyright © 2026 by Northwestern University. All Rights Reserved.
 title: "Seeing with Electrons (TEM-view): a physics-based transmission electron microscope simulator and digital twin"
 type: software
+doi: 10.5281/zenodo.24124292
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.24124292
+    description: Concept DOI (all versions; resolves to the latest)
+  - type: doi
+    value: 10.5281/zenodo.24124293
+    description: Version 1.0.0
 authors:
   - family-names: dos Reis
     given-names: Roberto
