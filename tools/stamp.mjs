@@ -19,7 +19,7 @@ writeFileSync(new URL('index.html', root), html);
 // path), including the language files in kids/lang/
 const kmods = [...readdirSync(new URL('kids/', root)).filter((f) => f.endsWith('.js')), ...readdirSync(new URL('kids/lang/', root)).filter((f) => f.endsWith('.js')).map((f) => `lang/${f}`)].sort();
 const kmap = `<script type="importmap">\n${JSON.stringify({ imports: Object.fromEntries(kmods.map((f) => [`./${f}`, `./${f}?v=${v}`])) }, null, 1)}\n</script>`;
-for (const [page, entry] of [['index.html', 'main.js'], ['sticker.html', 'sticker.js']]) {
+for (const [page, entry] of [['index.html', 'main.js'], ['sticker.html', 'sticker.js'], ['report.html', 'report.js']]) {
   let kids = readFileSync(new URL(`kids/${page}`, root), 'utf8');
   const re = new RegExp(`<script type="module" src="${entry.replace('.', '\\.')}`);
   kids = /<script type="importmap">[\s\S]*?<\/script>/.test(kids) ? kids.replace(/<script type="importmap">[\s\S]*?<\/script>/, kmap)

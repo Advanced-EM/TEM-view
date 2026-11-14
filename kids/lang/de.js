@@ -37,6 +37,7 @@ export default {
     stNote: 'Dieses Bild wurde auf deinem Handy aus ein paar Zahlen in der Adresse neu gezeichnet. Über dich wurde nichts gespeichert.',
   },
   strings: {
+    'Name of this kiosk (shown on reports)': 'Name dieses Kiosks (steht in den Berichten)', 'Open the report': 'Bericht öffnen', 'Export data (JSON)': 'Daten exportieren (JSON)',
     '2-inch round labels': 'Runde Etiketten, 5 cm', '4 × 6 inch photo paper': 'Fotopapier 10 × 15 cm', '58 mm receipt roll': 'Bonrolle, 58 mm',
     '<b>Brightness lens (yellow).</b> It squeezes the beam onto a small spot, like a magnifying glass in the sun. More squeeze means brighter, but too much can cook soft samples! 🔥': '<b>Linse für das Licht (gelb).</b> Sie drückt den Strahl auf einen kleinen Punkt zusammen, wie eine Lupe in der Sonne. Mehr Drücken heißt heller, aber zu viel kann weiche Proben verbrennen! 🔥',
     "<b>Electron gun.</b> It shoots out electrons, tiny bits of electricity much smaller than atoms. Like a flashlight, but with electrons instead of light. That's me! ⚡": '<b>Elektronenkanone.</b> Sie schießt Elektronen heraus, winzige Stückchen Elektrizität, viel kleiner als Atome. Wie eine Taschenlampe, aber mit Elektronen statt Licht. Das bin ich! ⚡',

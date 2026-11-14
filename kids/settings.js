@@ -15,6 +15,7 @@ export const DEFAULTS = {
   printMax: 3,           // stickers one visitor may print
   stickerUrl: 'https://advanced-em.github.io/TEM-view/kids/sticker.html',
   packs: null,           // enabled sample packs (null = the packs marked default)
+  site: '',              // name of this kiosk, shown on visitor reports (report.html)
 };
 const KEY = 'kids-kiosk';
 let cur;

@@ -10,13 +10,11 @@
 import { tr, trIn, msg, lang, LANGS, LANG_NAMES } from './i18n.js';
 import { settings, saveSettings, kioskMode, DEFAULTS } from './settings.js';
 import { drawQR } from './qr.js';
+import { STATS, BINS, csv, exportJson, download } from './visits.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (t) => String(t).replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' })[c]);
 const day = (t = Date.now()) => { const d = new Date(t); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
-const STATS = 'kids-stats';
-const BINS = [30, 60, 120, 300, 600, Infinity]; // dwell-time bins, seconds
-const BIN_NAMES = ['<30 s', '30–60 s', '1–2 min', '2–5 min', '5–10 min', '>10 min'];
 
 const ATTRACT = [['Touch the screen to explore!', '¡Toca la pantalla para explorar!'], ['Zoom into pollen, viruses and real atoms', 'Haz zoom en polen, virus y átomos de verdad']];
 
@@ -40,22 +38,37 @@ export function initKiosk(api) {
   // ---------------------------------------------------------------- visitor numbers (kiosk only, this device only)
   const loadStats = () => { try { return JSON.parse(localStorage.getItem(STATS) || '{"days":{}}'); } catch { return { days: {} }; } };
   const saveStats = (s) => { try { localStorage.setItem(STATS, JSON.stringify(s)); } catch { /* full or private */ } };
-  function startSession() { if (active) session = { start: Date.now(), last: Date.now(), missions: new Set(), snaps: 0, prints: 0, qr: 0, samples: new Set(), langs: new Set([lang]), a11y: false }; }
+  // one visit: from a touch on the attract screen until the exhibit starts over. Each counter is a number of
+  // things done or a set of names; a visit ends up as one more count in that day's totals, never stored on its own.
+  function startSession() {
+    if (active) session = { start: Date.now(), last: Date.now(), missions: new Set(), reached: new Set(), snaps: 0, prints: 0, qr: 0, hints: 0, whats: 0, parts: 0, cooked: 0,
+      beam: false, read: false, samples: new Set(), langs: new Set([lang]), a11y: new Set(), inputs: new Set() };
+  }
+  const emptyDay = () => ({ sessions: 0, dwell: 0, bins: BINS.map(() => 0), hours: Array(24).fill(0), missions: {}, reached: {}, allMissions: 0, engaged: 0, beam: 0,
+    snaps: 0, prints: 0, qr: 0, hints: 0, whats: 0, parts: 0, cooked: 0, read: 0, langs: {}, samples: {}, a11y: 0, a11yOpts: {}, inputs: {} });
+  const add = (o, k, n = 1) => { o[k] = (o[k] ?? 0) + n; };
   function endSession() {
     const s = session; session = null; if (!s) return;
     const dwell = Math.round((s.last - s.start) / 1000); if (dwell < 3 && !s.snaps) return; // a passer-by's bump
-    const st = loadStats(), d = (st.days[day(s.start)] ||= { sessions: 0, dwell: 0, bins: BINS.map(() => 0), missions: {}, allMissions: 0, snaps: 0, prints: 0, qr: 0, langs: {}, samples: {}, a11y: 0 });
-    d.sessions++; d.dwell += dwell; d.bins[BINS.findIndex((b) => dwell < b)]++;
-    s.missions.forEach((m) => (d.missions[m] = (d.missions[m] ?? 0) + 1)); if (s.missions.size >= api.missions) d.allMissions++;
-    d.snaps += s.snaps; d.prints += s.prints; d.qr += s.qr; d.a11y += s.a11y ? 1 : 0;
-    s.langs.forEach((l) => (d.langs[l] = (d.langs[l] ?? 0) + 1)); s.samples.forEach((x) => (d.samples[x] = (d.samples[x] ?? 0) + 1));
-    saveStats(st);
+    const st = loadStats(), d = { ...emptyDay(), ...(st.days[day(s.start)] ?? {}) };
+    d.hours ??= Array(24).fill(0); d.reached ??= {}; d.a11yOpts ??= {}; d.inputs ??= {};
+    d.sessions++; d.dwell += dwell; d.bins[BINS.findIndex((b) => dwell < b)]++; d.hours[new Date(s.start).getHours()]++;
+    s.missions.forEach((m) => add(d.missions, m)); s.reached.forEach((m) => add(d.reached, m)); if (s.missions.size >= api.missions) d.allMissions++;
+    if (dwell >= 30 || s.missions.size > 0) d.engaged++; // engaged: stayed half a minute, or finished a mission
+    for (const k of ['snaps', 'prints', 'qr', 'hints', 'whats', 'parts', 'cooked']) d[k] += s[k];
+    d.beam += s.beam ? 1 : 0; d.read += s.read ? 1 : 0; d.a11y += s.a11y.size ? 1 : 0;
+    s.a11y.forEach((k) => add(d.a11yOpts, k)); s.inputs.forEach((k) => add(d.inputs, k));
+    s.langs.forEach((l) => add(d.langs, l)); s.samples.forEach((x) => add(d.samples, x));
+    st.days[day(s.start)] = d; saveStats(st);
   }
   function track(type, v) {
     if (!session) return;
-    if (type === 'mission') session.missions.add(v); else if (type === 'sample') session.samples.add(v); else if (type === 'lang') session.langs.add(v);
-    else if (type === 'a11y') session.a11y = true; else if (type in session) session[type]++;
+    if (type === 'mission') session.missions.add(v); else if (type === 'reach') session.reached.add(v); else if (type === 'sample') session.samples.add(v);
+    else if (type === 'lang') session.langs.add(v); else if (type === 'a11y') session.a11y.add(v); else if (type === 'input') { if (v) session.inputs.add(v); }
+    else if (type === 'beam' || type === 'read') session[type] = true; else if (type in session) session[type]++;
   }
+  // how visitors drive it: touch, mouse, keyboard or a game controller / the Console (main.js reports the last two)
+  addEventListener('pointerdown', (e) => track('input', e.pointerType === 'touch' || e.pointerType === 'pen' ? 'touch' : 'mouse'), { passive: true, capture: true });
   addEventListener('pagehide', endSession);
 
   // ---------------------------------------------------------------- idle reset and the attract screen
@@ -100,7 +113,7 @@ export function initKiosk(api) {
   try { if (!active) a11y = { ...a11y, ...JSON.parse(localStorage.getItem('kids-a11y') || '{}') }; } catch { /* default */ }
   applyA11y(a11y);
   document.querySelectorAll('[data-a11y]').forEach((b) => b.addEventListener('click', () => {
-    a11y[b.dataset.a11y] = !a11y[b.dataset.a11y]; applyA11y(a11y); track('a11y');
+    a11y[b.dataset.a11y] = !a11y[b.dataset.a11y]; applyA11y(a11y); if (a11y[b.dataset.a11y]) track('a11y', b.dataset.a11y);
     if (!active) try { localStorage.setItem('kids-a11y', JSON.stringify(a11y)); } catch { /* private */ }
   }));
 
@@ -162,12 +175,8 @@ export function initKiosk(api) {
       <div class="tscroll"><table class="stats"><tr><th>${L(['Day', 'Día'])}</th><th>${L(['Visits', 'Visitas'])}</th><th>${L(['Avg stay', 'Estancia media'])}</th><th>${L(['Missions', 'Misiones'])}</th><th>${L(['All done', 'Todas'])}</th><th>${L(['Snaps', 'Fotos'])}</th><th>${L(['Printed', 'Impresas'])}</th><th>QR</th><th>${L(['Languages', 'Idiomas'])}</th></tr>
       ${days.slice(0, 14).map((k) => row(k, st.days[k])).join('')}</table></div>`;
   }
-  function exportCsv() {
-    const st = loadStats(), head = ['day', 'visits', 'total_seconds', ...BIN_NAMES.map((b) => `stay ${b}`), 'missions_completed', 'all_missions', 'snaps', 'stickers_printed', 'qr_shown', 'accessibility_used', 'languages', 'samples'];
-    const rows = Object.keys(st.days).sort().map((k) => { const d = st.days[k]; return [k, d.sessions, d.dwell, ...d.bins, Object.values(d.missions).reduce((a, b) => a + b, 0), d.allMissions, d.snaps, d.prints, d.qr, d.a11y, Object.entries(d.langs).map((e) => e.join(':')).join(' '), Object.entries(d.samples).map((e) => e.join(':')).join(' ')].join(','); });
-    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([[head.join(','), ...rows].join('\n')], { type: 'text/csv' }));
-    a.download = `electron-explorer-visits-${day()}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-  }
+  const exportCsv = () => download(`electron-explorer-visits-${day()}.csv`, csv(loadStats().days), 'text/csv');
+  const exportData = () => download(`electron-explorer-visits-${day()}.json`, exportJson(loadStats().days, settings.site), 'application/json');
   async function openStaff() {
     const s = settings, packs = await api.packList();
     const opt = (v, cur, label) => `<option value="${v}" ${String(v) === String(cur) ? 'selected' : ''}>${esc(label)}</option>`;
@@ -195,10 +204,12 @@ export function initKiosk(api) {
         <p class="muted">${L(['Add a pack in kids/packs/ (see the museum guide); changes apply after Save.', 'Añade un paquete en kids/packs/ (ver la guía para museos); los cambios se aplican al guardar.'])}</p></section>
       <section><h3>${L(['Offline', 'Sin conexión'])}</h3><p class="srow"><button type="button" class="chip" id="sOffline">${L(['Save everything for offline use', 'Guardar todo para usar sin conexión'])}</button> <span id="sOffMsg" class="muted"></span></p></section>
       <section><h3>${L(['Visitor numbers (this device only)', 'Visitas (solo este equipo)'])}</h3>${statsTable()}
-        <p class="srow"><button type="button" class="chip" id="sCsv">${L(['Export CSV', 'Exportar CSV'])}</button> <button type="button" class="chip" id="sClear">${L(['Clear numbers', 'Borrar números'])}</button></p></section>
+        <label class="srow">${L(['Name of this kiosk (shown on reports)', 'Nombre de este quiosco (aparece en los informes)'])} <input type="text" data-s="site" maxlength="60" value="${esc(s.site ?? '')}"></label>
+        <p class="srow"><button type="button" class="chip" id="sReport">📊 ${L(['Open the report', 'Abrir el informe'])}</button> <button type="button" class="chip" id="sCsv">${L(['Export CSV', 'Exportar CSV'])}</button> <button type="button" class="chip" id="sJson">${L(['Export data (JSON)', 'Exportar datos (JSON)'])}</button> <button type="button" class="chip" id="sClear">${L(['Clear numbers', 'Borrar números'])}</button></p></section>
       <section><h3>PIN</h3><label class="srow">${L(['New PIN (digits)', 'Nuevo PIN (dígitos)'])} <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="8" id="sPin" placeholder="••••"></label></section>
       <p class="srow sbtns"><button type="button" class="cb" id="sRestart">${L(['Start over now', 'Empezar de nuevo ahora'])}</button><button type="button" class="cb snap" id="sSave">${L(['Save', 'Guardar'])}</button><button type="button" class="cb" id="sDefaults">${L(['Factory settings', 'Ajustes de fábrica'])}</button></p>`;
-    $('sCsv').onclick = exportCsv;
+    $('sCsv').onclick = exportCsv; $('sJson').onclick = exportData;
+    $('sReport').onclick = () => { endSession(); location.href = `report.html${active ? '?kiosk' : ''}`; };
     $('sClear').onclick = () => { if (confirm(tr(['Clear all visitor numbers on this device?', '¿Borrar todos los números de visitas de este equipo?']))) { saveStats({ days: {} }); openStaff(); } };
     $('sRestart').onclick = () => { $('staffDlg').close(); restart(); };
     $('sDefaults').onclick = () => { if (confirm(tr(['Reset every setting, including the PIN?', '¿Restablecer todos los ajustes, incluido el PIN?']))) { saveSettings({ ...DEFAULTS }); location.reload(); } };

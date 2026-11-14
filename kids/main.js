@@ -207,7 +207,7 @@ function clampView() { const v = view(), B = spec().bound; v.cx = clamp(v.cx, -B
 function stage(vx, vy, dt) { const v = view(); v.cx += vx * v.fov * 0.6 * dt; v.cy += vy * v.fov * 0.6 * dt; clampView(); dirty = true; K?.activity(); }
 
 function setBeam(on) {
-  if (S.beam === on) return; S.beam = on; K?.activity();
+  if (S.beam === on) return; S.beam = on; K?.activity(); if (on) K?.track('beam');
   $('beamBtn').setAttribute('aria-pressed', on); $('sleep').hidden = on;
   if (on) { tone(180, 0.35, 'sawtooth', 0.12, 0, 4); noiseBurst(0.3, 900, 0.2); } else tone(500, 0.3, 'sine', 0.15, 0, 0.3);
 }
@@ -227,6 +227,7 @@ function setPal(p) { S.pal = p; document.querySelectorAll('[data-pal]').forEach(
 const PALS = ['color', 'mono', 'green'];
 
 function whatsThis() {
+  K?.track('whats');
   if (!S.beam) { say(T.beamOffWhat, 'worry'); return; }
   const v = vobj(), th = thing(v.fov), l = lookingAt(spec().what(v)), n = Math.max(1, Math.round(v.fov / th.size));
   say(join(l, msg(['The screen is {w} wide: that\'s about {n} × {one}.', 'La pantalla mide {w} de ancho: como {n} × {one}.'], { w: fmtLen(v.fov), n, one: th.one })), 'wow', [l]);
@@ -239,7 +240,10 @@ function focusHelp() {
 }
 
 const consoleApi = {
-  turn, stage, say: (m) => say(T[m] ?? m),
+  // the visitor numbers note whether the Console (or a game controller) or the keyboard is in use
+  turn: (axis, n, fine) => { K?.track('input', con.source); turn(axis, n, fine); },
+  stage: (vx, vy, dt) => { K?.track('input', con.source); stage(vx, vy, dt); },
+  say: (m) => say(T[m] ?? m),
   button(k) {
     K?.activity();
     if (k === 'pause') setBeam(!S.beam);
@@ -351,6 +355,7 @@ let qHold = 0;
 const current = () => QUESTS.find((q) => !S.done.has(q.id));
 function showQuest() {
   const q = current();
+  if (q) K?.track('reach', q.id); // how far visitors get through the missions
   $('badges').innerHTML = QUESTS.map((x) => `<span class="${S.done.has(x.id) ? 'got' : x === q ? 'now' : ''}" title="${tr(x.title)}">${S.done.has(x.id) ? x.icon : x === q ? '❓' : '•'}</span>`).join('');
   if (!q) { $('qTitle').textContent = tr(['🏆 Electron Explorer!', '🏆 ¡Explorador de Electrones!']); $('qText').innerHTML = tr(['You finished every mission. Explore anything you like, and fill your sticker book!', 'Completaste todas las misiones. ¡Explora lo que quieras y llena tu álbum de stickers!']); $('hintBtn').hidden = true; $('loadBtn').hidden = true; return; }
   $('qTitle').textContent = `${q.icon} ${tr(q.title)}`; $('qText').innerHTML = tr(q.text); $('hintBtn').hidden = false;
@@ -358,6 +363,7 @@ function showQuest() {
   $('loadBtn').hidden = !wrong; if (wrong) { const t = SPECIMENS[SP[q.spec]]; $('loadBtn').textContent = `${t.icon} ${tr(msg(['Load: {name}', 'Cargar: {name}'], { name: t.name }))}`; }
 }
 function hint() {
+  K?.track('hints');
   const q = current(); K?.activity();
   if (!q) { say(T.noMore); return; }
   if (q.id !== 'beam' && !S.beam) { say(T.beamFirstQuest, 'worry'); return; }
@@ -472,7 +478,7 @@ onLang(() => {
   bubble.innerHTML = tr(last.msg); dirty = true;
 });
 document.querySelectorAll('#column .part').forEach((p) => {
-  const go = () => { say(PARTS[p.dataset.part], 'wow'); p.classList.add('hot'); setTimeout(() => p.classList.remove('hot'), 600); tone(660, 0.08, 'triangle', 0.15); };
+  const go = () => { K?.track('parts'); say(PARTS[p.dataset.part], 'wow'); p.classList.add('hot'); setTimeout(() => p.classList.remove('hot'), 600); tone(660, 0.08, 'triangle', 0.15); };
   p.addEventListener('click', go); p.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
 });
 
@@ -501,7 +507,7 @@ function damage(dt) {
     let b = list.find((q) => Math.hypot(q.x - v.cx, q.y - v.cy) < r * 0.4 && q.r / r > 0.6 && q.r / r < 1.6);
     if (!b) { b = { x: v.cx, y: v.cy, r, amt: 0, seed: (Math.random() * 1e9) | 0 }; list.push(b); if (list.length > 60) list.shift(); }
     b.amt = Math.min(1, b.amt + rate * dt); dirty = true;
-    if (b.amt > 0.65) nag('cooked', T.cooked, 'worry', 15000);
+    if (b.amt > 0.65) { if (!b.counted) { b.counted = true; K?.track('cooked'); } nag('cooked', T.cooked, 'worry', 15000); }
     else if (b.amt > 0.15) nag('toasty', T.toasty, 'worry', 15000);
   }
   if (A.sizzle && A.ctx) A.sizzle.gain.setTargetAtTime(rate * 0.12, A.ctx.currentTime, 0.1);
@@ -515,7 +521,7 @@ function resetVisit() {
   if (K?.active) { setLang(settings.lang || lang, false); S.voice = settings.voice; voiceLabel(); setRead(settings.read); K.resetA11y(); }
   Voice.stop(); $('takeHome').hidden = true; showQuest(); say(join(HELLO, HELLO_START), 'happy', [HELLO, HELLO_START]);
 }
-function setRead(on) { S.read = !!on; $('readBtn').setAttribute('aria-pressed', S.read); if (!S.read) Voice.stop(); }
+function setRead(on) { S.read = !!on; if (S.read) K?.track('read'); $('readBtn').setAttribute('aria-pressed', S.read); if (!S.read) Voice.stop(); }
 function setVolume(x) { S.volume = Math.max(0, Math.min(1, x)); if (A.out) A.out.gain.value = 0.35 * S.volume; if (Voice.el) Voice.el.volume = S.volume; }
 
 // offline: ask the service worker (../sw.js) to keep every file this exhibit needs, with Zip's voice in the offered
@@ -552,7 +558,7 @@ export { S, SPECIMENS };
 applyStatic(); voiceLabel(); con.onChange(); say(HELLO);
 setSample(0, true); setPal(settings.pal); showQuest();
 K = initKiosk({
-  reset: resetVisit, greet: () => say(join(HELLO, HELLO_START), 'happy', [HELLO, HELLO_START]),
+  reset: resetVisit, greet: () => { showQuest(); say(join(HELLO, HELLO_START), 'happy', [HELLO, HELLO_START]); },
   setLang: (l) => setLang(l, false), setVoice: (v) => { S.voice = v; voiceLabel(); }, setRead, setVolume, setPal,
   missions: QUESTS.length, packList, precache,
 });

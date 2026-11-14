@@ -53,7 +53,7 @@ export class Console {
     if (arrows[k]) { const [x, y] = arrows[k]; if (x) this.keyStage[0] = down ? x : 0; if (y) this.keyStage[1] = down ? y : 0; e.preventDefault(); return; }
     if (!down || e.repeat && typeof KEYS[k] === 'string' || !(k in KEYS)) return;
     if (k === ' ' && t?.closest?.('button, a')) return;
-    const a = KEYS[k]; e.preventDefault();
+    const a = KEYS[k]; e.preventDefault(); this.source = 'keyboard';
     if (Array.isArray(a)) this.acc[a[0]] = (this.acc[a[0]] ?? 0) + a[1] * (e.shiftKey ? 5 : 1);
     else this.button(a);
   }
@@ -70,7 +70,7 @@ export class Console {
       const dz = (v) => (Math.abs(v) < 0.12 ? 0 : (v - Math.sign(v) * 0.12) / 0.88);
       const pressed = (k) => { const i = M.buttons[k]; return i != null && bt[i] > 0.5 && !(this.prevButtons[i] > 0.5); };
       const held = (k) => { const i = M.buttons[k]; return i != null ? bt[i] ?? 0 : 0; };
-      const add = (k, v) => { if (v) this.acc[k] = (this.acc[k] ?? 0) + v; };
+      const add = (k, v) => { if (v) { this.acc[k] = (this.acc[k] ?? 0) + v; this.source = 'console'; } };
       if (this.kind === 'panel') {
         const cur = {}; for (const k of ['focus', 'mag', 'intensity', 'mfX', 'mfY', 'context']) cur[k] = A(k);
         if (this.prevAxes) for (const k in cur) { let d = Math.round((cur[k] - this.prevAxes[k]) * 32767); if (d > 32767) d -= 65535; else if (d < -32767) d += 65535; add(k, d / (M.counts || 4)); }
@@ -83,8 +83,8 @@ export class Console {
         }
       }
       const jx = dz(A('stageX')), jy = dz(A('stageY'));
-      if (jx || jy) { sx = jx; sy = jy; }
-      for (const [k] of BUTTONS) if (pressed(k)) this.button(k);
+      if (jx || jy) { sx = jx; sy = jy; this.source = 'console'; }
+      for (const [k] of BUTTONS) if (pressed(k)) { this.source = 'console'; this.button(k); }
       this.prevButtons = bt;
     } else if (this.pad) { this.pad = null; this.onChange(); }
     if (sx || sy) this.api.stage(sx, sy, dt);
