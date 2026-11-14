@@ -11,6 +11,7 @@ import { tr, trIn, msg, lang, LANGS, LANG_NAMES } from './i18n.js';
 import { settings, saveSettings, kioskMode, DEFAULTS } from './settings.js';
 import { drawQR } from './qr.js';
 import { STATS, BINS, csv, exportJson, download } from './visits.js';
+import { sync, sharingOn, kioskId, lastSent } from './share.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (t) => String(t).replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' })[c]);
@@ -60,6 +61,7 @@ export function initKiosk(api) {
     s.a11y.forEach((k) => add(d.a11yOpts, k)); s.inputs.forEach((k) => add(d.inputs, k));
     s.langs.forEach((l) => add(d.langs, l)); s.samples.forEach((x) => add(d.samples, x));
     st.days[day(s.start)] = d; saveStats(st);
+    sync(); // when the museum shares its totals: send the changed days
   }
   function track(type, v) {
     if (!session) return;
@@ -167,6 +169,11 @@ export function initKiosk(api) {
   });
 
   const L = (m) => esc(tr(m));
+  function shareStatus() {
+    if (!sharingOn()) return esc(tr(['Not sending: the totals stay on this kiosk.', 'Sin enviar: los totales se quedan en este quiosco.']));
+    const { at, error } = lastSent();
+    return esc(tr(msg(['Kiosk {id}. Last sent: {at}.', 'Quiosco {id}. Último envío: {at}.'], { id: kioskId().slice(6, 14), at: at ? at.slice(0, 16).replace('T', ' ') : '—' }))) + (error ? ` <b>${esc(error)}</b>` : '');
+  }
   function statsTable() {
     const st = loadStats(), days = Object.keys(st.days).sort().reverse();
     const sum = (f) => days.reduce((a, k) => a + f(st.days[k]), 0), n = sum((d) => d.sessions);
@@ -205,10 +212,13 @@ export function initKiosk(api) {
       <section><h3>${L(['Offline', 'Sin conexión'])}</h3><p class="srow"><button type="button" class="chip" id="sOffline">${L(['Save everything for offline use', 'Guardar todo para usar sin conexión'])}</button> <span id="sOffMsg" class="muted"></span></p></section>
       <section><h3>${L(['Visitor numbers (this device only)', 'Visitas (solo este equipo)'])}</h3>${statsTable()}
         <label class="srow">${L(['Name of this kiosk (shown on reports)', 'Nombre de este quiosco (aparece en los informes)'])} <input type="text" data-s="site" maxlength="60" value="${esc(s.site ?? '')}"></label>
+        ${chk('share', L(['Send the daily totals to the Electron Explorer team (anonymous counts only)', 'Enviar los totales diarios al equipo de Explorador de Electrones (solo conteos anónimos)']))}
+        <p class="srow muted">${shareStatus()} <button type="button" class="chip" id="sSend">${L(['Send now', 'Enviar ahora'])}</button></p>
         <p class="srow"><button type="button" class="chip" id="sReport">📊 ${L(['Open the report', 'Abrir el informe'])}</button> <button type="button" class="chip" id="sCsv">${L(['Export CSV', 'Exportar CSV'])}</button> <button type="button" class="chip" id="sJson">${L(['Export data (JSON)', 'Exportar datos (JSON)'])}</button> <button type="button" class="chip" id="sClear">${L(['Clear numbers', 'Borrar números'])}</button></p></section>
       <section><h3>PIN</h3><label class="srow">${L(['New PIN (digits)', 'Nuevo PIN (dígitos)'])} <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="8" id="sPin" placeholder="••••"></label></section>
       <p class="srow sbtns"><button type="button" class="cb" id="sRestart">${L(['Start over now', 'Empezar de nuevo ahora'])}</button><button type="button" class="cb snap" id="sSave">${L(['Save', 'Guardar'])}</button><button type="button" class="cb" id="sDefaults">${L(['Factory settings', 'Ajustes de fábrica'])}</button></p>`;
     $('sCsv').onclick = exportCsv; $('sJson').onclick = exportData;
+    $('sSend').onclick = async () => { $('sSend').disabled = true; const n = await sync(true); $('sSend').disabled = false; $('sSend').previousSibling.textContent = `${n == null ? tr(['Could not send.', 'No se pudo enviar.']) : tr(msg(['Sent {n} days.', 'Se enviaron {n} días.'], { n }))} `; };
     $('sReport').onclick = () => { endSession(); location.href = `report.html${active ? '?kiosk' : ''}`; };
     $('sClear').onclick = () => { if (confirm(tr(['Clear all visitor numbers on this device?', '¿Borrar todos los números de visitas de este equipo?']))) { saveStats({ days: {} }); openStaff(); } };
     $('sRestart').onclick = () => { $('staffDlg').close(); restart(); };
@@ -232,6 +242,8 @@ export function initKiosk(api) {
     showAttract();
   } else startSession();
   api.setVolume(settings.volume);
+  // a kiosk that was offline catches up: shortly after start, then every 15 minutes
+  if (active) { setTimeout(() => sync(true), 15_000); setInterval(() => sync(), 900_000); }
 
   return {
     active, track, tick, activity, snapped, printSticker, showQR, restart,

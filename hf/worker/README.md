@@ -89,6 +89,24 @@ npx wrangler d1 execute tem-view-usage --remote --command "SELECT record FROM us
 Without the D1 binding, `/usage` answers 204 and stores nothing; without `USAGE_SALT`, records carry no visitor
 key.
 
+## Electron Explorer kiosk totals
+
+Museum kiosks whose staff turn on *Send the daily totals* in Electron Explorer's staff menu post their anonymous
+daily totals to `/kiosk` (`../../kids/share.js`, format `electron-explorer-kiosk/1`): counts per day, never single
+visits, for the days that changed, in batches of up to 20 days. The Worker validates them (`src/kiosk.js`), keeps the
+latest totals per kiosk and day in the same D1 database (table `kiosk_days`, with the museum's town from Cloudflare,
+no coordinates, no IP address), and the nightly cron commits the whole table to `USAGE_REPO` as
+`kiosk/kiosk_days.jsonl`. Kiosks served from a local copy of the exhibit (`http://localhost:…`) may send too.
+
+Set up once, after deploying this version:
+
+```bash
+npx wrangler d1 execute tem-view-usage --remote --file usage.sql   # adds the kiosk_days table (safe to re-run)
+```
+
+Pull the totals with `python3 ../../tools/analysis/kiosks.py --hf` (the nightly snapshot) or `--d1` (live); add
+`--json combined.json` to open them in `kids/report.html` (*Add another kiosk's data*), or `--csv` for a spreadsheet.
+
 ## Test
 
 ```bash

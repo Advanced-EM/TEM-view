@@ -16,6 +16,8 @@ export const DEFAULTS = {
   stickerUrl: 'https://advanced-em.github.io/TEM-view/kids/sticker.html',
   packs: null,           // enabled sample packs (null = the packs marked default)
   site: '',              // name of this kiosk, shown on visitor reports (report.html)
+  share: false,          // send the anonymous daily totals to the TEM-view collector (share.js); the museum decides
+  kioskId: '',           // this kiosk's random id, made when sharing is first turned on
 };
 const KEY = 'kids-kiosk';
 let cur;

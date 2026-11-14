@@ -37,6 +37,7 @@ export default {
     stNote: 'Dieses Bild wurde auf deinem Handy aus ein paar Zahlen in der Adresse neu gezeichnet. Über dich wurde nichts gespeichert.',
   },
   strings: {
+    'Not sending: the totals stay on this kiosk.': 'Kein Senden: Die Summen bleiben auf diesem Kiosk.', 'Kiosk {id}. Last sent: {at}.': 'Kiosk {id}. Zuletzt gesendet: {at}.', 'Send the daily totals to the Electron Explorer team (anonymous counts only)': 'Tagessummen an das Team des Elektronen-Entdeckers senden (nur anonyme Zählungen)', 'Send now': 'Jetzt senden', 'Could not send.': 'Senden nicht möglich.', 'Sent {n} days.': '{n} Tage gesendet.',
     'Name of this kiosk (shown on reports)': 'Name dieses Kiosks (steht in den Berichten)', 'Open the report': 'Bericht öffnen', 'Export data (JSON)': 'Daten exportieren (JSON)',
     '2-inch round labels': 'Runde Etiketten, 5 cm', '4 × 6 inch photo paper': 'Fotopapier 10 × 15 cm', '58 mm receipt roll': 'Bonrolle, 58 mm',
     '<b>Brightness lens (yellow).</b> It squeezes the beam onto a small spot, like a magnifying glass in the sun. More squeeze means brighter, but too much can cook soft samples! 🔥': '<b>Linse für das Licht (gelb).</b> Sie drückt den Strahl auf einen kleinen Punkt zusammen, wie eine Lupe in der Sonne. Mehr Drücken heißt heller, aber zu viel kann weiche Proben verbrennen! 🔥',

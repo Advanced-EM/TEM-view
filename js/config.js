@@ -29,3 +29,7 @@ export const SHARE = {
 // usage: anonymous usage metrics (js/usage.js, privacy.html), sent to the collector Worker's /usage. Empty turns
 // them off everywhere.
 export const USAGE = { url: 'https://tem-view-collector.tem-view.workers.dev/usage' };
+
+// kiosk: Electron Explorer kiosks whose staff turn on "Send the daily totals" (kids/share.js) post their anonymous
+// daily totals here (the collector Worker's /kiosk). Empty turns sharing off everywhere.
+export const KIOSK = { url: 'https://tem-view-collector.tem-view.workers.dev/kiosk' };
