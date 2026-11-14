@@ -41,7 +41,13 @@ def load_hf():
         from huggingface_hub import hf_hub_download
     except ImportError:
         raise SystemExit("pip install huggingface_hub (and `hf auth login`), or download kiosk/kiosk_days.jsonl yourself")
-    path = hf_hub_download(REPO, "kiosk/kiosk_days.jsonl", repo_type="dataset", force_download=True)
+    try:
+        path = hf_hub_download(REPO, "kiosk/kiosk_days.jsonl", repo_type="dataset", force_download=True)
+    except Exception as e:
+        if type(e).__name__ != "EntryNotFoundError":
+            raise
+        raise SystemExit(f"{REPO} has no kiosk/kiosk_days.jsonl yet: the collector writes it each night once it is "
+                         "deployed with /kiosk and at least one kiosk shares its totals. Try --d1 for live data.")
     with open(path) as f:
         return from_lines(f)
 
