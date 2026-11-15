@@ -6,3 +6,15 @@ CREATE TABLE IF NOT EXISTS usage (
   record TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS usage_day ON usage (day);
+
+-- Electron Explorer kiosks that share their totals: the latest anonymous totals per kiosk and day (src/kiosk.js)
+CREATE TABLE IF NOT EXISTS kiosk_days (
+  kiosk TEXT NOT NULL,
+  day TEXT NOT NULL,
+  site TEXT,
+  version TEXT,
+  place TEXT,
+  totals TEXT NOT NULL,
+  updated TEXT NOT NULL,
+  PRIMARY KEY (kiosk, day)
+);

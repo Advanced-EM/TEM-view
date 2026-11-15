@@ -49,14 +49,22 @@ ok((await sub({ email: 'x@example.org' }, env)).status === 503, 'no KV binding: 
 
 // usage metrics (D1 mocked: the three statements usage.js runs)
 import { exportUsage } from './src/index.js';
-const rows = new Map();
-const db = { prepare: (sql) => ({ bind: (...a) => ({
-  run: async () => {
-    if (sql.startsWith('INSERT')) { const [id, day, seq, record] = a, old = rows.get(id); if (!old || seq >= old.seq) rows.set(id, { id, day, seq, record }); }
-    if (sql.startsWith('DELETE')) for (const [id, r] of rows) if (r.day < a[0]) rows.delete(id);
-  },
-  all: async () => ({ results: [...rows.values()].filter((r) => r.day === a[0]).sort((x, y) => (x.id < y.id ? -1 : 1)) }),
-}) }) };
+const rows = new Map(), kdays = new Map();
+const kioskAll = async () => ({ results: [...kdays.values()].sort((x, y) => (x.kiosk + x.day < y.kiosk + y.day ? -1 : 1)) });
+const db = {
+  prepare: (sql) => ({
+    bind: (...a) => ({
+      run: async () => {
+        if (sql.includes('INTO kiosk_days')) { const [kiosk, day, site, version, place, totals, updated] = a; kdays.set(`${kiosk}|${day}`, { kiosk, day, site, version, place, totals, updated }); return; }
+        if (sql.startsWith('INSERT')) { const [id, day, seq, record] = a, old = rows.get(id); if (!old || seq >= old.seq) rows.set(id, { id, day, seq, record }); }
+        if (sql.startsWith('DELETE')) for (const [id, r] of rows) if (r.day < a[0]) rows.delete(id);
+      },
+      all: async () => ({ results: [...rows.values()].filter((r) => r.day === a[0]).sort((x, y) => (x.id < y.id ? -1 : 1)) }),
+    }),
+    all: kioskAll,
+  }),
+  batch: async (stmts) => { for (const st of stmts) await st.run(); },
+};
 const uEnv = { ...env, USAGE_DB: db, USAGE_REPO: 'rmsreis/tem-view-usage', USAGE_SALT: 'salt' };
 const visit = (o = {}) => ({ format: 'tem-view-usage/1', id: 'visit-0001', page: 'tem-view', version: '202611031200', seq: 1, started: new Date().toISOString(),
   duration_s: 61, active_s: 55, lang: 'de-DE', device: 'desktop', screen: [1500, 900], referrer: 'www.google.com', inputs: ['mouse', 'keyboard'],
@@ -86,3 +94,27 @@ ok(exp?.url === 'https://huggingface.co/api/datasets/rmsreis/tem-view-usage/comm
 ok(JSON.parse(Buffer.from(el[1].value.content, 'base64').toString().trim()).city === 'Nuremberg', 'export holds the visits');
 await exportUsage(uEnv, new Date(Date.now() + 100 * 86_400_000));
 ok(rows.size === 0, 'rows older than 90 days are dropped');
+
+// Electron Explorer kiosk totals
+const kiosk = (body, origin = 'http://localhost:8000', e = uEnv) => worker.fetch(Object.assign(new Request('https://x.workers.dev/kiosk', { method: 'POST', body: typeof body === 'string' ? body : JSON.stringify(body), headers: { origin, 'cf-connecting-ip': '203.0.113.9' } }), { cf: { country: 'US', region: 'Illinois', city: 'Chicago', latitude: '41.88', longitude: '-87.63', timezone: 'America/Chicago' } }), e);
+const kday = new Date().toISOString().slice(0, 10);
+const totals = { sessions: 12, dwell: 1800, engaged: 9, bins: [2, 2, 3, 3, 1, 1], hours: Array.from({ length: 24 }, (_, h) => (h === 10 ? 12 : 0)), missions: { beam: 11, 'pack:diatom': 2 }, langs: { en: 9, es: 3 }, inputs: { touch: 12 }, junk: 5 };
+const rep = (o = {}) => ({ format: 'electron-explorer-kiosk/1', kiosk: 'kiosk-a1b2c3d4', site: 'Science Center <b>Lobby</b>', version: '202611141559', days: { [kday]: totals }, ...o });
+r = await kiosk(rep());
+let kd = kdays.get(`kiosk-a1b2c3d4|${kday}`), kt = JSON.parse(kd?.totals ?? '{}'), kp = JSON.parse(kd?.place ?? '{}');
+ok(r.status === 200 && kt.sessions === 12 && kt.missions['pack:diatom'] === 2 && kt.hours[10] === 12, 'kiosk totals stored per kiosk and day');
+ok(r.headers.get('access-control-allow-origin') === 'http://localhost:8000', 'a kiosk on a local copy may send');
+ok(kt.junk === undefined && kd.site === 'Science Center bLobby/b', 'unknown fields dropped, site name cleaned');
+ok(kp.city === 'Chicago' && kp.lat === undefined, 'the town, no coordinates');
+r = await kiosk(rep({ days: { [kday]: { ...totals, sessions: 15 } } }));
+ok(kdays.size === 1 && JSON.parse(kdays.get(`kiosk-a1b2c3d4|${kday}`).totals).sessions === 15, 'a resent day replaces the old totals');
+ok((await kiosk(rep({ kiosk: 'x' }))).status === 422, 'bad kiosk id rejected');
+ok((await kiosk(rep({ days: { '1999-01-01': totals } }))).status === 422, 'day out of range rejected');
+ok((await kiosk(rep({ days: { [kday]: { ...totals, bins: [1, 2] } } }))).status === 422, 'malformed totals rejected');
+ok((await kiosk(rep(), 'https://evil.example')).status === 403, 'foreign origin refused for kiosks too');
+ok((await post(sample, 'http://localhost:8000')).status === 403, 'local origins only for /kiosk');
+calls = []; globalThis.fetch = async (url, init) => { calls.push({ url, init }); return new Response('{}', { status: 200 }); };
+await exportUsage(uEnv, new Date(Date.now() + 86_400_000));
+const snap = calls.map((c) => c.init.body.split('\n').map((l) => JSON.parse(l))).find((l) => l[1].value.path === 'kiosk/kiosk_days.jsonl');
+const line = snap && JSON.parse(Buffer.from(snap[1].value.content, 'base64').toString().trim().split('\n')[0]);
+ok(line?.kiosk === 'kiosk-a1b2c3d4' && line.totals.sessions === 15 && line.place.city === 'Chicago', 'daily snapshot committed to kiosk/kiosk_days.jsonl');

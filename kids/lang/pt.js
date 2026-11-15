@@ -36,6 +36,8 @@ export default {
     stNote: 'Esta imagem foi redesenhada no seu celular a partir de alguns números do endereço. Nada sobre você foi guardado.',
   },
   strings: {
+    'Not sending: the totals stay on this kiosk.': 'Sem envio: os totais ficam neste quiosque.', 'Kiosk {id}. Last sent: {at}.': 'Quiosque {id}. Último envio: {at}.', 'Send the daily totals to the Electron Explorer team (anonymous counts only)': 'Enviar os totais diários para a equipe do Explorador de Elétrons (só contagens anônimas)', 'Send now': 'Enviar agora', 'Could not send.': 'Não foi possível enviar.', 'Sent {n} days.': '{n} dias enviados.',
+    'Name of this kiosk (shown on reports)': 'Nome deste quiosque (aparece nos relatórios)', 'Open the report': 'Abrir o relatório', 'Export data (JSON)': 'Exportar dados (JSON)',
     '2-inch round labels': 'Etiquetas redondas de 2 polegadas', '4 × 6 inch photo paper': 'Papel fotográfico de 10 × 15 cm', '58 mm receipt roll': 'Bobina de recibo de 58 mm',
     '<b>Brightness lens (yellow).</b> It squeezes the beam onto a small spot, like a magnifying glass in the sun. More squeeze means brighter, but too much can cook soft samples! 🔥': '<b>Lente do brilho (amarela).</b> Ela aperta o feixe num pontinho, como uma lupa no sol. Mais apertado fica mais brilhante, mas demais pode cozinhar amostras moles! 🔥',
     "<b>Electron gun.</b> It shoots out electrons, tiny bits of electricity much smaller than atoms. Like a flashlight, but with electrons instead of light. That's me! ⚡": '<b>Canhão de elétrons.</b> Ele dispara elétrons, pedacinhos de eletricidade muito menores que os átomos. Como uma lanterna, mas com elétrons em vez de luz. Esse sou eu! ⚡',

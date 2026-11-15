@@ -17,15 +17,23 @@
 // derives from the connection, into the USAGE_DB D1 database; a daily cron commits the previous day to USAGE_REPO as
 // usage/<year>/<day>.jsonl. Settings: USAGE_REPO (a private dataset), the USAGE_SALT secret for the per-day visitor
 // key. Without USAGE_DB, /usage answers 204 and stores nothing.
+//
+// And Electron Explorer kiosk totals (kiosk.js): POST /kiosk {electron-explorer-kiosk/1} from a museum kiosk whose
+// staff turned on sharing: anonymous daily totals, kept per kiosk and day in USAGE_DB (kiosk_days); the daily cron
+// also commits the whole table to USAGE_REPO as kiosk/kiosk_days.jsonl. Kiosks served from a local copy of the
+// exhibit (localhost) may send too.
 import { clean, Invalid, MAX_BYTES } from './schema.js';
+import { cleanKiosk, storeKiosk, kioskLines, Invalid as BadKiosk, KIOSK_MAX_BYTES } from './kiosk.js';
 import { cleanUsage, place, visitorKey, storeUsage, dayLines, prune, Invalid as BadUsage, USAGE_MAX_BYTES } from './usage.js';
 
 const json = (body, status = 200, headers = {}) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', ...headers } });
 
-function cors(req, env) {
+// a kiosk may also run from a local copy of the exhibit, served on this computer
+const LOCAL = /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/;
+function cors(req, env, local = false) {
   const origin = req.headers.get('origin') ?? '';
   const allowed = (env.ALLOWED_ORIGINS ?? 'https://advanced-em.github.io').split(',').map((s) => s.trim());
-  return allowed.includes(origin) ? { 'access-control-allow-origin': origin, 'access-control-allow-methods': 'POST, GET', 'access-control-allow-headers': 'content-type', vary: 'origin' } : {};
+  return allowed.includes(origin) || (local && LOCAL.test(origin)) ? { 'access-control-allow-origin': origin, 'access-control-allow-methods': 'POST, GET', 'access-control-allow-headers': 'content-type', vary: 'origin' } : {};
 }
 
 async function hashIp(req) {
@@ -91,13 +99,28 @@ async function usage(req, env, h) {
   return new Response(null, { status: 204, headers: h });
 }
 
-// daily: commit yesterday's visits to the usage dataset, then drop old rows
+async function kiosk(req, env, h) {
+  if (!env.USAGE_DB) return new Response(null, { status: 204, headers: h });
+  const text = await req.text();
+  if (text.length > KIOSK_MAX_BYTES) return json({ detail: 'report too large' }, 413, h);
+  let rec;
+  try { rec = cleanKiosk(JSON.parse(text)); } catch (e) {
+    return json({ detail: `invalid report: ${e instanceof BadKiosk ? e.message : 'not JSON'}` }, 422, h);
+  }
+  const { lat, lon, ...where } = place(req.cf); // the museum's town is enough
+  await storeKiosk(env.USAGE_DB, rec, where);
+  return json({ ok: true, days: Object.keys(rec.days) }, 200, h);
+}
+
+// daily: commit yesterday's visits to the usage dataset, then drop old rows; and a snapshot of the kiosk totals
 async function exportUsage(env, now = new Date()) {
   if (!env.USAGE_DB) return;
   const day = new Date(now - 86_400_000).toISOString().slice(0, 10);
   const lines = await dayLines(env.USAGE_DB, day);
   if (lines && env.HF_TOKEN && env.USAGE_REPO) await commit(env, `usage/${day.slice(0, 4)}/${day}.jsonl`, `${lines}\n`, `Usage ${day} (${lines.split('\n').length} visits)`, env.USAGE_REPO);
   await prune(env.USAGE_DB, now);
+  const kl = await kioskLines(env.USAGE_DB);
+  if (kl && env.HF_TOKEN && env.USAGE_REPO) await commit(env, 'kiosk/kiosk_days.jsonl', `${kl}\n`, `Kiosk totals up to ${day} (${kl.split('\n').length} kiosk-days)`, env.USAGE_REPO);
 }
 
 export { exportUsage };
@@ -106,21 +129,22 @@ export default {
   async scheduled(event, env, ctx) { ctx.waitUntil(exportUsage(env, new Date(event.scheduledTime))); },
 
   async fetch(req, env) {
-    const url = new URL(req.url), h = cors(req, env);
+    const url = new URL(req.url), h = cors(req, env, url.pathname === '/kiosk');
     const dry = !(env.HF_TOKEN && env.DATASET_REPO);
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: h });
-    if (req.method === 'GET' && url.pathname === '/') return json({ service: 'tem-view session collector', dataset: env.DATASET_REPO || null, dry_run: dry, mailing_list: !!env.SUBSCRIBERS, usage: !!env.USAGE_DB }, 200, h);
-    if (req.method !== 'POST' || !['/submit', '/subscribe', '/usage'].includes(url.pathname)) return json({ detail: 'not found' }, 404, h);
+    if (req.method === 'GET' && url.pathname === '/') return json({ service: 'tem-view session collector', dataset: env.DATASET_REPO || null, dry_run: dry, mailing_list: !!env.SUBSCRIBERS, usage: !!env.USAGE_DB, kiosks: !!env.USAGE_DB }, 200, h);
+    if (req.method !== 'POST' || !['/submit', '/subscribe', '/usage', '/kiosk'].includes(url.pathname)) return json({ detail: 'not found' }, 404, h);
     // browsers send from the exhibit only; sendBeacon carries the origin too
     if (!h['access-control-allow-origin']) return json({ detail: 'origin not allowed' }, 403);
     // usage reports have their own, wider limit: a page reports once a minute and when it is hidden
-    const lim = url.pathname === '/usage' ? env.USAGE_LIMITER : env.LIMITER;
+    const lim = url.pathname === '/usage' || url.pathname === '/kiosk' ? env.USAGE_LIMITER : env.LIMITER;
     if (lim) {
       const { success } = await lim.limit({ key: await hashIp(req) });
       if (!success) return json({ detail: 'too many submissions, try again later' }, 429, h);
     }
     if (url.pathname === '/subscribe') return subscribe(req, env, h);
     if (url.pathname === '/usage') return usage(req, env, h);
+    if (url.pathname === '/kiosk') return kiosk(req, env, h);
     const text = await req.text();
     if (text.length > MAX_BYTES) return json({ detail: 'session too large' }, 413, h);
     let s;

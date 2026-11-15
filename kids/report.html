@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Visitor report</title>
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="../fonts/fonts.css">
+<style>
+  :root { --ink: #1d2340; --muted: #5a6285; --line: #dfe3f0; --bar: #3b82f6; --bar-hi: #1d4ed8; --bg: #f4f7ff; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.5 'Nunito', system-ui, sans-serif; color: var(--ink); background: var(--bg); }
+  main { max-width: 1080px; margin: 0 auto; padding: 20px 20px 40px; }
+  h1, h2 { font-family: 'Fredoka', sans-serif; font-weight: 600; margin: 0; }
+  h1 { font-size: 26px; } h2 { font-size: 17px; margin-bottom: 2px; }
+  .sub { color: var(--muted); margin: 2px 0 14px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0 16px; }
+  .controls select, .controls input, .controls button, .controls a { font: 600 14px 'Fredoka', sans-serif; border: 2px solid var(--ink); border-radius: 999px; background: #fff; padding: 5px 12px; color: var(--ink); text-decoration: none; cursor: pointer; }
+  .controls input[type=date] { border-radius: 10px; padding: 3px 8px; }
+  .controls .sp { flex: 1; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; margin-bottom: 14px; }
+  .tile { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; }
+  .tile b { display: block; font: 600 28px/1.15 'Fredoka', sans-serif; }
+  .tile span { color: var(--muted); font-size: 13px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .card { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; break-inside: avoid; }
+  .card.wide { grid-column: 1 / -1; }
+  .card p.note { color: var(--muted); font-size: 13px; margin: 0 0 6px; }
+  svg { display: block; width: 100%; height: auto; overflow: visible; }
+  svg text { font: 12px 'Nunito', sans-serif; fill: var(--muted); }
+  svg .val { fill: var(--ink); font-weight: 700; }
+  svg .bar { fill: var(--bar); } svg g.m:hover .bar { fill: var(--bar-hi); }
+  svg line.ax { stroke: var(--line); stroke-width: 1; }
+  details { margin-top: 6px; font-size: 13px; } summary { cursor: pointer; color: var(--muted); }
+  table { border-collapse: collapse; width: 100%; margin-top: 6px; font-size: 13px; } th, td { text-align: left; padding: 3px 8px; border-bottom: 1px solid var(--line); } td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+  .empty { background: #fff; border: 1px dashed var(--muted); border-radius: 12px; padding: 24px; text-align: center; color: var(--muted); }
+  .foot { color: var(--muted); font-size: 13px; margin-top: 18px; }
+  #tip { position: fixed; pointer-events: none; background: var(--ink); color: #fff; font-size: 13px; padding: 4px 8px; border-radius: 8px; transform: translate(-50%, -120%); white-space: nowrap; }
+  @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
+  @media print { body { background: #fff; font-size: 12px; } .controls, #tip { display: none !important; } main { padding: 0; max-width: none; } .card, .tile { border-color: #bbb; } @page { margin: 12mm; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Electron Explorer · visitor report</h1>
+  <p class="sub" id="sub"></p>
+  <div class="controls">
+    <select id="range" aria-label="Period">
+      <option value="all">All time</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="year">This year</option><option value="custom">Custom…</option>
+    </select>
+    <input type="date" id="from" aria-label="From" hidden><input type="date" id="to" aria-label="To" hidden>
+    <span class="sp"></span>
+    <label class="btn"><input type="file" id="add" accept=".json,application/json" multiple hidden><span role="button" tabindex="0" id="addBtn" style="font:600 14px 'Fredoka',sans-serif;border:2px solid var(--ink);border-radius:999px;background:#fff;padding:5px 12px;cursor:pointer">＋ Add another kiosk's data</span></label>
+    <button id="csv">Download CSV</button><button id="json">Download data</button><button id="print">Print / PDF</button><a id="back" href="./">Back to the exhibit</a>
+  </div>
+  <div id="out"></div>
+  <p class="foot">How it's counted: a <b>visit</b> runs from a touch on the attract screen until the exhibit starts over after nobody has touched it; bumps shorter than 3 seconds are not counted. An <b>engaged visit</b> lasted at least 30 seconds or finished a mission. Each kiosk keeps only anonymous daily totals in its own browser: no names, photos, recordings, identifiers or cookies, and nothing is sent anywhere.</p>
+</main>
+<div id="tip" hidden></div>
+<script type="importmap">
+{
+ "imports": {
+  "./console.js": "./console.js?v=202611141610",
+  "./i18n.js": "./i18n.js?v=202611141610",
+  "./kiosk.js": "./kiosk.js?v=202611141610",
+  "./lang/de.js": "./lang/de.js?v=202611141610",
+  "./lang/fr.js": "./lang/fr.js?v=202611141610",
+  "./lang/pt.js": "./lang/pt.js?v=202611141610",
+  "./lines.js": "./lines.js?v=202611141610",
+  "./main.js": "./main.js?v=202611141610",
+  "./packs.js": "./packs.js?v=202611141610",
+  "./qr.js": "./qr.js?v=202611141610",
+  "./render.js": "./render.js?v=202611141610",
+  "./report.js": "./report.js?v=202611141610",
+  "./settings.js": "./settings.js?v=202611141610",
+  "./share.js": "./share.js?v=202611141610",
+  "./specimens.js": "./specimens.js?v=202611141610",
+  "./sticker.js": "./sticker.js?v=202611141610",
+  "./visits.js": "./visits.js?v=202611141610",
+  "../js/config.js": "../js/config.js?v=202611141610"
+ }
+}
+</script>
+<script type="module" src="report.js?v=202611141610"></script>
+</body>
+</html>

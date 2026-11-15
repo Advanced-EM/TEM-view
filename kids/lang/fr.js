@@ -36,6 +36,8 @@ export default {
     stNote: 'Cette image a été redessinée sur ton téléphone à partir de quelques nombres dans l’adresse. Rien sur toi n’a été enregistré.',
   },
   strings: {
+    'Not sending: the totals stay on this kiosk.': 'Pas d’envoi : les totaux restent sur cette borne.', 'Kiosk {id}. Last sent: {at}.': 'Borne {id}. Dernier envoi : {at}.', 'Send the daily totals to the Electron Explorer team (anonymous counts only)': 'Envoyer les totaux quotidiens à l’équipe de l’Explorateur d’électrons (comptages anonymes uniquement)', 'Send now': 'Envoyer maintenant', 'Could not send.': 'Envoi impossible.', 'Sent {n} days.': '{n} jours envoyés.',
+    'Name of this kiosk (shown on reports)': 'Nom de cette borne (sur les rapports)', 'Open the report': 'Ouvrir le rapport', 'Export data (JSON)': 'Exporter les données (JSON)',
     '2-inch round labels': 'Étiquettes rondes de 5 cm', '4 × 6 inch photo paper': 'Papier photo 10 × 15 cm', '58 mm receipt roll': 'Rouleau de tickets de 58 mm',
     '<b>Brightness lens (yellow).</b> It squeezes the beam onto a small spot, like a magnifying glass in the sun. More squeeze means brighter, but too much can cook soft samples! 🔥': '<b>Lentille de la lumière (jaune).</b> Elle serre le faisceau sur un petit point, comme une loupe au soleil. Plus c’est serré, plus c’est lumineux, mais trop peut faire cuire les échantillons mous ! 🔥',
     "<b>Electron gun.</b> It shoots out electrons, tiny bits of electricity much smaller than atoms. Like a flashlight, but with electrons instead of light. That's me! ⚡": '<b>Canon à électrons.</b> Il lance des électrons, de tout petits morceaux d’électricité, bien plus petits que les atomes. Comme une lampe de poche, mais avec des électrons au lieu de la lumière. C’est moi ! ⚡',
