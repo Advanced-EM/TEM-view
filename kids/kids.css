@@ -324,3 +324,81 @@ dialog.small { max-width: min(92vw, 360px); } dialog.wide { max-width: min(96vw,
 .tscroll { overflow-x: auto; }
 table.stats { border-collapse: collapse; font-size: .85rem; }
 table.stats th, table.stats td { border: 1px solid #c9cfe6; padding: 3px 8px; text-align: left; white-space: nowrap; }
+
+/* ---------------------------------------------------------------- tablets and kiosks: the whole lab on one screen
+   body.fit is set by the script at the top of index.html (touch screens 600 px and up, kiosks, or ?fit). The lab
+   takes exactly the screen under the header; the porthole grows to whatever room is left, the side column scrolls
+   inside itself. Landscape: scope | screen + Console | Zip and missions. Portrait: Zip and missions on top. */
+.pwrap { display: contents; }
+body.fit { --gap: clamp(8px, 1.3vmin, 16px); }
+body.fit .top { padding: max(6px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) 6px max(14px, env(safe-area-inset-left)); gap: 8px; flex-wrap: nowrap; }
+body.fit .brand { font-size: 1.35rem; white-space: nowrap; } body.fit .top .zipmini { width: 38px; height: 38px; }
+body.fit .tools { flex-wrap: nowrap; gap: 6px; justify-content: flex-end; align-items: center; }
+body.fit .chip { padding: 5px 11px; white-space: nowrap; }
+body.fit .seg.lang { flex-wrap: nowrap; } body.fit .seg.lang button { padding: 3px 8px; min-width: 2.3em; }
+/* the tool chips keep only their icons until there is room for every label on one row */
+@media (max-width: 1599px) { body.fit .tools > .chip span:not(#voiceIcon) { display: none; } }
+@media (max-width: 900px) {
+  body.fit .tools { gap: 4px; } body.fit .chip { padding: 4px 8px; font-size: .92rem; }
+  body.fit .seg.lang { gap: 3px; } body.fit .seg.lang button { padding: 2px 6px; font-size: .82rem; min-width: 2em; }
+}
+
+body.fit .lab { height: calc(100svh - var(--headH, 64px)); max-width: none; margin: 0; gap: var(--gap); align-items: stretch;
+  padding: 2px max(14px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+  grid-template-columns: clamp(120px, 14vw, 210px) minmax(0, 1fr) clamp(240px, 26vw, 340px); grid-template-rows: minmax(0, 1fr); }
+body.fit .card { padding: 12px; }
+body.fit .col-scope { position: static; display: flex; flex-direction: column; min-height: 0; padding: 8px 6px; }
+body.fit .ctitle { font-size: 1rem; margin-bottom: 2px; }
+body.fit #column { flex: 1 1 0; min-height: 0; height: 100%; max-width: none; margin: 0; }
+body.fit .col-scope .tiny { font-size: .75rem; }
+
+body.fit .col-main { min-height: 0; gap: var(--gap); }
+body.fit .samples { grid-template-columns: repeat(auto-fit, minmax(78px, 1fr)); gap: 8px; }
+body.fit .samples button { padding: 3px 4px 4px; font-size: .82rem; line-height: 1.1; border-radius: 14px; }
+body.fit .samples button span { font-size: 1.35rem; }
+body.fit .viewer { flex: 1 1 0; min-height: 0; display: grid; gap: 8px 12px; align-items: center; justify-items: center;
+  grid-template: "p" minmax(0, 1fr) "r" auto "c" auto "t" auto / minmax(0, 1fr); }
+body.fit .pwrap { grid-area: p; display: grid; place-items: center; container-type: size; width: 100%; height: 100%; min-height: 0; }
+body.fit .porthole { width: min(100cqw, 100cqh); padding: clamp(8px, 3.2cqmin, 18px); box-shadow: 5px 5px 0 var(--ink); }
+body.fit .sleep, body.fit .arrow, body.fit .flash { inset: clamp(8px, 3.2cqmin, 18px); }
+body.fit .sleep b { font-size: clamp(1.6rem, 8cqmin, 2.6rem); } body.fit .sleep span { font-size: clamp(.85rem, 3.4cqmin, 1.05rem); }
+body.fit .readouts { grid-area: r; width: 100%; max-width: 480px; gap: 10px; }
+body.fit .mag { padding: 3px 12px; border-radius: 14px; } body.fit .mag b { font-size: 1.25rem; } body.fit .mag span { font-size: .72rem; }
+body.fit .scale #scaleTxt { font-size: 1rem; } body.fit .scale small { font-size: .78rem; }
+body.fit .palette { grid-area: c; flex-wrap: nowrap; } body.fit .palette button { font-size: .78rem; padding: 3px 9px; white-space: nowrap; }
+body.fit .takehome { grid-area: t; }
+
+body.fit .console { padding: 6px 12px 10px; border-radius: 22px; box-shadow: 5px 5px 0 var(--ink); }
+body.fit .chead { padding: 0 16px 4px; } body.fit .chead > b { font-size: .95rem; } body.fit .cstat { font-size: .75rem; }
+body.fit .cbody { gap: 10px; }
+body.fit .knobs { gap: 6px; } body.fit .knob { gap: 2px; } body.fit .knob small { font-size: .68rem; line-height: 1.15; }
+body.fit .kdial { width: clamp(56px, 9.5svh, 100px); padding: 7px; }
+body.fit .kpm button { width: 28px; height: 28px; }
+body.fit .joy { width: clamp(78px, 13svh, 112px); height: clamp(78px, 13svh, 112px); } body.fit .joy b { width: 48%; height: 48%; }
+body.fit .cbtns { min-width: 112px; gap: 6px; }
+body.fit .cb { padding: 5px 10px; border-radius: 15px; } body.fit .cb.snap { font-size: 1.3rem; padding: 5px 10px; } body.fit .cb.sm { padding: 4px 8px; }
+
+body.fit .col-side { display: flex; flex-direction: column; grid-column: auto; gap: var(--gap); min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 8px 8px 0; margin-right: -8px; }
+body.fit .col-side > .card { flex: none; }
+body.fit .zip { grid-template-columns: 68px 1fr; } body.fit #zip { width: 68px; height: 68px; }
+body.fit .bubble { min-height: 0; font-size: .95rem; }
+body.fit .lad { height: 230px; }
+
+/* short landscape screens (older iPads, 1280×800 tablets): drop the small hints so the porthole gets the room */
+@media (orientation: landscape) and (max-height: 800px) { body.fit .knob small, body.fit .col-scope .tiny { display: none; } }
+
+/* a kiosk never scrolls: the explanations below the lab are already hidden there */
+body.fit.kiosk { height: 100svh; overflow: hidden; }
+
+@media (orientation: portrait) {
+  body.fit .top { flex-wrap: wrap; justify-content: center; row-gap: 6px; }
+  body.fit .lab { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) clamp(130px, 19vw, 210px);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-areas: "zip quest quest" "main main scope" "main main meter"; }
+  body.fit .col-side { display: contents; }
+  body.fit .zip { grid-area: zip; } body.fit .quest { grid-area: quest; } body.fit .meter { grid-area: meter; } body.fit .ladder { display: none; }
+  body.fit .col-main { grid-area: main; } body.fit .col-scope { grid-area: scope; }
+  body.fit .zip, body.fit .quest { max-height: 22svh; overflow-y: auto; overscroll-behavior: contain; }
+  body.fit .meter { padding: 10px; } body.fit .meter h3 { font-size: .85rem; } body.fit .sface { font-size: .66rem; margin-bottom: 6px; }
+  body.fit .viewer { gap: 6px; }
+}
