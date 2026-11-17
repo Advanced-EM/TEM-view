@@ -63,6 +63,7 @@ const vr = new VR(scene, {
   component: (name) => renderComponent(name, S, sim),
   screens: () => [{ canvas: mainCv, ver: () => lastDraw }, { canvas: secCv, ver: () => lastDraw }],
   acquire: () => acquireNow(),
+  panel: () => hwPanel,
   clarity: { real: () => S.clarity === 'real', toggle: () => { S.clarity = S.clarity === 'edu' ? 'real' : 'edu'; sim.invalidate('clarity'); refreshControls(); explainChange('clarity'); } },
   data: () => {
     const a = acq.list[0], m = MODES.find((x) => x[0] === S.mode);

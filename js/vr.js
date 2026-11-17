@@ -69,11 +69,12 @@ function wrap(x, text, maxW) {
 const rr = (x, a, b, w, h, r) => { x.beginPath(); x.roundRect(a, b, w, h, r); };
 
 export class VR {
-  constructor(sc, { modes, getMode, setMode, onChange, sliders, component, getS, screens, data, acquire, clarity, training, narr, talk, listening, caption }) {
+  constructor(sc, { modes, getMode, setMode, onChange, sliders, component, getS, screens, data, acquire, clarity, panel, training, narr, talk, listening, caption }) {
     this.sc = sc; this.modes = modes; this.getMode = getMode; this.setMode = setMode; this.onChange = onChange || (() => {});
     this.sliders = sliders || (() => []); this.component = component || (() => null); this.getS = getS || (() => ({}));
     this.screensFn = screens || (() => []);
     this.dataFn = data || (() => ({ lines: [], n: 0, last: null })); this.acquireFn = acquire || (() => {});
+    this.hwFn = panel || (() => null); this.cons = { angle: {}, hot: [], drag: null, padDrag: null, pad: [0, 0] };
     this.clarity = clarity || { real: () => false, toggle: () => {} };
     this.opt = {
       training: training || { list: () => [], start() {}, state: () => ({ active: false }), finish: () => ({ head: '', body: '' }) },
@@ -218,9 +219,9 @@ export class VR {
       this.ar = false;
       this.closeCard(); this.stopRide(); this.stopSpoken(); if (this.opt.listening()) this.opt.talk(false);
       this.ex.on = false; this.ex.t = 0; this.applyExplode(); this.unwrapSlots(); // parts back in place, beams back on
-      for (const P of [this.slP, this.cardP, this.trainP, this.rideP, this.capP, this.dataP]) P?.dispose();
+      for (const P of [this.slP, this.cardP, this.trainP, this.rideP, this.capP, this.dataP, this.consP]) P?.dispose();
       if (this.menu) { this.mtex.dispose(); this.menu.geometry.dispose(); this.menu.material.dispose(); }
-      for (const g of [this.room, this.menu, this.slP?.mesh, this.cardP?.mesh, this.trainP?.mesh, this.rideP?.mesh, this.capP?.mesh, this.dataP?.mesh, ...(this.ctrl || [])]) g && scene.remove(g);
+      for (const g of [this.room, this.menu, this.slP?.mesh, this.cardP?.mesh, this.trainP?.mesh, this.rideP?.mesh, this.capP?.mesh, this.dataP?.mesh, this.consP?.mesh, ...(this.ctrl || [])]) g && scene.remove(g);
       for (const c of [...this.world.children]) scene.add(c);
       scene.remove(this.world);
       this.world = null;
@@ -269,7 +270,7 @@ export class VR {
 
   // ---- floating mode menu (left)
   buildMenu() {
-    const cols = 3, rows = Math.ceil((this.modes.length + 12) / cols); // modes, then the twelve tool buttons ending in Exit
+    const cols = 3, rows = Math.ceil((this.modes.length + 13) / cols); // modes, then the thirteen tool buttons ending in Exit
     this.mcols = cols; this.mrows = rows;
     const W = 768, H = rows * 128 + 96;
     const cv = (this.mcv = document.createElement('canvas')); cv.width = W; cv.height = H;
@@ -290,12 +291,12 @@ export class VR {
     x.fillStyle = '#6fd6ff'; x.font = `600 34px ${FONT}`; x.textAlign = 'left';
     x.fillText('TEM-view · choose a mode', 36, 62);
     const cw = (W - 72) / this.mcols, top = 96;
-    const items = [...this.modes.map((m) => ({ id: m[0], label: m[1], sub: m[2] })), { id: '__explode', label: 'Exploded', sub: 'pull it apart' }, { id: '__screens', label: 'Screens', sub: 'big detectors' }, { id: '__size', label: 'Size', sub: 'table / life size' }, { id: '__reset', label: 'Reset', sub: 'in front of me' }, { id: '__real', label: 'Realistic', sub: 'noise, real detectors' }, { id: '__acq', label: 'Acquire', sub: 'record the data' }, { id: '__data', label: 'Data', sub: 'live + last shot' }, { id: '__train', label: 'Training', sub: 'align a task' }, { id: '__narr', label: 'Narrate', sub: 'hear explanations' }, { id: '__talk', label: 'Talk', sub: 'voice commands' }, { id: '__ride', label: 'Ride beam', sub: 'follow the electrons' }, { id: '__exit', label: this.ar ? 'Exit AR' : 'Exit VR', sub: '' }];
+    const items = [...this.modes.map((m) => ({ id: m[0], label: m[1], sub: m[2] })), { id: '__explode', label: 'Exploded', sub: 'pull it apart' }, { id: '__screens', label: 'Screens', sub: 'big detectors' }, { id: '__size', label: 'Size', sub: 'table / life size' }, { id: '__reset', label: 'Reset', sub: 'in front of me' }, { id: '__cons', label: 'Console', sub: 'knobs and buttons' }, { id: '__real', label: 'Realistic', sub: 'noise, real detectors' }, { id: '__acq', label: 'Acquire', sub: 'record the data' }, { id: '__data', label: 'Data', sub: 'live + last shot' }, { id: '__train', label: 'Training', sub: 'align a task' }, { id: '__narr', label: 'Narrate', sub: 'hear explanations' }, { id: '__talk', label: 'Talk', sub: 'voice commands' }, { id: '__ride', label: 'Ride beam', sub: 'follow the electrons' }, { id: '__exit', label: this.ar ? 'Exit AR' : 'Exit VR', sub: '' }];
     items.forEach((it, i) => {
       const exit = it.id === '__exit';
       const c = i % this.mcols, r = Math.floor(i / this.mcols);
       const bx = 36 + c * cw + 6, by = top + r * 128 + 6, bw = cw - 12, bh = 116;
-      const on = it.id === cur || (it.id === '__explode' && this.ex.on) || (it.id === '__screens' && this.scr.on) || (it.id === '__data' && this.dataP?.mesh.visible) || (it.id === '__real' && this.clarity.real()) || (it.id === '__size' && this.life) || (it.id === '__train' && this.trainP?.mesh.visible) || (it.id === '__narr' && this.opt.narr.on()) || (it.id === '__talk' && this.opt.listening()) || (it.id === '__ride' && this.ride.on), hov = this.hover === i;
+      const on = it.id === cur || (it.id === '__explode' && this.ex.on) || (it.id === '__screens' && this.scr.on) || (it.id === '__data' && this.dataP?.mesh.visible) || (it.id === '__real' && this.clarity.real()) || (it.id === '__cons' && this.consP?.mesh.visible) || (it.id === '__size' && this.life) || (it.id === '__train' && this.trainP?.mesh.visible) || (it.id === '__narr' && this.opt.narr.on()) || (it.id === '__talk' && this.opt.listening()) || (it.id === '__ride' && this.ride.on), hov = this.hover === i;
       x.fillStyle = on ? 'rgba(111,214,255,0.22)' : hov ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.05)';
       rr(x, bx, by, bw, bh, 20); x.fill();
       if (on || hov) { x.strokeStyle = on ? '#6fd6ff' : 'rgba(255,255,255,0.5)'; x.lineWidth = 3; x.stroke(); }
@@ -309,7 +310,7 @@ export class VR {
 
   // everything that changes how the menu looks, as one string (repaint when it changes)
   menuSig() {
-    return [this.getMode(), this.hover, this.ex.on, this.scr.on, this.clarity.real(), this.dataP?.mesh.visible, this.life, this.trainP?.mesh.visible, this.opt.narr.on(), this.opt.listening(), this.ride.on].join('|');
+    return [this.getMode(), this.hover, this.ex.on, this.scr.on, this.clarity.real(), this.consP?.mesh.visible, this.dataP?.mesh.visible, this.life, this.trainP?.mesh.visible, this.opt.narr.on(), this.opt.listening(), this.ride.on].join('|');
   }
 
   menuHit(ctrl) { return this.hitRay(this.ctrlRay(ctrl)); }
@@ -381,9 +382,13 @@ export class VR {
     this.rideP.mesh.visible = false;
     this.capP = new Panel(0.7, 1024, 220, (x, W, H) => this.paintCaption(x, W, H)).place(0, 0.78, -0.7, 0);
     this.capP.mesh.visible = false;
-    this.dataP = new Panel(0.62, 960, 640, (x, W, H) => this.paintData(x, W, H)).place(0, 0.9, -0.55, 0);
+    this.dataP = new Panel(0.62, 960, 640, (x, W, H) => this.paintData(x, W, H)).place(0.85, 0.62, -0.62, -0.5);
     this.dataP.mesh.visible = false;
-    this.sc.scene.add(this.slP.mesh, this.cardP.mesh, this.trainP.mesh, this.rideP.mesh, this.capP.mesh, this.dataP.mesh);
+    // the control console, as on the desk: a tilted panel low in front of you
+    this.consP = new Panel(0.84, 1280, 720, (x, W, H) => this.paintCons(x, W, H)).place(0, 0.6, -0.12, 0);
+    this.consP.mesh.rotation.x = -0.8;
+    this.consP.mesh.visible = !!this.hw;
+    this.sc.scene.add(this.slP.mesh, this.cardP.mesh, this.trainP.mesh, this.rideP.mesh, this.capP.mesh, this.dataP.mesh, this.consP.mesh);
     this.refreshSliders(); this.slP.paint();
   }
 
@@ -495,6 +500,10 @@ export class VR {
   rayDown(ray, id) {
     const h = this.hitRay(ray);
     if (h.idx >= 0) { this.pick(h.idx); return true; }
+    if (this.consP.mesh.visible) {
+      const cp = this.consP.hit(ray);
+      if (cp) { this.consDown(cp, id); return true; }
+    }
     const sp = this.slP.hit(ray);
     if (sp) {
       const L = this.sl, inb = (b) => sp.x >= b[0] && sp.x <= b[0] + b[2] && sp.y >= b[1] && sp.y <= b[1] + b[3];
@@ -538,12 +547,14 @@ export class VR {
       this.fitScreen(sd.s);
       return;
     }
+    const C = this.cons;
+    if (C.drag?.id === id || C.padDrag?.id === id) { const hp = this.consP.hit(ray, true); if (hp) this.consMove(hp); return; }
     const d = this.sl.drag; if (!d || d.id !== id) return;
     const h = this.slP.hit(ray, true); if (!h) return;
     d.s.set(Math.max(0, Math.min(1, (h.x - d.t.tx0) / (d.t.tx1 - d.t.tx0))));
     this.acc = 1; // repaint right away
   }
-  rayUp(id) { if (this.sl.drag?.id === id) { this.sl.drag = null; this.acc = 1; } if (this.sd?.id === id) this.sd = null; }
+  rayUp(id) { const C = this.cons; if (C.drag?.id === id) C.drag = null; if (C.padDrag?.id === id) { C.padDrag = null; C.pad = [0, 0]; this.hw?.setStage(0, 0); this.acc = 1; } if (this.sl.drag?.id === id) { this.sl.drag = null; this.acc = 1; } if (this.sd?.id === id) this.sd = null; }
   rayClick(ray) { this.pickComponent(ray); }
 
   pick(idx) {
@@ -553,6 +564,7 @@ export class VR {
     else if (it.id === '__screens') { this.setScreens(!this.scr.on); this.paintMenu(); }
     else if (it.id === '__size') { this.setLife(!this.life); this.paintMenu(); }
     else if (it.id === '__reset') { this.stopRide(); this.ex.on = false; this.setLife(this.life); this.toMe(); this.paintMenu(); }
+    else if (it.id === '__cons') { const m = this.consP.mesh; m.visible = !m.visible; if (m.visible) this.toMeCons(); this.consP.sig = null; this.paintMenu(); }
     else if (it.id === '__real') { this.clarity.toggle(); this.paintMenu(); }
     else if (it.id === '__acq') { this.acquireFn(); this.dataP.mesh.visible = true; this.dataP.sig = null; this.toMeData(); this.paintMenu(); }
     else if (it.id === '__data') { const m = this.dataP.mesh; m.visible = !m.visible; if (m.visible) this.toMeData(); this.dataP.sig = null; this.paintMenu(); }
@@ -603,6 +615,7 @@ export class VR {
   }
 
   // ---- per-frame
+  get hw() { return this.hwFn(); }
   loop = (t) => { this.frameFn?.(t); };
   attach(frameFn) { this.frameFn = frameFn; }
 
@@ -612,6 +625,7 @@ export class VR {
     if (this.acc > 0.2) {
       this.acc = 0;
       this.slP.paint(this.refreshSliders());
+      if (this.consP.mesh.visible) this.consP.paint(); // live readouts
       const C = this.card;
       if (C.name) { const h = this.component(C.name); if (h !== C.html) C.html = h; this.cardP.paint(C.page + '|' + this.opt.narr.playing() + '|' + C.html); }
     }
@@ -797,14 +811,15 @@ export class VR {
     mesh.position.set(H.p.x + H.f.x * fwd + H.r.x * right, H.p.y + up, H.p.z + H.f.z * fwd + H.r.z * right);
     mesh.rotation.set(0, Math.atan2(H.p.x - mesh.position.x, H.p.z - mesh.position.z) + yawAdd, 0);
   }
-  toMeData() { this.placeAt(this.dataP.mesh, this.head(), 0, -0.3, 0.7); }
+  toMeData() { this.placeAt(this.dataP.mesh, this.head(), 0.85, -0.4, 0.7); }
+  toMeCons() { const m = this.consP.mesh; this.placeAt(m, this.head(), 0, -0.62, 0.5); m.rotation.set(-0.8, m.rotation.y, 0, 'YXZ'); }
   // bring the microscope, menu, knobs, data and screens in front of you (Reset)
   toMe() {
     const H = this.head();
     this.world.position.x = H.p.x + H.f.x * (this.life ? 2.4 : 1.05); this.world.position.z = H.p.z + H.f.z * (this.life ? 2.4 : 1.05);
     this.placeAt(this.menu, H, -0.55, -0.15, 0.75, 0);
     this.placeAt(this.slP.mesh, H, 0.55, -0.1, 0.7);
-    this.toMeData();
+    this.toMeData(); this.toMeCons();
     this.placeScreens(H.f.clone().negate());
     this.scrT = 1;
   }
@@ -831,6 +846,75 @@ export class VR {
       x.fillStyle = '#aab4bf'; x.font = `22px ${FONT}`;
       x.fillText(wrap(x, L.summary, W - 64)[0] ?? '', 32, H - 20);
     } else frame('nothing acquired yet · use Acquire', () => {}, 64 + iw);
+  }
+
+  // ---- the control console (the page's on-screen panel, in the room): knobs turn by dragging or tapping − / +
+  turnCons(axis, n) { this.hw.turn(axis, n); this.cons.angle[axis] = (this.cons.angle[axis] ?? 0) + n * 18; this.acc = 1; }
+  consDown(p, id) {
+    const C = this.cons;
+    const t = C.hot.find((t) => (t.r ? Math.hypot(p.x - t.x, p.y - t.y) <= t.r : p.x >= t.x && p.x <= t.x + t.w && p.y >= t.y && p.y <= t.y + t.h));
+    if (!t) return;
+    if (t.k === 'dial') C.drag = { id, axis: t.axis, y0: p.y, acc: 0 };
+    else if (t.k === 'pad') { C.padDrag = { id, t }; this.consMove(p); }
+    else { t.act(); this.acc = 1; }
+  }
+  consMove(p) {
+    const C = this.cons;
+    if (C.drag) {
+      C.drag.acc += (C.drag.y0 - p.y) / 26; C.drag.y0 = p.y; // 26 px of drag per detent, up = clockwise
+      const n = Math.trunc(C.drag.acc);
+      if (n) { this.turnCons(C.drag.axis, n); C.drag.acc -= n; }
+    } else if (C.padDrag) {
+      const t = C.padDrag.t, cx = THREE.MathUtils.clamp((p.x - t.x) / t.r, -1, 1), cy = THREE.MathUtils.clamp((p.y - t.y) / t.r, -1, 1);
+      C.pad = [cx, cy]; this.hw.setStage(cx, cy); this.acc = 1;
+    }
+  }
+  paintCons(x, W, H) {
+    const P = this.hw; if (!P) return;
+    const C = this.cons, hot = (C.hot = []), ro = P.readouts(), S = P.api.S;
+    x.fillStyle = 'rgba(10,14,19,0.94)'; rr(x, 0, 0, W, H, 40); x.fill();
+    x.strokeStyle = 'rgba(111,214,255,0.35)'; x.lineWidth = 3; x.stroke();
+    x.textAlign = 'left'; x.fillStyle = '#6fd6ff'; x.font = `600 36px ${FONT}`; x.fillText('Control panel', 36, 62);
+    x.fillStyle = '#8b97a4'; x.font = `24px ${FONT}`; x.fillText('drag a knob up or down, or tap − / +', 280, 60);
+    const KN = [['intensity', 'Intensity', 'intensity'], ['focus', 'Focus', 'focus'], ['mag', 'Magnification', 'mag'], ['mfX', 'Multifunction X', 'mf'], ['mfY', 'Multifunction Y', 'mf'], ['context', 'Context', 'context']];
+    const button = (b, label, on, act, fs = 28) => {
+      x.fillStyle = on ? 'rgba(111,214,255,0.25)' : 'rgba(255,255,255,0.08)'; rr(x, b[0], b[1], b[2], b[3], 16); x.fill();
+      if (on) { x.strokeStyle = '#6fd6ff'; x.lineWidth = 3; x.stroke(); }
+      x.fillStyle = '#e8edf2'; x.textAlign = 'center'; x.font = `600 ${fs}px ${FONT}`; x.fillText(label, b[0] + b[2] / 2, b[1] + b[3] / 2 + fs * 0.35);
+      hot.push({ k: 'btn', x: b[0], y: b[1], w: b[2], h: b[3], act });
+    };
+    KN.forEach(([axis, label, key], i) => {
+      const c = i % 3, r = Math.floor(i / 3), ox = 36 + c * 300, oy = 92 + r * 210, cx = ox + 62, cy = oy + 70;
+      x.strokeStyle = 'rgba(255,255,255,0.3)'; x.lineWidth = 5; x.fillStyle = 'rgba(255,255,255,0.06)';
+      x.beginPath(); x.arc(cx, cy, 54, 0, 7); x.fill(); x.stroke();
+      const a = ((C.angle[axis] ?? 0) - 90) * Math.PI / 180;
+      x.strokeStyle = '#6fd6ff'; x.lineWidth = 7; x.lineCap = 'round'; x.beginPath(); x.moveTo(cx + Math.cos(a) * 18, cy + Math.sin(a) * 18); x.lineTo(cx + Math.cos(a) * 46, cy + Math.sin(a) * 46); x.stroke();
+      hot.push({ k: 'dial', axis, x: cx, y: cy, r: 62 });
+      x.textAlign = 'left'; x.fillStyle = '#e8edf2'; x.font = `600 25px ${FONT}`;
+      x.fillText(axis === 'mfX' || axis === 'mfY' ? (axis === 'mfX' ? 'Multifunction X' : 'Multifunction Y') : ro[key][0], ox + 132, cy - 14);
+      x.fillStyle = '#9fe3ff'; x.font = `22px ${FONT}`;
+      const em = axis === 'mfY' ? '' : ro[key][1];
+      for (const [j, t] of wrap(x, em, 150).slice(0, 3).entries()) x.fillText(t, ox + 132, cy + 14 + j * 26);
+      button([ox + 4, oy + 140, 86, 52], '−', false, () => this.turnCons(axis, -1), 34);
+      button([ox + 100, oy + 140, 86, 52], '+', false, () => this.turnCons(axis, 1), 34);
+    });
+    // stage pad
+    const px = 1110, py = 250, pr = 120;
+    x.strokeStyle = 'rgba(255,255,255,0.3)'; x.lineWidth = 4; x.fillStyle = 'rgba(255,255,255,0.05)'; x.beginPath(); x.arc(px, py, pr, 0, 7); x.fill(); x.stroke();
+    x.fillStyle = '#6fd6ff'; x.beginPath(); x.arc(px + C.pad[0] * (pr - 24), py + C.pad[1] * (pr - 24), 22, 0, 7); x.fill();
+    x.fillStyle = '#8b97a4'; x.textAlign = 'center'; x.font = `24px ${FONT}`; x.fillText('Stage: press and push', px, py + pr + 34);
+    hot.push({ k: 'pad', x: px, y: py, r: pr });
+    // multifunction selector
+    const avail = P.mfList(), now = P.mfNow();
+    x.textAlign = 'left'; x.fillStyle = '#8b97a4'; x.font = `24px ${FONT}`; x.fillText('Multifunction knobs drive:', 36, 512);
+    let mx = 340;
+    for (const [k, l] of avail) { const w = Math.max(90, 30 + l.length * 15); if (mx + w > W - 30) break; button([mx, 480, w, 46], l, k === now, () => P.setMF(k), 24); mx += w + 10; }
+    // buttons
+    const B = [['modePrev', '◀ Mode', false], ['modeNext', 'Mode ▶', false], ['focusFine', 'Fine', P.fine], ['wobbler', 'Wobbler', !!P.wob], ['optFocus', 'Opt. focus', false], ['acquire', 'Acquire', false], ['pause', S.paused ? 'Resume' : 'Pause', S.paused]];
+    const bw = (W - 72 - 6 * 12) / 7;
+    B.forEach(([k, l, on], i) => button([36 + i * (bw + 12), 548, bw, 66], l, on, () => { if (k === 'acquire') { this.acquireFn(); this.dataP.mesh.visible = true; this.dataP.sig = null; this.toMeData(); } else P.button(k); }));
+    x.textAlign = 'left'; x.fillStyle = '#aab4bf'; x.font = `24px ${FONT}`;
+    x.fillText(`${S.mode.toUpperCase()} · ${P.msg}`.slice(0, 80), 36, 664);
   }
 
   // ---- big floating detector screens (the same canvases the page's results panel draws)
