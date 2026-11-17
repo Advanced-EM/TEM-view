@@ -21,6 +21,7 @@ import { toNpz as npzBytes } from './export.js';
 import { collectData, toNpz } from './export.js';
 import { openCalibration } from './calibui.js';
 import { ScriptCore, b64 } from './scripting.js';
+import { Drive } from './drive.js';
 import { PythonIDE, EXAMPLES as IDE_EXAMPLES } from './ide.js';
 import { specState, modeState, setState, chipState, resetVdet as resetVdetState, optimalDefocus, dfLimits as dfLimitsOf, lorSet, tiltLimit, fovMax, libGoto } from './ops.js';
 import * as ML from './megalibrary.js';
@@ -1107,6 +1108,17 @@ function wire() {
   $('#help').addEventListener('click', (e) => { if (e.target.id === 'help' || e.target.closest('.close')) $('#help').hidden = true; });
 
   // detector interactions
+  const drive = new Drive({
+    canvas: mainCv,
+    allowed: () => ['tem', 'stem', 'eds', 'eels', 'oah', 'ilh'].includes(S.mode),
+    fovA: () => sim.fovA(),
+    move: (dx, dy) => { S.cx += dx; S.cy += dy; sim.invalidate('stage'); },
+    done: () => explainChange('stage'),
+    readouts: () => ({ mode: S.mode, kV: S.kV, fov: S.fov, defocus: S.df, dose: S.dose, x: S.cx, y: S.cy }),
+  });
+  window.temDrive = drive;
+  $('#btnDrive')?.addEventListener('click', () => { usage.count('drive'); drive.toggle(); });
+  if (new URLSearchParams(location.search).has('drive')) drive.set(true);
   let drag = null;
   const rel = (e, cv) => { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top, r.width, r.height]; };
   mainCv.addEventListener('pointerdown', (e) => { if (S.mode === 'ltem' || S.mode === 'lstem') return; drag = { x: e.clientX, y: e.clientY, cx: S.cx, cy: S.cy, tx: S.tiltX, ty: S.tiltY }; mainCv.setPointerCapture(e.pointerId); });
@@ -1193,6 +1205,7 @@ function wire() {
     else if (e.key === 'e' || e.key === 'E') set('showElectrons', !S.showElectrons);
     else if (e.key === 'r' || e.key === 'R') scene.resetView();
     else if (e.key === 'c' || e.key === 'C') { S.clarity = S.clarity === 'edu' ? 'real' : 'edu'; sim.invalidate('clarity'); refreshControls(); explainChange('clarity'); }
+    else if ((e.key === 'd' || e.key === 'D') && !e.metaKey && !e.ctrlKey) { usage.count('drive'); drive.toggle(); }
     else if (e.key === 'v' || e.key === 'V') vPanel.openDock();
     else if (e.key === 'i' || e.key === 'I') acquireNow();
     else if ((e.key === 't' || e.key === 'T') && !e.metaKey && !e.ctrlKey) openTraining();
@@ -1250,6 +1263,7 @@ function frame(now) {
   last = now;
   try {
     hwPanel.poll(dt);
+    window.temDrive?.tick(dt);
     scn.tick();
     sim.update(dt);
     const live = S.clarity === 'real' && ['tem', 'stem', 'diff', 'ronch', 'cbed'].includes(S.mode) && !S.paused;
