@@ -193,7 +193,7 @@ export class Scene3D {
   constructor(canvas, labelLayer) {
     this.canvas = canvas;
     this.labelLayer = labelLayer;
-    const R = (this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' }));
+    const R = (this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' }));
     R.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
     R.toneMapping = THREE.ACESFilmicToneMapping;
     R.toneMappingExposure = 0.95;
@@ -465,9 +465,9 @@ export class Scene3D {
     geo.setAttribute('size', new THREE.BufferAttribute(new Float32Array(n), 1));
     const mat = new THREE.ShaderMaterial({
       transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-      uniforms: { uPR: { value: this.renderer.getPixelRatio() } },
-      vertexShader: `attribute vec3 color; attribute float size; varying vec3 vC; uniform float uPR;
-        void main(){ vC=color; vec4 mv=modelViewMatrix*vec4(position,1.0); gl_PointSize=size*uPR*(300.0/-mv.z); gl_Position=projectionMatrix*mv; }`,
+      uniforms: { uPR: { value: this.renderer.getPixelRatio() }, uWS: { value: 1 } },
+      vertexShader: `attribute vec3 color; attribute float size; varying vec3 vC; uniform float uPR; uniform float uWS;
+        void main(){ vC=color; vec4 mv=modelViewMatrix*vec4(position,1.0); gl_PointSize=size*uPR*uWS*(300.0/-mv.z); gl_Position=projectionMatrix*mv; }`,
       fragmentShader: `varying vec3 vC; void main(){ vec2 d=gl_PointCoord-0.5; float r=length(d); float a=smoothstep(0.5,0.0,r); a*=a; gl_FragColor=vec4(vC,a); }`,
     });
     const pts = new THREE.Points(geo, mat);
@@ -523,13 +523,15 @@ export class Scene3D {
       el.querySelector('span').addEventListener('click', open);
       el.querySelector('span').addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') open(e); });
       this.labelLayer.appendChild(el);
-      return { el, pos: new THREE.Vector3(...p), modes };
+      return { el, pos: new THREE.Vector3(...p), modes, text };
     });
   }
 
   resize(w, h, off) {
     this.W = w; this.H = h;
+    if (this.renderer.xr.isPresenting) return; // the headset owns the drawing buffer while it presents
     this.labels?.forEach((L) => (L.wd = 0)); // label widths change with the responsive font size
+    if (this.fullFrame) off = { left: 0, right: 0, bottom: 0, top: 0 }; // VR preview: the column is not framed between panels
     this.viewOffset = off;
     this.renderer.setSize(w, h, false);
     this.composer.setSize(w, h);
@@ -715,9 +717,10 @@ export class Scene3D {
   update(dt, S, sim) {
     this.time += dt;
     // pan the view down to the spectrometer in EELS mode (and back up afterwards)
+    const inVR = this.renderer.xr.isPresenting;
     const wantShift = S.mode === 'eels' ? -1.5 : 0;
     this.vShift ??= 0;
-    if (Math.abs(wantShift - this.vShift) > 1e-3 && !this.tour) {
+    if (!inVR && !this.fullFrame && Math.abs(wantShift - this.vShift) > 1e-3 && !this.tour) {
       const step = (wantShift - this.vShift) * Math.min(1, dt * 2.5);
       this.vShift += step;
       this.camera.position.y += step;
@@ -824,6 +827,7 @@ export class Scene3D {
     this.camMat.color.setScalar(ded ? 1.2 : 0.3);
     this.updateParticles(dt, S, sim);
     this.updateXrays(dt, S, onSpec);
+    if (inVR) { this.renderer.render(this.scene, this.camera); return; } // headset: straight to the eye buffers (no bloom pass)
     this.updateLabels(S);
     if (this.tour) this.stepTour(dt);
     this.controls.autoRotate = S.autoRotate && !this.tour;
@@ -896,11 +900,16 @@ export class Scene3D {
     X.pts.geometry.attributes.position.needsUpdate = X.pts.geometry.attributes.size.needsUpdate = true;
   }
 
+  // is this component present in the current mode? (also what the VR view uses to decide what can be touched)
+  labelOn(L, S) {
+    return !L.modes || (typeof L.modes === 'function' ? L.modes(S) : L.modes.includes(S.mode) || L.modes.includes(`${S.mode}:${S.camera}`) || (L.modes.includes('corr') && S.corrector));
+  }
+
   updateLabels(S) {
     const show = S.showLabels, v = new THREE.Vector3();
     const w = this.W, h = this.H;
     for (const L of this.labels) {
-      const on = show && (!L.modes || (typeof L.modes === 'function' ? L.modes(S) : L.modes.includes(S.mode) || L.modes.includes(`${S.mode}:${S.camera}`) || (L.modes.includes('corr') && S.corrector)));
+      const on = show && this.labelOn(L, S);
       if (!on) { L.el.style.opacity = 0; L.el.classList.add('off'); continue; }
       v.copy(L.pos).project(this.camera);
       if (v.z > 1) { L.el.style.opacity = 0; L.el.classList.add('off'); continue; }

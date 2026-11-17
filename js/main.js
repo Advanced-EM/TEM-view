@@ -2,6 +2,7 @@ import * as P from './physics.js';
 import { Sim, stemDetType, EELS_FULL_WELL } from './sim.js';
 import * as R2 from './render2d.js';
 import { Scene3D, Y } from './scene3d.js';
+import { VR } from './vr.js';
 import { modeInfo, changeText, dataRows } from './explain.js';
 import { renderComponent } from './components.js';
 import * as N from './narration.js';
@@ -11,7 +12,7 @@ import { HOLDERS } from './holder.js';
 import { Panel } from './panel.js';
 import { VirtualPanel } from './vpanel.js';
 import { Acquisitions } from './acquire.js';
-import { Scenarios } from './scenarios.js';
+import { Scenarios, SCENARIOS } from './scenarios.js';
 import { Voice, parseCommand, describe, EXAMPLES } from './voice.js';
 import { analyze } from './analyze.js';
 import { AgentBridge } from './agent.js';
@@ -53,6 +54,59 @@ const MODES = [
   ['oah', 'Off-axis', 'biprism holography', 'Holography'], ['ilh', 'In-line', 'focal-series exit wave', 'Holography'],
   ['ltem', 'Lorentz TEM', 'magnetic domains', 'Magnetism'], ['lstem', 'Lorentz STEM', 'DPC induction maps', 'Magnetism'],
 ];
+// optional VR view: the button only appears where the browser can start an immersive session
+let vrNote = null, xrLoop = false; // xrLoop: the page's own frame loop paused while a headset session drives the frames
+const vr = new VR(scene, {
+  modes: MODES, getMode: () => S.mode, setMode: (m) => setMode(m), getS: () => S,
+  component: (name) => renderComponent(name, S, sim),
+  screens: () => [{ canvas: mainCv, ver: () => lastDraw }, { canvas: secCv, ver: () => lastDraw }],
+  // alignment tasks: started unrecorded (the recording consent lives on the desktop page), result read back as text
+  training: {
+    list: () => Object.entries(SCENARIOS).map(([id, t]) => ({ id, title: t.title, short: t.short })),
+    start: (id) => { if (scn.active) scn.finish('abandoned'); const m = $('#scnModal'); if (m) m.hidden = true; scn.begin(id, false, 'novice', false); },
+    state: () => scn.active ? { active: true, title: SCENARIOS[scn.active.id].title, brief: document.querySelector('#scnCard .scnbrief')?.textContent ?? '', secs: (performance.now() - scn.active.t0) / 1000 } : { active: false },
+    finish: (outcome, rating) => {
+      if (!scn.active) return { head: '', body: '' };
+      scn.finish(outcome, rating);
+      const m = $('#scnModal'), head = m.querySelector('h2')?.textContent ?? '';
+      const body = [...m.querySelectorAll('.card > p:not(.eyebrow):not(.muted)')].map((p) => p.textContent).join(' ');
+      m.hidden = true;
+      return { head, body };
+    },
+  },
+  narr: { on: () => autoNarrate, toggle: () => setAutoNarrate(!autoNarrate), speak: (id) => N.speak(id), toggleId: (id) => N.toggle(id), stop: () => N.stop(), playing: () => N.playing() },
+  // voice: the first-use consent has to be given on the desktop page (its buttons are not in the headset)
+  talk: (on) => {
+    let ok = false; try { ok = localStorage.getItem('tem-voice-ok') === '1'; } catch { /* no storage */ }
+    if (on && !ok) { vrNote = ['Voice needs a one-time OK on the desktop page first (hold M there).', performance.now()]; return false; }
+    on ? voice.start() : voice.stop();
+    return on;
+  },
+  listening: () => !!voice.listening,
+  caption: () => {
+    if (vrNote && performance.now() - vrNote[1] < 6000) return vrNote[0];
+    const b = document.getElementById('voiceBubble');
+    return b && !b.hidden ? b.textContent.replace(/\s+/g, ' ').trim() : null;
+  },
+  // the sliders the control panel shows right now, as plain {label, value text, 0..1 position, setter} for the VR panel
+  sliders: () => bound.filter((b) => b.input && !b.el.hidden).map((b) => {
+    const lo = +b.input.min, hi = +b.input.max;
+    return {
+      key: b.c.slider + (b.c.stig ?? ''), label: b.el.querySelector('label').textContent, val: b.val.textContent, frac: hi > lo ? (+b.input.value - lo) / (hi - lo) : 0,
+      set: (f) => { b.input.value = lo + f * (hi - lo); b.input.dispatchEvent(new Event('input', { bubbles: true })); },
+    };
+  }),
+  onChange: (on) => { document.body.classList.toggle('inVR', on); $('#btnVR')?.setAttribute('aria-pressed', on); if (!on) { resize(); if (xrLoop) { xrLoop = false; requestAnimationFrame(frame); } } },
+});
+vr.attach((t) => frame(t));
+let vrReal = false;
+VR.supportedAR().then((ok) => { const b = $('#btnAR'); if (b && ok) b.hidden = false; });
+VR.supported().then((ok) => {
+  vrReal = ok;
+  const b = $('#btnVR'), demo = new URLSearchParams(location.search).has('vrdemo');
+  if (b && (ok || demo)) b.hidden = false;
+  if (b && !ok) b.title = 'VR preview: look at the VR scene on screen (no headset needed). Drag to orbit, click the floating menu, Esc to leave';
+});
 // keyboard shortcuts (Ronchigram keeps 8; the holography modes were added later as 9 and 0)
 const KEYS = { tem: '1', stem: '2', '4d': '3', diff: '4', cbed: '5', eds: '6', eels: '7', ronch: '8', oah: '9', ilh: '0', ltem: '-', lstem: '=' };
 const logMap = (min, max) => ({ to: (v) => (Math.log(v / min) / Math.log(max / min)) * 1000, from: (t) => min * Math.pow(max / min, t / 1000) });
@@ -944,6 +998,12 @@ function wire() {
   });
   document.querySelectorAll('.clarity button').forEach((b) => b.addEventListener('click', () => { S.clarity = b.dataset.v; sim.invalidate('clarity'); refreshControls(); explainChange('clarity'); }));
   $('#btnLabels').addEventListener('click', () => set('showLabels', !S.showLabels));
+  $('#btnVR').addEventListener('click', async () => {
+    try { if (vrReal) await vr.enter('vr'); else vr.startPreview(); } catch (e) { console.warn('VR could not start', e); $('#btnVR').title = 'VR could not start: ' + (e.message || e); }
+  });
+  $('#btnAR').addEventListener('click', async () => {
+    try { await vr.enter('ar'); } catch (e) { console.warn('AR could not start', e); $('#btnAR').title = 'AR could not start: ' + (e.message || e); }
+  });
   $('#btnFull').addEventListener('click', () => { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.(); });
   $('#btnHelp').addEventListener('click', () => ($('#help').hidden = false));
   // the explanation panel grows up from the bottom: stop it below the hero, so the support buttons stay visible
@@ -1191,13 +1251,14 @@ function frame(now) {
       }
       if (S.mode === 'eels') { scene.specTex.image = secCv; scene.specTex.needsUpdate = true; }
     }
+    vr.update(dt);
     scene.update(dt, S, sim);
   } catch (err) {
     console.error(err);
   }
   frames++;
   if (now - fpsT > 1000) { fps = Math.round((frames * 1000) / (now - fpsT)); frames = 0; fpsT = now; }
-  if (now - lastSlow > 300) {
+  if (now - lastSlow > 300 && !scene.renderer.xr.isPresenting) { // the page's readouts are not visible in a headset
     lastSlow = now;
     updateTable();
     hwPanel.hud($('#panelHud'));
@@ -1213,7 +1274,7 @@ function frame(now) {
     if (['eds', '4d', 'eels', 'stem', 'ronch', 'cbed', 'oah', 'ilh', 'ltem', 'lstem'].includes(S.mode)) renderInfo();
     $('#status').textContent = `· ${fps} fps`;
   }
-  requestAnimationFrame(frame);
+  if (!scene.renderer.xr.isPresenting) requestAnimationFrame(frame); else xrLoop = true; // in a headset the XR session drives the frames
 }
 
 // ------------------------------------------------------------------ component cards
@@ -1291,7 +1352,7 @@ updateDetectorHeader();
 explainChange('spec');
 resize();
 requestAnimationFrame(() => { resize(); requestAnimationFrame(frame); });
-window.__tem = { S, sim, scene, panel: hwPanel, vpanel: vPanel, scn, voice, agent, runOp };
+window.__tem = { S, sim, scene, vr, panel: hwPanel, vpanel: vPanel, scn, voice, agent, runOp };
 // deep link from the printed guides: ?train=<scenario id> opens that training task's intro
 { const id = new URLSearchParams(location.search).get('train'); if (id && /^[a-z0-9-]+$/.test(id)) setTimeout(() => { try { scn.start(id); } catch { /* unknown id */ } }, 600); }
 // ?script=<example> opens the Python IDE with that example (tools/temview-py/examples/<example>.py); ?script alone opens it

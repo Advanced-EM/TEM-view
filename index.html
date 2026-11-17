@@ -7,45 +7,46 @@
 <title>Seeing with Electrons</title>
 <meta name="description" content="An interactive transmission electron microscope: TEM, STEM, 4D-STEM, diffraction, EDS and EELS, computed from wave optics in your browser.">
 <link rel="stylesheet" href="fonts/fonts.css">
-<link rel="stylesheet" href="css/style.css?v=202611150031">
+<link rel="stylesheet" href="css/style.css?v=202611171004">
 <script type="importmap">
 {
  "imports": {
   "three": "./vendor/three@0.160.0/build/three.module.js",
   "three/addons/": "./vendor/three@0.160.0/examples/jsm/",
-  "./js/acquire.js": "./js/acquire.js?v=202611150031",
-  "./js/agent.js": "./js/agent.js?v=202611150031",
-  "./js/align.js": "./js/align.js?v=202611150031",
-  "./js/analyze.js": "./js/analyze.js?v=202611150031",
-  "./js/calibrate.js": "./js/calibrate.js?v=202611150031",
-  "./js/calibui.js": "./js/calibui.js?v=202611150031",
-  "./js/components.js": "./js/components.js?v=202611150031",
-  "./js/config.js": "./js/config.js?v=202611150031",
-  "./js/explain.js": "./js/explain.js?v=202611150031",
-  "./js/export.js": "./js/export.js?v=202611150031",
-  "./js/holder.js": "./js/holder.js?v=202611150031",
-  "./js/holography.js": "./js/holography.js?v=202611150031",
-  "./js/ide.js": "./js/ide.js?v=202611150031",
-  "./js/lorentz.js": "./js/lorentz.js?v=202611150031",
-  "./js/main.js": "./js/main.js?v=202611150031",
-  "./js/megalibrary.js": "./js/megalibrary.js?v=202611150031",
-  "./js/narration.js": "./js/narration.js?v=202611150031",
-  "./js/npy.js": "./js/npy.js?v=202611150031",
-  "./js/ops.js": "./js/ops.js?v=202611150031",
-  "./js/panel.js": "./js/panel.js?v=202611150031",
-  "./js/physics.js": "./js/physics.js?v=202611150031",
-  "./js/profile.js": "./js/profile.js?v=202611150031",
-  "./js/render2d.js": "./js/render2d.js?v=202611150031",
-  "./js/scenarios.js": "./js/scenarios.js?v=202611150031",
-  "./js/scene3d.js": "./js/scene3d.js?v=202611150031",
-  "./js/scripting.js": "./js/scripting.js?v=202611150031",
-  "./js/sim.js": "./js/sim.js?v=202611150031",
-  "./js/state.js": "./js/state.js?v=202611150031",
-  "./js/techniques.js": "./js/techniques.js?v=202611150031",
-  "./js/telemetry.js": "./js/telemetry.js?v=202611150031",
-  "./js/usage.js": "./js/usage.js?v=202611150031",
-  "./js/voice.js": "./js/voice.js?v=202611150031",
-  "./js/vpanel.js": "./js/vpanel.js?v=202611150031"
+  "./js/acquire.js": "./js/acquire.js?v=202611171004",
+  "./js/agent.js": "./js/agent.js?v=202611171004",
+  "./js/align.js": "./js/align.js?v=202611171004",
+  "./js/analyze.js": "./js/analyze.js?v=202611171004",
+  "./js/calibrate.js": "./js/calibrate.js?v=202611171004",
+  "./js/calibui.js": "./js/calibui.js?v=202611171004",
+  "./js/components.js": "./js/components.js?v=202611171004",
+  "./js/config.js": "./js/config.js?v=202611171004",
+  "./js/explain.js": "./js/explain.js?v=202611171004",
+  "./js/export.js": "./js/export.js?v=202611171004",
+  "./js/holder.js": "./js/holder.js?v=202611171004",
+  "./js/holography.js": "./js/holography.js?v=202611171004",
+  "./js/ide.js": "./js/ide.js?v=202611171004",
+  "./js/lorentz.js": "./js/lorentz.js?v=202611171004",
+  "./js/main.js": "./js/main.js?v=202611171004",
+  "./js/megalibrary.js": "./js/megalibrary.js?v=202611171004",
+  "./js/narration.js": "./js/narration.js?v=202611171004",
+  "./js/npy.js": "./js/npy.js?v=202611171004",
+  "./js/ops.js": "./js/ops.js?v=202611171004",
+  "./js/panel.js": "./js/panel.js?v=202611171004",
+  "./js/physics.js": "./js/physics.js?v=202611171004",
+  "./js/profile.js": "./js/profile.js?v=202611171004",
+  "./js/render2d.js": "./js/render2d.js?v=202611171004",
+  "./js/scenarios.js": "./js/scenarios.js?v=202611171004",
+  "./js/scene3d.js": "./js/scene3d.js?v=202611171004",
+  "./js/scripting.js": "./js/scripting.js?v=202611171004",
+  "./js/sim.js": "./js/sim.js?v=202611171004",
+  "./js/state.js": "./js/state.js?v=202611171004",
+  "./js/techniques.js": "./js/techniques.js?v=202611171004",
+  "./js/telemetry.js": "./js/telemetry.js?v=202611171004",
+  "./js/usage.js": "./js/usage.js?v=202611171004",
+  "./js/voice.js": "./js/voice.js?v=202611171004",
+  "./js/vpanel.js": "./js/vpanel.js?v=202611171004",
+  "./js/vr.js": "./js/vr.js?v=202611171004"
  }
 }
 </script>
@@ -111,6 +112,8 @@
   <button id="btnLabels" title="Labels (L)" aria-label="Toggle labels"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button>
   <button id="btnPanel" title="Control panel" aria-label="Control panel and game controllers"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2.5" y="6.5" width="19" height="11" rx="3"/><circle cx="8" cy="12" r="2"/><circle cx="16" cy="10.5" r="1"/><circle cx="18" cy="13" r="1"/></svg></button>
   <button id="btnNarrate" title="Auto-narrate (N)" aria-label="Narrate automatically" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 13v-1a8 8 0 0 1 16 0v1"/><rect x="3" y="13" width="4" height="7" rx="1.5"/><rect x="17" y="13" width="4" height="7" rx="1.5"/></svg></button>
+  <button id="btnVR" hidden title="View in VR: stand the microscope in your room (needs a headset)" aria-label="View in VR" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M3 8.5h18v7a1.5 1.5 0 0 1-1.5 1.5h-3.2l-1.6-2.5h-3.4L9.7 17H4.5A1.5 1.5 0 0 1 3 15.5z"/><circle cx="7.6" cy="12" r=".6" fill="currentColor"/><circle cx="16.4" cy="12" r=".6" fill="currentColor"/></svg></button>
+  <button id="btnAR" hidden title="View in AR: put the microscope on your table, with the room visible (needs a passthrough headset)" aria-label="View in AR"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M12 3.5 20 8v8l-8 4.5L4 16V8z"/><path d="M4 8l8 4.5L20 8M12 12.5v8"/></svg></button>
   <button id="btnFull" title="Fullscreen" aria-label="Fullscreen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
   <button class="fold" data-fold="R" title="Hide the controls (])" aria-label="Hide the controls panel">›</button>
   <button id="btnHelp" title="About" aria-label="About this exhibit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9.5"/><path d="M9.6 9.3a2.5 2.5 0 1 1 3.4 2.3c-.7.3-1 .8-1 1.5v.6"/><circle cx="12" cy="16.8" r=".6" fill="currentColor"/></svg></button>
@@ -167,6 +170,6 @@
 <input id="fileSession" type="file" accept=".json,application/json" hidden>
 <div id="calib" class="modal calib" hidden><div class="card"><button class="close" aria-label="Close">×</button><div class="calibBody"></div></div></div>
 
-<script type="module" src="js/main.js?v=202611150031"></script>
+<script type="module" src="js/main.js?v=202611171004"></script>
 </body>
 </html>

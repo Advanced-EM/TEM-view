@@ -590,3 +590,7 @@ body.stacked .support { margin: 8px 16px 0; }
 .sitefoot b { color: var(--text); font-weight: 500; }
 .sitefoot a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 .sitefoot a:hover { color: var(--text); }
+
+/* VR view: the page chrome gets out of the way (in a headset it is not drawn at all; in the desktop preview this leaves just the scene) */
+body.inVR > :not(.stage):not(script):not(style) { opacity: 0 !important; pointer-events: none !important; } /* hidden, but still laid out: the detector canvases keep their size, so the VR screens can show them */
+body.inVR::before { content: 'VR preview · drag to orbit · scroll to zoom · click the floating menu · Esc to leave'; position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); padding: 8px 16px; border-radius: 999px; background: rgba(10, 14, 19, 0.85); border: 1px solid rgba(111, 214, 255, 0.35); color: #c3cad3; font: 12.5px var(--sans); pointer-events: none; z-index: 5; }
