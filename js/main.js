@@ -62,6 +62,14 @@ const vr = new VR(scene, {
   modes: MODES, getMode: () => S.mode, setMode: (m) => setMode(m), getS: () => S,
   component: (name) => renderComponent(name, S, sim),
   screens: () => [{ canvas: mainCv, ver: () => lastDraw }, { canvas: secCv, ver: () => lastDraw }],
+  acquire: () => acquireNow(),
+  data: () => {
+    const a = acq.list[0], m = MODES.find((x) => x[0] === S.mode);
+    return {
+      lines: [`${m ? m[1] : S.mode} on ${sim.spec.short}`, `${S.kV} kV · defocus ${Math.round(S.df)} nm · field ${S.fov} nm`, `dose ${S.dose < 10 ? S.dose.toFixed(1) : Math.round(S.dose)} e⁻/Å² per exposure · ${acq.list.length} acquired`],
+      n: acq.list.length, last: a ? { id: a.id, mode: a.mode, summary: a.summary, png: a.png } : null,
+    };
+  },
   // alignment tasks: started unrecorded (the recording consent lives on the desktop page), result read back as text
   training: {
     list: () => Object.entries(SCENARIOS).map(([id, t]) => ({ id, title: t.title, short: t.short })),

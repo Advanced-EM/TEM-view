@@ -68,10 +68,11 @@ function wrap(x, text, maxW) {
 const rr = (x, a, b, w, h, r) => { x.beginPath(); x.roundRect(a, b, w, h, r); };
 
 export class VR {
-  constructor(sc, { modes, getMode, setMode, onChange, sliders, component, getS, screens, training, narr, talk, listening, caption }) {
+  constructor(sc, { modes, getMode, setMode, onChange, sliders, component, getS, screens, data, acquire, training, narr, talk, listening, caption }) {
     this.sc = sc; this.modes = modes; this.getMode = getMode; this.setMode = setMode; this.onChange = onChange || (() => {});
     this.sliders = sliders || (() => []); this.component = component || (() => null); this.getS = getS || (() => ({}));
     this.screensFn = screens || (() => []);
+    this.dataFn = data || (() => ({ lines: [], n: 0, last: null })); this.acquireFn = acquire || (() => {});
     this.opt = {
       training: training || { list: () => [], start() {}, state: () => ({ active: false }), finish: () => ({ head: '', body: '' }) },
       narr: narr || { on: () => false, toggle() {}, speak() {}, toggleId() {}, stop() {}, playing: () => null },
@@ -205,6 +206,7 @@ export class VR {
       this.buildMenu();
       this.buildPanels();
       this.buildControllers();
+      this.setScreens(true); // the detector images are the data: show them from the start
       if (this.ar) { // passthrough: let the room show through
         this.bg = scene.background; scene.background = null; sc.renderer.setClearAlpha(0);
         this.room.visible = false;
@@ -214,9 +216,9 @@ export class VR {
       this.ar = false;
       this.closeCard(); this.stopRide(); this.stopSpoken(); if (this.opt.listening()) this.opt.talk(false);
       this.ex.on = false; this.ex.t = 0; this.applyExplode(); this.unwrapSlots(); // parts back in place, beams back on
-      for (const P of [this.slP, this.cardP, this.trainP, this.rideP, this.capP]) P?.dispose();
+      for (const P of [this.slP, this.cardP, this.trainP, this.rideP, this.capP, this.dataP]) P?.dispose();
       if (this.menu) { this.mtex.dispose(); this.menu.geometry.dispose(); this.menu.material.dispose(); }
-      for (const g of [this.room, this.menu, this.slP?.mesh, this.cardP?.mesh, this.trainP?.mesh, this.rideP?.mesh, this.capP?.mesh, ...(this.ctrl || [])]) g && scene.remove(g);
+      for (const g of [this.room, this.menu, this.slP?.mesh, this.cardP?.mesh, this.trainP?.mesh, this.rideP?.mesh, this.capP?.mesh, this.dataP?.mesh, ...(this.ctrl || [])]) g && scene.remove(g);
       for (const c of [...this.world.children]) scene.add(c);
       scene.remove(this.world);
       this.world = null;
@@ -264,7 +266,7 @@ export class VR {
 
   // ---- floating mode menu (left)
   buildMenu() {
-    const cols = 3, rows = Math.ceil((this.modes.length + 9) / cols); // modes, then the nine tool buttons ending in Exit
+    const cols = 3, rows = Math.ceil((this.modes.length + 11) / cols); // modes, then the eleven tool buttons ending in Exit
     this.mcols = cols; this.mrows = rows;
     const W = 768, H = rows * 128 + 96;
     const cv = (this.mcv = document.createElement('canvas')); cv.width = W; cv.height = H;
@@ -285,12 +287,12 @@ export class VR {
     x.fillStyle = '#6fd6ff'; x.font = `600 34px ${FONT}`; x.textAlign = 'left';
     x.fillText('TEM-view · choose a mode', 36, 62);
     const cw = (W - 72) / this.mcols, top = 96;
-    const items = [...this.modes.map((m) => ({ id: m[0], label: m[1], sub: m[2] })), { id: '__explode', label: 'Exploded', sub: 'pull it apart' }, { id: '__screens', label: 'Screens', sub: 'big detectors' }, { id: '__size', label: 'Size', sub: 'table / life size' }, { id: '__reset', label: 'Reset', sub: 'in front of me' }, { id: '__train', label: 'Training', sub: 'align a task' }, { id: '__narr', label: 'Narrate', sub: 'hear explanations' }, { id: '__talk', label: 'Talk', sub: 'voice commands' }, { id: '__ride', label: 'Ride beam', sub: 'follow the electrons' }, { id: '__exit', label: this.ar ? 'Exit AR' : 'Exit VR', sub: '' }];
+    const items = [...this.modes.map((m) => ({ id: m[0], label: m[1], sub: m[2] })), { id: '__explode', label: 'Exploded', sub: 'pull it apart' }, { id: '__screens', label: 'Screens', sub: 'big detectors' }, { id: '__size', label: 'Size', sub: 'table / life size' }, { id: '__reset', label: 'Reset', sub: 'in front of me' }, { id: '__acq', label: 'Acquire', sub: 'record the data' }, { id: '__data', label: 'Data', sub: 'live + last shot' }, { id: '__train', label: 'Training', sub: 'align a task' }, { id: '__narr', label: 'Narrate', sub: 'hear explanations' }, { id: '__talk', label: 'Talk', sub: 'voice commands' }, { id: '__ride', label: 'Ride beam', sub: 'follow the electrons' }, { id: '__exit', label: this.ar ? 'Exit AR' : 'Exit VR', sub: '' }];
     items.forEach((it, i) => {
       const exit = it.id === '__exit';
       const c = i % this.mcols, r = Math.floor(i / this.mcols);
       const bx = 36 + c * cw + 6, by = top + r * 128 + 6, bw = cw - 12, bh = 116;
-      const on = it.id === cur || (it.id === '__explode' && this.ex.on) || (it.id === '__screens' && this.scr.on) || (it.id === '__size' && this.life) || (it.id === '__train' && this.trainP?.mesh.visible) || (it.id === '__narr' && this.opt.narr.on()) || (it.id === '__talk' && this.opt.listening()) || (it.id === '__ride' && this.ride.on), hov = this.hover === i;
+      const on = it.id === cur || (it.id === '__explode' && this.ex.on) || (it.id === '__screens' && this.scr.on) || (it.id === '__data' && this.dataP?.mesh.visible) || (it.id === '__size' && this.life) || (it.id === '__train' && this.trainP?.mesh.visible) || (it.id === '__narr' && this.opt.narr.on()) || (it.id === '__talk' && this.opt.listening()) || (it.id === '__ride' && this.ride.on), hov = this.hover === i;
       x.fillStyle = on ? 'rgba(111,214,255,0.22)' : hov ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.05)';
       rr(x, bx, by, bw, bh, 20); x.fill();
       if (on || hov) { x.strokeStyle = on ? '#6fd6ff' : 'rgba(255,255,255,0.5)'; x.lineWidth = 3; x.stroke(); }
@@ -304,7 +306,7 @@ export class VR {
 
   // everything that changes how the menu looks, as one string (repaint when it changes)
   menuSig() {
-    return [this.getMode(), this.hover, this.ex.on, this.scr.on, this.life, this.trainP?.mesh.visible, this.opt.narr.on(), this.opt.listening(), this.ride.on].join('|');
+    return [this.getMode(), this.hover, this.ex.on, this.scr.on, this.dataP?.mesh.visible, this.life, this.trainP?.mesh.visible, this.opt.narr.on(), this.opt.listening(), this.ride.on].join('|');
   }
 
   menuHit(ctrl) { return this.hitRay(this.ctrlRay(ctrl)); }
@@ -376,7 +378,9 @@ export class VR {
     this.rideP.mesh.visible = false;
     this.capP = new Panel(0.7, 1024, 220, (x, W, H) => this.paintCaption(x, W, H)).place(0, 0.78, -0.7, 0);
     this.capP.mesh.visible = false;
-    this.sc.scene.add(this.slP.mesh, this.cardP.mesh, this.trainP.mesh, this.rideP.mesh, this.capP.mesh);
+    this.dataP = new Panel(0.62, 960, 640, (x, W, H) => this.paintData(x, W, H)).place(0, 0.9, -0.55, 0);
+    this.dataP.mesh.visible = false;
+    this.sc.scene.add(this.slP.mesh, this.cardP.mesh, this.trainP.mesh, this.rideP.mesh, this.capP.mesh, this.dataP.mesh);
     this.refreshSliders(); this.slP.paint();
   }
 
@@ -545,7 +549,9 @@ export class VR {
     else if (it.id === '__explode') { this.ex.on = !this.ex.on; this.paintMenu(); }
     else if (it.id === '__screens') { this.setScreens(!this.scr.on); this.paintMenu(); }
     else if (it.id === '__size') { this.setLife(!this.life); this.paintMenu(); }
-    else if (it.id === '__reset') { this.stopRide(); this.ex.on = false; this.setLife(this.life); this.paintMenu(); }
+    else if (it.id === '__reset') { this.stopRide(); this.ex.on = false; this.setLife(this.life); this.toMe(); this.paintMenu(); }
+    else if (it.id === '__acq') { this.acquireFn(); this.dataP.mesh.visible = true; this.dataP.sig = null; this.toMeData(); this.paintMenu(); }
+    else if (it.id === '__data') { const m = this.dataP.mesh; m.visible = !m.visible; if (m.visible) this.toMeData(); this.dataP.sig = null; this.paintMenu(); }
     else if (it.id === '__train') { const m = this.trainP.mesh; m.visible = !m.visible; this.tr.view = this.opt.training.state().active ? 'run' : this.tr.view; this.trainP.sig = null; this.paintMenu(); }
     else if (it.id === '__narr') { this.opt.narr.toggle(); this.paintMenu(); }
     else if (it.id === '__talk') { this.opt.talk(!this.opt.listening()); this.paintMenu(); }
@@ -617,6 +623,7 @@ export class VR {
       const cap = this.opt.caption();
       this.capP.mesh.visible = !!cap;
       if (cap) { this.capText = cap; this.capP.paint(cap); }
+      if (this.dataP.mesh.visible) this.dataP.paint(); // live: redraw with the detector
       if (this.menuSig() !== this.menuDrawn) { this.paintMenu(); }
     }
   }
@@ -770,6 +777,56 @@ export class VR {
     E.t += Math.sign(d) * st;
     if (Math.abs(want - E.t) < 1e-3) E.t = want;
     this.applyExplode();
+  }
+
+  // ---- placing things where you are looking: the head's position and the horizontal direction it faces
+  head() {
+    const cam = this.preview ? this.sc.camera : this.sc.renderer.xr.getCamera();
+    cam.updateMatrixWorld(true);
+    const p = new THREE.Vector3().setFromMatrixPosition(cam.matrixWorld);
+    const f = new THREE.Vector3(0, 0, -1).transformDirection(cam.matrixWorld); f.y = 0;
+    if (f.lengthSq() < 1e-4) f.set(0, 0, -1); f.normalize();
+    return { p, f, r: new THREE.Vector3(-f.z, 0, f.x) };
+  }
+  // put a mesh `fwd` in front of the head, `right` to its right and `up` above it, turned to face it
+  placeAt(mesh, H, right, up, fwd, yawAdd = 0) {
+    mesh.position.set(H.p.x + H.f.x * fwd + H.r.x * right, H.p.y + up, H.p.z + H.f.z * fwd + H.r.z * right);
+    mesh.rotation.set(0, Math.atan2(H.p.x - mesh.position.x, H.p.z - mesh.position.z) + yawAdd, 0);
+  }
+  toMeData() { this.placeAt(this.dataP.mesh, this.head(), 0, -0.3, 0.7); }
+  // bring the microscope, menu, knobs, data and screens in front of you (Reset)
+  toMe() {
+    const H = this.head();
+    this.world.position.x = H.p.x + H.f.x * (this.life ? 2.4 : 1.05); this.world.position.z = H.p.z + H.f.z * (this.life ? 2.4 : 1.05);
+    this.placeAt(this.menu, H, -0.55, -0.15, 0.75, 0);
+    this.placeAt(this.slP.mesh, H, 0.55, -0.1, 0.7);
+    this.toMeData();
+    this.scr.list.forEach((s, i) => { this.placeAt(s.mesh, H, i ? 0.95 : 0, i ? -0.05 : 0.1, i ? 1.9 : 2.0); s.handle.rotation.y = s.mesh.rotation.y; });
+    this.scrT = 1;
+  }
+  paintData(x, W, H) {
+    const d = this.dataFn();
+    x.fillStyle = 'rgba(10,14,19,0.93)'; rr(x, 0, 0, W, H, 34); x.fill();
+    x.strokeStyle = 'rgba(111,214,255,0.35)'; x.lineWidth = 3; x.stroke();
+    x.textAlign = 'left'; x.fillStyle = '#6fd6ff'; x.font = `600 34px ${FONT}`; x.fillText('Data · live detector and last acquisition', 32, 58);
+    x.fillStyle = '#e8edf2'; x.font = `28px ${FONT}`;
+    d.lines.forEach((t, i) => x.fillText(t, 32, 108 + i * 38));
+    const iy = 108 + d.lines.length * 38 + 14, ih = H - iy - 90, iw = (W - 96) / 2, side = Math.min(iw, ih);
+    const frame = (label, draw, ox) => {
+      x.fillStyle = '#000'; x.fillRect(ox, iy, side, side);
+      draw(ox, side);
+      x.strokeStyle = 'rgba(255,255,255,0.25)'; x.lineWidth = 2; x.strokeRect(ox, iy, side, side);
+      x.fillStyle = '#8b97a4'; x.font = `24px ${FONT}`; x.fillText(label, ox, iy + side + 32);
+    };
+    const live = this.screensFn()[0]?.canvas;
+    frame('live (updates as the beam scans)', (ox, sd) => { if (live && live.width > 8) { try { x.drawImage(live, ox, iy, sd, sd); } catch (e) { /* not drawn yet */ } } }, 32);
+    const L = d.last;
+    if (L) {
+      if (this.dataImg?.id !== L.id) { const im = new Image(); im.onload = () => { this.dataImg.ok = true; this.dataP.sig = null; }; im.src = L.png; this.dataImg = { id: L.id, im, ok: false }; }
+      frame(`acquired #${L.id} · ${L.mode.toUpperCase()}`, (ox, sd) => { if (this.dataImg.ok) x.drawImage(this.dataImg.im, ox, iy, sd, sd); }, 64 + iw);
+      x.fillStyle = '#aab4bf'; x.font = `22px ${FONT}`;
+      x.fillText(wrap(x, L.summary, W - 64)[0] ?? '', 32, H - 20);
+    } else frame('nothing acquired yet · use Acquire', () => {}, 64 + iw);
   }
 
   // ---- big floating detector screens (the same canvases the page's results panel draws)
