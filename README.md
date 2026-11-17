@@ -122,6 +122,12 @@ Then open http://localhost:8765. Three.js and the fonts are in the repository (`
 
 To publish, push this folder to a GitHub repository and enable **Pages** on the main branch; no build step is needed. Before each release, run `node tools/stamp.mjs`: it stamps a version onto every module and the stylesheet in `index.html`, `kids/index.html` and `kids/sticker.html` (with `kids/lang/`), and the Ruska and Scanning modules, so browsers load the new code instead of a cached copy.
 
+## Virtual reality (experimental)
+
+On a browser with WebXR immersive VR (for example a Meta Quest), a **VR** button appears and puts the microscope on a table in front of you; where AR passthrough is available you can also place it in your room. Look at the column, pick up the knobs, and open panels from the wrist menu: the control console (six knobs, stage pad, mode, focus, acquire), live detector screens at the base of the column, a Data panel, the Python editor, the acquired-shots gallery, training and narration. Every panel has a close button, and *Hide all* clears the room. *Realistic* switches to shot noise and real detectors.
+
+This view has been tested with a mouse-driven preview, not yet on a headset; ray pointing, grips, hand tracking, comfort and frame rate on a standalone headset are unverified. The button stays hidden on devices without WebXR. `?vrdemo` shows it anywhere and runs the mouse preview.
+
 ## Controls
 
 Drag the column to orbit and scroll to zoom. Keys `1`–`9` and `0` switch modes, `Space` pauses, `C` toggles clarity, `L` toggles labels, `R` resets the view, `N` toggles narration, `X` enlarges the results panel, `V` opens the on-screen control panel, `I` acquires, `T` opens training, hold `M` to talk, `[` and `]` hide or show the explanation and controls panels (or the ‹ › buttons; a tab at the screen edge brings them back). Drag the detector image to move the stage and scroll it to change magnification (in diffraction, dragging tilts the crystal). In EDS, click a peak to map it; in EELS, drag the spectrum to move the energy window. In 4D-STEM, hover the image to read patterns and drag on the pattern to reshape the detector.
@@ -135,7 +141,8 @@ Drag the column to orbit and scroll to zoom. Keys `1`–`9` and `0` switch modes
 | `js/techniques.js` | Ronchigram & corrector, CBED/LACBED |
 | `js/holography.js` | Off-axis and in-line (focal-series) electron holography |
 | `js/lorentz.js` | Lorentz TEM (Fresnel, Foucault, TIE) and Lorentz STEM (DPC) of magnetic specimens |
-| `js/abtem.js`, `tools/abtem-bridge/` | Bridge to [abTEM](https://github.com/abTEM/abTEM) ([docs](https://abtem.readthedocs.io/); Madsen & Susi, *Open Research Europe* 1, 24 (2021), [doi:10.12688/openreseurope.13015.2](https://doi.org/10.12688/openreseurope.13015.2)): the current state as a reference multislice simulation (TEM, STEM, 4D-STEM, SAED, CBED) |
+| `js/abtem.js`, `tools/abtem-bridge/` | Bridge to [abTEM](https://github.com/abTEM/abTEM) ([docs](https://abtem.readthedocs.io/); Madsen & Susi, *Open Research Europe* 1, 24 (2021), [doi:10.12688/openreseurope.13015.2](https://doi.org/10.12688/openreseurope.13015.2)): the current state as a reference multislice simulation (TEM, STEM, 4D-STEM, SAED, CBED); also published as the stand-alone [temview-abtem](https://github.com/Advanced-EM/temview-abtem) |
+| `js/vr.js` | Optional WebXR view (experimental): tabletop microscope, control console, floating panels, AR passthrough |
 | `js/profile.js` | Instrument profile, presets, focal spread |
 | `js/state.js` | Default state and the keys a session stores |
 | `js/calibrate.js`, `js/calibui.js` | Thon-ring and zero-loss fits, file readers (.mrc, .npy, images), calibration dialog |
