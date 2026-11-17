@@ -36,6 +36,11 @@ class Panel {
   paint(sig) {
     if (sig !== undefined) { if (sig === this.sig) return; this.sig = sig; }
     const x = this.cv.getContext('2d'); x.clearRect(0, 0, this.pw, this.ph); this.draw(x, this.pw, this.ph); this.tex.needsUpdate = true;
+    if (this.closable) { // a close button in the top-right corner
+      const cx = this.pw - 42, cy = 42;
+      x.fillStyle = 'rgba(255,255,255,0.14)'; x.beginPath(); x.arc(cx, cy, 26, 0, 7); x.fill();
+      x.strokeStyle = '#e8edf2'; x.lineWidth = 5; x.lineCap = 'round'; x.beginPath(); x.moveTo(cx - 10, cy - 10); x.lineTo(cx + 10, cy + 10); x.moveTo(cx + 10, cy - 10); x.lineTo(cx - 10, cy + 10); x.stroke();
+    }
   }
   // pixel position of a ray on this panel; with `loose` the ray's plane crossing counts even outside the panel
   hit(ray, loose = false) {
@@ -69,11 +74,13 @@ function wrap(x, text, maxW) {
 const rr = (x, a, b, w, h, r) => { x.beginPath(); x.roundRect(a, b, w, h, r); };
 
 export class VR {
-  constructor(sc, { modes, getMode, setMode, onChange, sliders, component, getS, screens, data, acquire, clarity, panel, training, narr, talk, listening, caption }) {
+  constructor(sc, { modes, getMode, setMode, onChange, sliders, component, getS, screens, data, acquire, clarity, panel, ide, examples, gallery, training, narr, talk, listening, caption }) {
     this.sc = sc; this.modes = modes; this.getMode = getMode; this.setMode = setMode; this.onChange = onChange || (() => {});
     this.sliders = sliders || (() => []); this.component = component || (() => null); this.getS = getS || (() => ({}));
     this.screensFn = screens || (() => []);
     this.dataFn = data || (() => ({ lines: [], n: 0, last: null })); this.acquireFn = acquire || (() => {});
+    this.ideFn = ide || (() => null); this.examples = examples || []; this.galFn = gallery || { list: () => [], remove() {} };
+    this.ideS = { code: 0, out: 0, auto: true, hot: [], opened: false }; this.gal = { sel: null, hot: [], imgs: new Map() };
     this.hwFn = panel || (() => null); this.cons = { angle: {}, hot: [], drag: null, padDrag: null, pad: [0, 0] };
     this.clarity = clarity || { real: () => false, toggle: () => {} };
     this.opt = {
@@ -219,9 +226,10 @@ export class VR {
       this.ar = false;
       this.closeCard(); this.stopRide(); this.stopSpoken(); if (this.opt.listening()) this.opt.talk(false);
       this.ex.on = false; this.ex.t = 0; this.applyExplode(); this.unwrapSlots(); // parts back in place, beams back on
-      for (const P of [this.slP, this.cardP, this.trainP, this.rideP, this.capP, this.dataP, this.consP]) P?.dispose();
+      for (const P of [this.slP, this.cardP, this.trainP, this.rideP, this.capP, this.dataP, this.consP, this.ideP, this.galP]) P?.dispose();
+      if (this.ideS.opened) { this.ideFn()?.toggle(false); this.ideS.opened = false; }
       if (this.menu) { this.mtex.dispose(); this.menu.geometry.dispose(); this.menu.material.dispose(); }
-      for (const g of [this.room, this.menu, this.slP?.mesh, this.cardP?.mesh, this.trainP?.mesh, this.rideP?.mesh, this.capP?.mesh, this.dataP?.mesh, this.consP?.mesh, ...(this.ctrl || [])]) g && scene.remove(g);
+      for (const g of [this.room, this.menu, this.slP?.mesh, this.cardP?.mesh, this.trainP?.mesh, this.rideP?.mesh, this.capP?.mesh, this.dataP?.mesh, this.consP?.mesh, this.ideP?.mesh, this.galP?.mesh, ...(this.ctrl || [])]) g && scene.remove(g);
       for (const c of [...this.world.children]) scene.add(c);
       scene.remove(this.world);
       this.world = null;
@@ -270,7 +278,7 @@ export class VR {
 
   // ---- floating mode menu (left)
   buildMenu() {
-    const cols = 3, rows = Math.ceil((this.modes.length + 13) / cols); // modes, then the thirteen tool buttons ending in Exit
+    const cols = 3, rows = Math.ceil((this.modes.length + 17) / cols); // modes, then the seventeen tool buttons ending in Exit
     this.mcols = cols; this.mrows = rows;
     const W = 768, H = rows * 128 + 96;
     const cv = (this.mcv = document.createElement('canvas')); cv.width = W; cv.height = H;
@@ -291,12 +299,12 @@ export class VR {
     x.fillStyle = '#6fd6ff'; x.font = `600 34px ${FONT}`; x.textAlign = 'left';
     x.fillText('TEM-view · choose a mode', 36, 62);
     const cw = (W - 72) / this.mcols, top = 96;
-    const items = [...this.modes.map((m) => ({ id: m[0], label: m[1], sub: m[2] })), { id: '__explode', label: 'Exploded', sub: 'pull it apart' }, { id: '__screens', label: 'Screens', sub: 'big detectors' }, { id: '__size', label: 'Size', sub: 'table / life size' }, { id: '__reset', label: 'Reset', sub: 'in front of me' }, { id: '__cons', label: 'Console', sub: 'knobs and buttons' }, { id: '__real', label: 'Realistic', sub: 'noise, real detectors' }, { id: '__acq', label: 'Acquire', sub: 'record the data' }, { id: '__data', label: 'Data', sub: 'live + last shot' }, { id: '__train', label: 'Training', sub: 'align a task' }, { id: '__narr', label: 'Narrate', sub: 'hear explanations' }, { id: '__talk', label: 'Talk', sub: 'voice commands' }, { id: '__ride', label: 'Ride beam', sub: 'follow the electrons' }, { id: '__exit', label: this.ar ? 'Exit AR' : 'Exit VR', sub: '' }];
+    const items = [...this.modes.map((m) => ({ id: m[0], label: m[1], sub: m[2] })), { id: '__explode', label: 'Exploded', sub: 'pull it apart' }, { id: '__screens', label: 'Screens', sub: 'big detectors' }, { id: '__size', label: 'Size', sub: 'table / life size' }, { id: '__reset', label: 'Reset', sub: 'in front of me' }, { id: '__ctrl', label: 'Controls', sub: 'sliders panel' }, { id: '__cons', label: 'Console', sub: 'knobs and buttons' }, { id: '__ide', label: 'Python', sub: 'IDE and examples' }, { id: '__gal', label: 'Acquired', sub: 'saved shots' }, { id: '__hide', label: 'Hide all', sub: 'panels on / off' }, { id: '__real', label: 'Realistic', sub: 'noise, real detectors' }, { id: '__acq', label: 'Acquire', sub: 'record the data' }, { id: '__data', label: 'Data', sub: 'live + last shot' }, { id: '__train', label: 'Training', sub: 'align a task' }, { id: '__narr', label: 'Narrate', sub: 'hear explanations' }, { id: '__talk', label: 'Talk', sub: 'voice commands' }, { id: '__ride', label: 'Ride beam', sub: 'follow the electrons' }, { id: '__exit', label: this.ar ? 'Exit AR' : 'Exit VR', sub: '' }];
     items.forEach((it, i) => {
       const exit = it.id === '__exit';
       const c = i % this.mcols, r = Math.floor(i / this.mcols);
       const bx = 36 + c * cw + 6, by = top + r * 128 + 6, bw = cw - 12, bh = 116;
-      const on = it.id === cur || (it.id === '__explode' && this.ex.on) || (it.id === '__screens' && this.scr.on) || (it.id === '__data' && this.dataP?.mesh.visible) || (it.id === '__real' && this.clarity.real()) || (it.id === '__cons' && this.consP?.mesh.visible) || (it.id === '__size' && this.life) || (it.id === '__train' && this.trainP?.mesh.visible) || (it.id === '__narr' && this.opt.narr.on()) || (it.id === '__talk' && this.opt.listening()) || (it.id === '__ride' && this.ride.on), hov = this.hover === i;
+      const on = it.id === cur || (it.id === '__explode' && this.ex.on) || (it.id === '__screens' && this.scr.on) || (it.id === '__data' && this.dataP?.mesh.visible) || (it.id === '__real' && this.clarity.real()) || (it.id === '__cons' && this.consP?.mesh.visible) || (it.id === '__ctrl' && this.slP?.mesh.visible) || (it.id === '__ide' && this.ideP?.mesh.visible) || (it.id === '__gal' && this.galP?.mesh.visible) || (it.id === '__size' && this.life) || (it.id === '__train' && this.trainP?.mesh.visible) || (it.id === '__narr' && this.opt.narr.on()) || (it.id === '__talk' && this.opt.listening()) || (it.id === '__ride' && this.ride.on), hov = this.hover === i;
       x.fillStyle = on ? 'rgba(111,214,255,0.22)' : hov ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.05)';
       rr(x, bx, by, bw, bh, 20); x.fill();
       if (on || hov) { x.strokeStyle = on ? '#6fd6ff' : 'rgba(255,255,255,0.5)'; x.lineWidth = 3; x.stroke(); }
@@ -310,7 +318,7 @@ export class VR {
 
   // everything that changes how the menu looks, as one string (repaint when it changes)
   menuSig() {
-    return [this.getMode(), this.hover, this.ex.on, this.scr.on, this.clarity.real(), this.consP?.mesh.visible, this.dataP?.mesh.visible, this.life, this.trainP?.mesh.visible, this.opt.narr.on(), this.opt.listening(), this.ride.on].join('|');
+    return [this.getMode(), this.hover, this.ex.on, this.scr.on, this.clarity.real(), this.consP?.mesh.visible, this.slP?.mesh.visible, this.ideP?.mesh.visible, this.galP?.mesh.visible, this.dataP?.mesh.visible, this.life, this.trainP?.mesh.visible, this.opt.narr.on(), this.opt.listening(), this.ride.on].join('|');
   }
 
   menuHit(ctrl) { return this.hitRay(this.ctrlRay(ctrl)); }
@@ -385,10 +393,13 @@ export class VR {
     this.dataP = new Panel(0.62, 960, 640, (x, W, H) => this.paintData(x, W, H)).place(0.85, 0.62, -0.62, -0.5);
     this.dataP.mesh.visible = false;
     // the control console, as on the desk: a tilted panel low in front of you
+    this.ideP = new Panel(0.9, 1280, 860, (x, W, H) => this.paintIde(x, W, H)); this.ideP.mesh.visible = false;
+    this.galP = new Panel(0.74, 1100, 800, (x, W, H) => this.paintGal(x, W, H)); this.galP.mesh.visible = false;
     this.consP = new Panel(0.84, 1280, 720, (x, W, H) => this.paintCons(x, W, H)).place(0, 0.6, -0.12, 0);
     this.consP.mesh.rotation.x = -0.8;
     this.consP.mesh.visible = !!this.hw;
-    this.sc.scene.add(this.slP.mesh, this.cardP.mesh, this.trainP.mesh, this.rideP.mesh, this.capP.mesh, this.dataP.mesh, this.consP.mesh);
+    this.sc.scene.add(this.slP.mesh, this.cardP.mesh, this.trainP.mesh, this.rideP.mesh, this.capP.mesh, this.dataP.mesh, this.consP.mesh, this.ideP.mesh, this.galP.mesh);
+    for (const P of [this.slP, this.consP, this.dataP, this.trainP, this.ideP, this.galP]) P.closable = true;
     this.refreshSliders(); this.slP.paint();
   }
 
@@ -500,9 +511,17 @@ export class VR {
   rayDown(ray, id) {
     const h = this.hitRay(ray);
     if (h.idx >= 0) { this.pick(h.idx); return true; }
-    if (this.consP.mesh.visible) {
-      const cp = this.consP.hit(ray);
-      if (cp) { this.consDown(cp, id); return true; }
+    const cons = this.consP.mesh.visible ? this.consP.hit(ray) : null;
+    if (cons && !(cons.x > this.consP.pw - 84 && cons.y < 84)) { this.consDown(cons, id); return true; }
+    for (const P of [this.ideP, this.galP, this.dataP, this.consP, this.trainP, this.slP]) { // the corner button every panel has
+      if (!P.mesh.visible) continue;
+      const hp = P.hit(ray);
+      if (hp && hp.x > P.pw - 84 && hp.y < 84) { this.closePanel(P); return true; }
+    }
+    for (const [P, fn] of [[this.ideP, 'ideDown'], [this.galP, 'galDown']]) {
+      if (!P.mesh.visible) continue;
+      const hp = P.hit(ray);
+      if (hp) { this[fn](hp); return true; }
     }
     const sp = this.slP.hit(ray);
     if (sp) {
@@ -564,6 +583,10 @@ export class VR {
     else if (it.id === '__screens') { this.setScreens(!this.scr.on); this.paintMenu(); }
     else if (it.id === '__size') { this.setLife(!this.life); this.paintMenu(); }
     else if (it.id === '__reset') { this.stopRide(); this.ex.on = false; this.setLife(this.life); this.toMe(); this.paintMenu(); }
+    else if (it.id === '__ctrl') { const m = this.slP.mesh; m.visible = !m.visible; this.slP.sig = null; this.paintMenu(); }
+    else if (it.id === '__ide') { this.ideP.mesh.visible ? this.closePanel(this.ideP) : this.openIde(); this.paintMenu(); }
+    else if (it.id === '__gal') { const m = this.galP.mesh; m.visible = !m.visible; if (m.visible) this.placeAt(m, this.head(), 0, 0.05, 0.8); this.galP.sig = null; this.paintMenu(); }
+    else if (it.id === '__hide') { this.hideAll(); this.paintMenu(); }
     else if (it.id === '__cons') { const m = this.consP.mesh; m.visible = !m.visible; if (m.visible) this.toMeCons(); this.consP.sig = null; this.paintMenu(); }
     else if (it.id === '__real') { this.clarity.toggle(); this.paintMenu(); }
     else if (it.id === '__acq') { this.acquireFn(); this.dataP.mesh.visible = true; this.dataP.sig = null; this.toMeData(); this.paintMenu(); }
@@ -642,6 +665,8 @@ export class VR {
       this.capP.mesh.visible = !!cap;
       if (cap) { this.capText = cap; this.capP.paint(cap); }
       if (this.dataP.mesh.visible) this.dataP.paint(); // live: redraw with the detector
+      if (this.ideP.mesh.visible) this.ideP.paint(); // output and status
+      if (this.galP.mesh.visible) this.galP.paint(this.galFn.list().map((a) => a.id).join() + this.gal.sel);
       if (this.menuSig() !== this.menuDrawn) { this.paintMenu(); }
     }
   }
@@ -915,6 +940,122 @@ export class VR {
     B.forEach(([k, l, on], i) => button([36 + i * (bw + 12), 548, bw, 66], l, on, () => { if (k === 'acquire') { this.acquireFn(); this.dataP.mesh.visible = true; this.dataP.sig = null; this.toMeData(); } else P.button(k); }));
     x.textAlign = 'left'; x.fillStyle = '#aab4bf'; x.font = `24px ${FONT}`;
     x.fillText(`${S.mode.toUpperCase()} · ${P.msg}`.slice(0, 80), 36, 664);
+  }
+
+  // ---- opening and closing panels
+  closePanel(P) {
+    P.mesh.visible = false; P.sig = null;
+    if (P === this.ideP && this.ideS.opened) { this.ideFn()?.toggle(false); this.ideS.opened = false; }
+    this.paintMenu();
+  }
+  hideAll() {
+    const list = [this.slP, this.consP, this.dataP, this.trainP, this.ideP, this.galP];
+    if (list.some((P) => P.mesh.visible) || this.scr.on || this.card.name) {
+      for (const P of list) if (P.mesh.visible) this.closePanel(P);
+      this.closeCard(); this.setScreens(false);
+    } else { this.slP.mesh.visible = true; this.consP.mesh.visible = true; this.setScreens(true); this.toMe(); }
+  }
+  hotAt(list, p) { return list.find((t) => (t.r ? Math.hypot(p.x - t.x, p.y - t.y) <= t.r : p.x >= t.x && p.x <= t.x + t.w && p.y >= t.y && p.y <= t.y + t.h)); }
+  hotBtn(x, hot, b, label, on, act, fs = 26) {
+    x.fillStyle = on ? 'rgba(111,214,255,0.25)' : 'rgba(255,255,255,0.08)'; rr(x, b[0], b[1], b[2], b[3], 14); x.fill();
+    if (on) { x.strokeStyle = '#6fd6ff'; x.lineWidth = 3; x.stroke(); }
+    x.fillStyle = '#e8edf2'; x.textAlign = 'center'; x.font = `600 ${fs}px ${FONT}`; x.fillText(label, b[0] + b[2] / 2, b[1] + b[3] / 2 + fs * 0.35);
+    hot.push({ x: b[0], y: b[1], w: b[2], h: b[3], act });
+  }
+
+  // ---- the Python IDE: pick an example, run it, read the output and figures (writing code needs a keyboard: use the desktop page)
+  openIde() {
+    const ide = this.ideFn(); if (!ide) return;
+    ide.toggle(true); this.ideS.opened = true; // the page's own window stays hidden in VR; its Python and output are what we show
+    if (!ide.code().trim()) ide.loadExample(this.examples[0]?.[0] ?? 'quickstart.py');
+    this.ideP.mesh.visible = true; this.ideP.sig = null; this.ideS.auto = true;
+    this.placeAt(this.ideP.mesh, this.head(), 0, 0.1, 0.8);
+  }
+  ideDown(p) { const t = this.hotAt(this.ideS.hot, p); if (t) { t.act(); this.ideP.sig = null; this.acc = 1; } }
+  ideRows(x, w) {
+    const ide = this.ideFn(), rows = [];
+    x.font = `20px ui-monospace, Menlo, monospace`;
+    for (const el of ide?.out?.children ?? []) {
+      if (el.tagName === 'PRE') { const c = el.className === 'err' ? '#ff9b8a' : el.className === 'ok' ? '#8fe3a4' : el.className === 'run' ? '#6fd6ff' : '#dce6ef'; for (const l of el.textContent.split('\n')) for (const t of wrap(x, l || ' ', w)) rows.push({ t, c, h: 26 }); }
+      else if (el.tagName === 'FIGURE') { const cv = el.querySelector('canvas'); if (cv) rows.push({ cv, h: 200 }); const cap = el.querySelector('figcaption'); if (cap) rows.push({ t: cap.textContent, c: '#8b97a4', h: 26 }); }
+    }
+    return rows;
+  }
+  paintIde(x, W, H) {
+    const ide = this.ideFn(), S = this.ideS, hot = (S.hot = []);
+    x.fillStyle = 'rgba(9,12,16,0.97)'; rr(x, 0, 0, W, H, 36); x.fill();
+    x.strokeStyle = 'rgba(111,214,255,0.35)'; x.lineWidth = 3; x.stroke();
+    x.textAlign = 'left'; x.fillStyle = '#6fd6ff'; x.font = `600 34px ${FONT}`; x.fillText('Python · temview', 32, 58);
+    x.fillStyle = '#8b97a4'; x.font = `22px ${FONT}`; x.fillText((ide?.stat?.textContent ?? '').slice(0, 92), 330, 56);
+    // examples
+    this.examples.forEach(([f, t], i) => this.hotBtn(x, hot, [24, 92 + i * 62, 290, 54], t.replace(/^[^:]*:\s*/, '').slice(0, 24), false, () => ide.loadExample(f), 21));
+    const y0 = 92 + this.examples.length * 62 + 8;
+    this.hotBtn(x, hot, [24, y0, 290, 74], ide?.running ? 'Running…' : '▶ Run', !!ide?.running, () => ide.run(), 32);
+    this.hotBtn(x, hot, [24, y0 + 86, 290, 54], 'Clear output', false, () => { ide.out.innerHTML = ''; S.out = 0; }, 22);
+    x.fillStyle = '#7d8896'; x.font = `20px ${FONT}`; x.textAlign = 'left';
+    wrap(x, 'The code is read-only here. A long run freezes the view until it ends.', 280).forEach((t, i) => x.fillText(t, 26, y0 + 176 + i * 24));
+    // code
+    const bx = 330, bw = W - bx - 28, codeTop = 80, codeH = 330;
+    x.fillStyle = 'rgba(255,255,255,0.04)'; rr(x, bx, codeTop, bw, codeH, 14); x.fill();
+    x.save(); x.beginPath(); x.rect(bx, codeTop, bw, codeH); x.clip();
+    x.font = `20px ui-monospace, Menlo, monospace`; x.fillStyle = '#dce6ef'; x.textAlign = 'left';
+    const lines = (ide?.code() ?? '').split('\n'), vis = Math.floor((codeH - 20) / 26);
+    S.code = Math.max(0, Math.min(S.code, Math.max(0, lines.length - vis)));
+    lines.slice(S.code, S.code + vis).forEach((l, i) => { x.fillStyle = /^\s*#/.test(l) ? '#6f8396' : '#dce6ef'; x.fillText(l.slice(0, 82), bx + 14, codeTop + 30 + i * 26); });
+    x.restore();
+    this.hotBtn(x, hot, [W - 28 - 52, codeTop + 8, 46, 46], '▲', false, () => { S.code = Math.max(0, S.code - 4); }, 22);
+    this.hotBtn(x, hot, [W - 28 - 52, codeTop + 62, 46, 46], '▼', false, () => { S.code += 4; }, 22);
+    // output
+    const oy = codeTop + codeH + 14, oh = H - oy - 24;
+    x.fillStyle = 'rgba(0,0,0,0.35)'; rr(x, bx, oy, bw, oh, 14); x.fill();
+    const rows = this.ideRows(x, bw - 90), total = rows.reduce((a, r) => a + r.h, 0);
+    if (rows.length !== S.nRows) { S.nRows = rows.length; S.auto = true; }
+    if (S.auto) S.out = Math.max(0, total - oh + 20);
+    S.out = Math.max(0, Math.min(S.out, Math.max(0, total - oh + 20)));
+    x.save(); x.beginPath(); x.rect(bx, oy, bw, oh); x.clip();
+    let yy = oy + 12 - S.out;
+    for (const r of rows) {
+      if (yy + r.h > oy && yy < oy + oh) {
+        if (r.cv) { const sc = Math.min(1, 190 / r.cv.height, (bw - 100) / r.cv.width); x.drawImage(r.cv, bx + 14, yy, r.cv.width * sc, r.cv.height * sc); }
+        else { x.fillStyle = r.c; x.font = `20px ui-monospace, Menlo, monospace`; x.textAlign = 'left'; x.fillText(r.t, bx + 14, yy + 20); }
+      }
+      yy += r.h;
+    }
+    x.restore();
+    if (!rows.length) { x.fillStyle = '#566170'; x.font = `24px ${FONT}`; x.textAlign = 'center'; x.fillText('Output appears here', bx + bw / 2, oy + oh / 2); }
+    this.hotBtn(x, hot, [W - 28 - 52, oy + 8, 46, 46], '▲', false, () => { S.auto = false; S.out = Math.max(0, S.out - 120); }, 22);
+    this.hotBtn(x, hot, [W - 28 - 52, oy + 62, 46, 46], '▼', false, () => { S.out += 120; }, 22);
+  }
+
+  // ---- acquired shots: a gallery of what Acquire recorded
+  galImg(a) {
+    let g = this.gal.imgs.get(a.id);
+    if (!g) { const im = new Image(); g = { im, ok: false }; im.onload = () => { g.ok = true; this.galP.sig = null; }; im.src = a.png; this.gal.imgs.set(a.id, g); }
+    return g;
+  }
+  galDown(p) { const t = this.hotAt(this.gal.hot, p); if (t) { t.act(); this.galP.sig = null; this.acc = 1; } }
+  paintGal(x, W, H) {
+    const G = this.gal, hot = (G.hot = []), list = this.galFn.list();
+    x.fillStyle = 'rgba(10,14,19,0.95)'; rr(x, 0, 0, W, H, 36); x.fill();
+    x.strokeStyle = 'rgba(111,214,255,0.35)'; x.lineWidth = 3; x.stroke();
+    x.textAlign = 'left'; x.fillStyle = '#6fd6ff'; x.font = `600 34px ${FONT}`; x.fillText(`Acquired shots (${list.length})`, 32, 58);
+    if (!list.length) { x.fillStyle = '#8b97a4'; x.font = `26px ${FONT}`; x.textAlign = 'center'; x.fillText('Nothing yet. Press Acquire on the console.', W / 2, H / 2); return; }
+    const cw = 340, ch = 300, shown = list.slice(0, 6);
+    shown.forEach((a, i) => {
+      const c = i % 3, r = Math.floor(i / 3), ox = 32 + c * (cw + 12), oy = 84 + r * (ch + 12), g = this.galImg(a), sel = G.sel === a.id;
+      x.fillStyle = sel ? 'rgba(111,214,255,0.22)' : 'rgba(255,255,255,0.05)'; rr(x, ox, oy, cw, ch, 16); x.fill();
+      if (sel) { x.strokeStyle = '#6fd6ff'; x.lineWidth = 3; x.stroke(); }
+      x.fillStyle = '#000'; x.fillRect(ox + 20, oy + 14, 300, 220);
+      if (g.ok) x.drawImage(g.im, ox + 20 + (300 - Math.min(300, 220)) / 2, oy + 14, Math.min(300, 220), 220);
+      x.fillStyle = '#e8edf2'; x.textAlign = 'left'; x.font = `600 24px ${FONT}`; x.fillText(`#${a.id} · ${a.mode.toUpperCase()} · ${a.spec}`.slice(0, 28), ox + 20, oy + 262);
+      hot.push({ x: ox, y: oy, w: cw, h: ch, act: () => { G.sel = a.id; } });
+    });
+    const s = list.find((a) => a.id === G.sel);
+    if (s) {
+      x.fillStyle = '#aab4bf'; x.font = `22px ${FONT}`; x.textAlign = 'left';
+      wrap(x, s.summary, W - 380).slice(0, 2).forEach((t, i) => x.fillText(t, 32, H - 54 + i * 26));
+      this.hotBtn(x, hot, [W - 32 - 300, H - 84, 300, 60], 'Delete this shot', false, () => { this.galFn.remove(s.id); G.sel = null; }, 24);
+    } else { x.fillStyle = '#7d8896'; x.font = `22px ${FONT}`; x.textAlign = 'left'; x.fillText('Tap a shot to select it.', 32, H - 40); }
   }
 
   // ---- big floating detector screens (the same canvases the page's results panel draws)

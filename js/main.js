@@ -21,7 +21,7 @@ import { toNpz as npzBytes } from './export.js';
 import { collectData, toNpz } from './export.js';
 import { openCalibration } from './calibui.js';
 import { ScriptCore, b64 } from './scripting.js';
-import { PythonIDE } from './ide.js';
+import { PythonIDE, EXAMPLES as IDE_EXAMPLES } from './ide.js';
 import { specState, modeState, setState, chipState, resetVdet as resetVdetState, optimalDefocus, dfLimits as dfLimitsOf, lorSet, tiltLimit, fovMax, libGoto } from './ops.js';
 import * as ML from './megalibrary.js';
 import { openAbTEM } from './abtem.js';
@@ -64,6 +64,8 @@ const vr = new VR(scene, {
   screens: () => [{ canvas: mainCv, ver: () => lastDraw }, { canvas: secCv, ver: () => lastDraw }],
   acquire: () => acquireNow(),
   panel: () => hwPanel,
+  ide: () => ide, examples: IDE_EXAMPLES,
+  gallery: { list: () => acq.list, remove: (id) => acq.remove(id) },
   clarity: { real: () => S.clarity === 'real', toggle: () => { S.clarity = S.clarity === 'edu' ? 'real' : 'edu'; sim.invalidate('clarity'); refreshControls(); explainChange('clarity'); } },
   data: () => {
     const a = acq.list[0], m = MODES.find((x) => x[0] === S.mode);

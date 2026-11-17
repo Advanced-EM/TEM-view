@@ -10,7 +10,7 @@ import { b64 } from './scripting.js';
 const PYODIDE = 'https://cdn.jsdelivr.net/pyodide/v0.26.4/full/';
 const CM = 'https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/';
 const PKG = ['__init__.py', 'microscope.py', 'transports.py'];
-const EXAMPLES = [
+export const EXAMPLES = [
   ['quickstart.py', 'Quick start: set, acquire, show'],
   ['through_focus.py', 'Through-focus series'],
   ['stem_detectors.py', 'STEM: compare detectors'],
