@@ -81,7 +81,7 @@ export class VR {
     this.dataFn = data || (() => ({ lines: [], n: 0, last: null })); this.acquireFn = acquire || (() => {});
     this.ideFn = ide || (() => null); this.examples = examples || []; this.galFn = gallery || { list: () => [], remove() {} };
     this.ideS = { code: 0, out: 0, auto: true, hot: [], opened: false }; this.gal = { sel: null, hot: [], imgs: new Map() };
-    this.hwFn = panel || (() => null); this.cons = { angle: {}, hot: [], drag: null, padDrag: null, pad: [0, 0] }; this.drive = { on: false, pull: null };
+    this.hwFn = panel || (() => null); this.cons = { angle: {}, hot: [], drag: null, padDrag: null, pad: [0, 0] }; this.drive = { on: false, pull: null, v: [0, 0], t: [0, 0] }; // v: stage speed now, t: where the pull wants it
     this.clarity = clarity || { real: () => false, toggle: () => {} };
     this.opt = {
       training: training || { list: () => [], start() {}, state: () => ({ active: false }), finish: () => ({ head: '', body: '' }) },
@@ -895,12 +895,20 @@ export class VR {
     const pos = D.line.geometry.attributes.position; pos.setXYZ(1, b.x, b.y, 0.004); pos.needsUpdate = true;
     const k = d <= DEAD ? 0 : Math.min(1, Math.pow((d - DEAD) / (FULL - DEAD), 1.5));
     const cx = d ? (dx / d) * k : 0, cy = d ? (-dy / d) * k : 0; // screen up is stage "up", like the pad (down is positive)
-    this.cons.pad = [cx, cy]; this.hw?.setStage(cx, cy); this.acc = 1;
+    this.drive.t = [cx, cy];
+  }
+  // eases the stage toward the pull (quickly) and, once you let go, coasts it to a stop (gently), like the desktop drive
+  driveTick(dt) {
+    const D = this.drive; if (!D.pull && !D.v[0] && !D.v[1]) return;
+    const t = D.pull ? D.t : [0, 0], k = Math.min(1, dt * (D.pull ? 9 : 4));
+    D.v[0] += (t[0] - D.v[0]) * k; D.v[1] += (t[1] - D.v[1]) * k;
+    if (!D.pull && Math.hypot(D.v[0], D.v[1]) < 0.02) D.v = [0, 0];
+    this.cons.pad = [D.v[0], D.v[1]]; this.hw?.setStage(D.v[0], D.v[1]); this.acc = 1;
   }
   driveEnd() {
     const D = this.drive.pull; if (!D) return;
     D.s.mesh.remove(D.line); D.line.geometry.dispose(); D.line.material.dispose();
-    this.drive.pull = null; this.cons.pad = [0, 0]; this.hw?.setStage(0, 0); this.acc = 1;
+    this.drive.pull = null; this.drive.t = [0, 0]; // the stage keeps its speed and coasts (driveTick)
   }
   consDown(p, id) {
     const C = this.cons;
@@ -956,7 +964,7 @@ export class VR {
     x.fillStyle = '#6fd6ff'; x.beginPath(); x.arc(px + C.pad[0] * (pr - 24), py + C.pad[1] * (pr - 24), 22, 0, 7); x.fill();
     x.fillStyle = '#8b97a4'; x.textAlign = 'center'; x.font = `24px ${FONT}`; x.fillText('Stage: press and push', px, py + pr + 34);
     hot.push({ k: 'pad', x: px, y: py, r: pr });
-    button([px - 100, py + pr + 48, 200, 46], this.drive.on ? 'Drive: on' : 'Drive: off', this.drive.on, () => { if (this.drive.pull) this.driveEnd(); this.drive.on = !this.drive.on; if (this.drive.on && !this.scr.on) this.setScreens(true); this.paintMenu(); }, 24);
+    button([px - 100, py + pr + 48, 200, 46], this.drive.on ? 'Drive: on' : 'Drive: off', this.drive.on, () => { if (this.drive.pull) this.driveEnd(); this.drive.v = [0, 0]; this.hw?.setStage(0, 0); this.cons.pad = [0, 0]; this.drive.on = !this.drive.on; if (this.drive.on && !this.scr.on) this.setScreens(true); this.paintMenu(); }, 24);
     if (this.drive.on) { x.fillStyle = '#ff9a6b'; x.font = `20px ${FONT}`; x.fillText('press a screen and pull', px, py + pr + 118); }
     // multifunction selector
     const avail = P.mfList(), now = P.mfNow();
@@ -1153,7 +1161,8 @@ export class VR {
   }
 
   update(dt) {
-    if (!this.active || !this.world) return;
+    if (!this.active || !this.world) { if (this.drive.v[0] || this.drive.v[1]) { this.drive.v = [0, 0]; this.hw?.setStage(0, 0); } return; }
+    this.driveTick(dt);
     this.panels(dt);
     if (this.preview) { // mouse hover stands in for the controller ray
       if (this.pvHit !== this.hover || this.drawn !== this.menuSig()) { this.hover = this.pvHit ?? -1; this.paintMenu(); }
