@@ -141,6 +141,6 @@ abTEM is **GPL-3.0-or-later**. This bridge imports it, so distributing the bridg
 for the bridge itself. TEM-view does not import abTEM. It only exchanges JSON and `.npz` with the bridge, a
 separate program, over HTTP or files.
 
-The bridge's license is to be decided with the abTEM authors (see `PROPOSAL.md`). Options:
+The bridge's license is to be decided with the abTEM authors. Options:
 - GPL-3.0 here;
 - or hosting the bridge alongside abTEM.
