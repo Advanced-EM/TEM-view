@@ -115,7 +115,7 @@ exceed the preset's grid is refused, with a message saying what to change.
 | SAED, 10 nm area | about 12 s |
 | CBED | about 4 s |
 | 4D-STEM, 1.5 nm, 32², PRISM | about 16 s |
-| HAADF-STEM, 2 nm, 32², PRISM | about 8 min |
+| HAADF-STEM, 2 nm, 32², PRISM | about 30 min (measured 32 min, abTEM 1.0.11) |
 
 Use a GPU for the larger runs.
 
