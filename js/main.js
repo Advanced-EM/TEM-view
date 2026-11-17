@@ -116,6 +116,7 @@ const vr = new VR(scene, {
 vr.attach((t) => frame(t));
 let vrReal = false;
 VR.supportedAR().then((ok) => { const b = $('#btnAR'); if (b && ok) b.hidden = false; });
+window.temVR = vr;
 VR.supported().then((ok) => {
   vrReal = ok;
   const b = $('#btnVR'), demo = new URLSearchParams(location.search).has('vrdemo');

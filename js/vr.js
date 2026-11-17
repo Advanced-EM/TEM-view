@@ -81,7 +81,7 @@ export class VR {
     this.dataFn = data || (() => ({ lines: [], n: 0, last: null })); this.acquireFn = acquire || (() => {});
     this.ideFn = ide || (() => null); this.examples = examples || []; this.galFn = gallery || { list: () => [], remove() {} };
     this.ideS = { code: 0, out: 0, auto: true, hot: [], opened: false }; this.gal = { sel: null, hot: [], imgs: new Map() };
-    this.hwFn = panel || (() => null); this.cons = { angle: {}, hot: [], drag: null, padDrag: null, pad: [0, 0] };
+    this.hwFn = panel || (() => null); this.cons = { angle: {}, hot: [], drag: null, padDrag: null, pad: [0, 0] }; this.drive = { on: false, pull: null };
     this.clarity = clarity || { real: () => false, toggle: () => {} };
     this.opt = {
       training: training || { list: () => [], start() {}, state: () => ({ active: false }), finish: () => ({ head: '', body: '' }) },
@@ -547,6 +547,7 @@ export class VR {
       if (hp) { const b = list.find((b) => hp.x >= b.x && hp.x <= b.x + b.w && hp.y >= b.y && hp.y <= b.y + b.h); b?.act(); P.sig = null; return true; }
     }
     const sh = this.scr.on ? this.screenHit(ray) : null;
+    if (sh && this.drive.on) { this.drivePull(sh, id); return true; } // drive mode: press on a screen and pull to steer the stage
     if (sh) { // a screen: drag to move it, drag the corner to resize it
       const corner = sh.uv.x > 0.8 && sh.uv.y < 0.2;
       this.sd = { id, s: sh.s, mode: corner ? 'size' : 'move', off: sh.s.mesh.position.clone().sub(sh.point) };
@@ -566,6 +567,7 @@ export class VR {
       this.fitScreen(sd.s);
       return;
     }
+    if (this.drive.pull?.id === id) { this.driveMove(ray); return; }
     const C = this.cons;
     if (C.drag?.id === id || C.padDrag?.id === id) { const hp = this.consP.hit(ray, true); if (hp) this.consMove(hp); return; }
     const d = this.sl.drag; if (!d || d.id !== id) return;
@@ -573,7 +575,7 @@ export class VR {
     d.s.set(Math.max(0, Math.min(1, (h.x - d.t.tx0) / (d.t.tx1 - d.t.tx0))));
     this.acc = 1; // repaint right away
   }
-  rayUp(id) { const C = this.cons; if (C.drag?.id === id) C.drag = null; if (C.padDrag?.id === id) { C.padDrag = null; C.pad = [0, 0]; this.hw?.setStage(0, 0); this.acc = 1; } if (this.sl.drag?.id === id) { this.sl.drag = null; this.acc = 1; } if (this.sd?.id === id) this.sd = null; }
+  rayUp(id) { if (this.drive.pull?.id === id) this.driveEnd(); const C = this.cons; if (C.drag?.id === id) C.drag = null; if (C.padDrag?.id === id) { C.padDrag = null; C.pad = [0, 0]; this.hw?.setStage(0, 0); this.acc = 1; } if (this.sl.drag?.id === id) { this.sl.drag = null; this.acc = 1; } if (this.sd?.id === id) this.sd = null; }
   rayClick(ray) { this.pickComponent(ray); }
 
   pick(idx) {
@@ -875,6 +877,31 @@ export class VR {
 
   // ---- the control console (the page's on-screen panel, in the room): knobs turn by dragging or tapping − / +
   turnCons(axis, n) { this.hw.turn(axis, n); this.cons.angle[axis] = (this.cons.angle[axis] ?? 0) + n * 18; this.acc = 1; }
+  // ---- drive mode (see js/drive.js): the screens become a joystick. Press, pull a tether, the stage moves toward the pull,
+  // faster the further you pull (a soft power curve past a small dead zone); letting go stops it.
+  drivePull(sh, id) {
+    const m = sh.s.mesh, a = m.worldToLocal(sh.point.clone());
+    const geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(a.x, a.y, 0.004), new THREE.Vector3(a.x, a.y, 0.004)]);
+    const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0xff5a1f, depthTest: false, toneMapped: false }));
+    line.renderOrder = 10; m.add(line);
+    this.drive.pull = { id, s: sh.s, a, line };
+  }
+  driveMove(ray) {
+    const D = this.drive.pull, m = D.s.mesh; m.updateMatrixWorld();
+    const n = new THREE.Vector3(0, 0, 1).transformDirection(m.matrixWorld);
+    const pt = ray.intersectPlane(new THREE.Plane().setFromNormalAndCoplanarPoint(n, m.getWorldPosition(new THREE.Vector3())), new THREE.Vector3());
+    if (!pt) return;
+    const b = m.worldToLocal(pt), dx = b.x - D.a.x, dy = b.y - D.a.y, d = Math.hypot(dx, dy), DEAD = 0.025, FULL = 0.3;
+    const pos = D.line.geometry.attributes.position; pos.setXYZ(1, b.x, b.y, 0.004); pos.needsUpdate = true;
+    const k = d <= DEAD ? 0 : Math.min(1, Math.pow((d - DEAD) / (FULL - DEAD), 1.5));
+    const cx = d ? (dx / d) * k : 0, cy = d ? (-dy / d) * k : 0; // screen up is stage "up", like the pad (down is positive)
+    this.cons.pad = [cx, cy]; this.hw?.setStage(cx, cy); this.acc = 1;
+  }
+  driveEnd() {
+    const D = this.drive.pull; if (!D) return;
+    D.s.mesh.remove(D.line); D.line.geometry.dispose(); D.line.material.dispose();
+    this.drive.pull = null; this.cons.pad = [0, 0]; this.hw?.setStage(0, 0); this.acc = 1;
+  }
   consDown(p, id) {
     const C = this.cons;
     const t = C.hot.find((t) => (t.r ? Math.hypot(p.x - t.x, p.y - t.y) <= t.r : p.x >= t.x && p.x <= t.x + t.w && p.y >= t.y && p.y <= t.y + t.h));
@@ -929,6 +956,8 @@ export class VR {
     x.fillStyle = '#6fd6ff'; x.beginPath(); x.arc(px + C.pad[0] * (pr - 24), py + C.pad[1] * (pr - 24), 22, 0, 7); x.fill();
     x.fillStyle = '#8b97a4'; x.textAlign = 'center'; x.font = `24px ${FONT}`; x.fillText('Stage: press and push', px, py + pr + 34);
     hot.push({ k: 'pad', x: px, y: py, r: pr });
+    button([px - 100, py + pr + 48, 200, 46], this.drive.on ? 'Drive: on' : 'Drive: off', this.drive.on, () => { if (this.drive.pull) this.driveEnd(); this.drive.on = !this.drive.on; if (this.drive.on && !this.scr.on) this.setScreens(true); this.paintMenu(); }, 24);
+    if (this.drive.on) { x.fillStyle = '#ff9a6b'; x.font = `20px ${FONT}`; x.fillText('press a screen and pull', px, py + pr + 118); }
     // multifunction selector
     const avail = P.mfList(), now = P.mfNow();
     x.textAlign = 'left'; x.fillStyle = '#8b97a4'; x.font = `24px ${FONT}`; x.fillText('Multifunction knobs drive:', 36, 512);
@@ -1061,6 +1090,7 @@ export class VR {
   // ---- big floating detector screens (the same canvases the page's results panel draws)
   setScreens(on) {
     const L = this.scr; L.on = on;
+    this.driveEnd();
     for (const s of L.list) { this.sc.scene.remove(s.mesh, s.handle); for (const m of [s.mesh, s.handle]) { m.geometry.dispose(); m.material.dispose(); } s.tex.dispose(); }
     this.sd = null;
     L.list = [];
