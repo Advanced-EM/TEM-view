@@ -370,7 +370,9 @@ body.fit .takehome { grid-area: t; }
 
 body.fit .console { padding: 6px 12px 10px; border-radius: 22px; box-shadow: 5px 5px 0 var(--ink); }
 body.fit .chead { padding: 0 16px 4px; } body.fit .chead > b { font-size: .95rem; } body.fit .cstat { font-size: .75rem; }
-body.fit .cbody { gap: 10px; }
+body.fit .cbody { gap: 10px; grid-template-columns: minmax(0, 1fr) auto auto; }
+/* below 760 px the phone rules stack the Console and the readouts, which leaves the porthole no room: keep them in rows */
+body.fit .knobs { grid-column: auto; } body.fit .readouts { grid-template-columns: auto 1fr; }
 body.fit .knobs { gap: 6px; } body.fit .knob { gap: 2px; } body.fit .knob small { font-size: .68rem; line-height: 1.15; }
 body.fit .kdial { width: clamp(56px, 9.5svh, 100px); padding: 7px; }
 body.fit .kpm button { width: 28px; height: 28px; }

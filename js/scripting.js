@@ -8,6 +8,7 @@
 // The compute runs on the CPU in JavaScript. The calls here do not depend on how the simulator computes, so a
 // future WebGPU backend for the wave optics can speed up the same scripts without changing them.
 import * as P from './physics.js';
+import { abtemRequest } from './abtem.js';
 import { collectData, toNpz } from './export.js';
 import { analyze, ANALYSES } from './analyze.js';
 import { parseCommand } from './voice.js';
@@ -199,9 +200,15 @@ export class ScriptCore {
     return { ended: was, restored: true };
   }
 
+  // the current state as an abTEM request (tools/abtem-bridge): preset quick|standard|full, algorithm multislice|prism
+  abtem_request({ preset = 'quick', algorithm = 'multislice', seed = 0 } = {}) {
+    this.guard();
+    return abtemRequest(this.S, this.sim, { preset, algorithm, seed });
+  }
+
   // one entry point for remote callers (desktop Python): only these names can be called
   call(name, args = {}) {
-    if (!['info', 'state', 'set', 'command', 'aberrations', 'acquire', 'analyze', 'step', 'challenge', 'score', 'reveal', 'end_challenge', 'move', 'library', 'goto', 'particle', 'load_xyz'].includes(name)) throw new Error(`unknown call ${name}`);
+    if (!['info', 'state', 'set', 'command', 'aberrations', 'acquire', 'analyze', 'step', 'challenge', 'score', 'reveal', 'end_challenge', 'move', 'library', 'goto', 'particle', 'load_xyz', 'abtem_request'].includes(name)) throw new Error(`unknown call ${name}`);
     return this[name](args ?? {});
   }
 }
