@@ -16,6 +16,7 @@
 //
 // Without a headset the same room can be previewed on screen (startPreview): mouse stands in for the controller.
 import * as THREE from 'three';
+import { Y } from './scene3d.js';
 
 const TABLE = 0.11; // scene units to metres: the 10-unit column becomes about 1.2 m tall
 const PX = 2.5;     // particle size boost: the headset's eye buffers are far denser than the desktop canvas
@@ -68,11 +69,12 @@ function wrap(x, text, maxW) {
 const rr = (x, a, b, w, h, r) => { x.beginPath(); x.roundRect(a, b, w, h, r); };
 
 export class VR {
-  constructor(sc, { modes, getMode, setMode, onChange, sliders, component, getS, screens, data, acquire, training, narr, talk, listening, caption }) {
+  constructor(sc, { modes, getMode, setMode, onChange, sliders, component, getS, screens, data, acquire, clarity, training, narr, talk, listening, caption }) {
     this.sc = sc; this.modes = modes; this.getMode = getMode; this.setMode = setMode; this.onChange = onChange || (() => {});
     this.sliders = sliders || (() => []); this.component = component || (() => null); this.getS = getS || (() => ({}));
     this.screensFn = screens || (() => []);
     this.dataFn = data || (() => ({ lines: [], n: 0, last: null })); this.acquireFn = acquire || (() => {});
+    this.clarity = clarity || { real: () => false, toggle: () => {} };
     this.opt = {
       training: training || { list: () => [], start() {}, state: () => ({ active: false }), finish: () => ({ head: '', body: '' }) },
       narr: narr || { on: () => false, toggle() {}, speak() {}, toggleId() {}, stop() {}, playing: () => null },
@@ -250,6 +252,7 @@ export class VR {
     this.world.rotation.set(0, 0, 0);
     this.setScale(s);
     this.world.position.set(0, on ? 4.5 * s : 1.25 - 0.8 * TABLE, on ? -2.4 : -1.05);
+    this.placeScreens();
   }
 
   buildRoom() {
@@ -266,7 +269,7 @@ export class VR {
 
   // ---- floating mode menu (left)
   buildMenu() {
-    const cols = 3, rows = Math.ceil((this.modes.length + 11) / cols); // modes, then the eleven tool buttons ending in Exit
+    const cols = 3, rows = Math.ceil((this.modes.length + 12) / cols); // modes, then the twelve tool buttons ending in Exit
     this.mcols = cols; this.mrows = rows;
     const W = 768, H = rows * 128 + 96;
     const cv = (this.mcv = document.createElement('canvas')); cv.width = W; cv.height = H;
@@ -287,12 +290,12 @@ export class VR {
     x.fillStyle = '#6fd6ff'; x.font = `600 34px ${FONT}`; x.textAlign = 'left';
     x.fillText('TEM-view · choose a mode', 36, 62);
     const cw = (W - 72) / this.mcols, top = 96;
-    const items = [...this.modes.map((m) => ({ id: m[0], label: m[1], sub: m[2] })), { id: '__explode', label: 'Exploded', sub: 'pull it apart' }, { id: '__screens', label: 'Screens', sub: 'big detectors' }, { id: '__size', label: 'Size', sub: 'table / life size' }, { id: '__reset', label: 'Reset', sub: 'in front of me' }, { id: '__acq', label: 'Acquire', sub: 'record the data' }, { id: '__data', label: 'Data', sub: 'live + last shot' }, { id: '__train', label: 'Training', sub: 'align a task' }, { id: '__narr', label: 'Narrate', sub: 'hear explanations' }, { id: '__talk', label: 'Talk', sub: 'voice commands' }, { id: '__ride', label: 'Ride beam', sub: 'follow the electrons' }, { id: '__exit', label: this.ar ? 'Exit AR' : 'Exit VR', sub: '' }];
+    const items = [...this.modes.map((m) => ({ id: m[0], label: m[1], sub: m[2] })), { id: '__explode', label: 'Exploded', sub: 'pull it apart' }, { id: '__screens', label: 'Screens', sub: 'big detectors' }, { id: '__size', label: 'Size', sub: 'table / life size' }, { id: '__reset', label: 'Reset', sub: 'in front of me' }, { id: '__real', label: 'Realistic', sub: 'noise, real detectors' }, { id: '__acq', label: 'Acquire', sub: 'record the data' }, { id: '__data', label: 'Data', sub: 'live + last shot' }, { id: '__train', label: 'Training', sub: 'align a task' }, { id: '__narr', label: 'Narrate', sub: 'hear explanations' }, { id: '__talk', label: 'Talk', sub: 'voice commands' }, { id: '__ride', label: 'Ride beam', sub: 'follow the electrons' }, { id: '__exit', label: this.ar ? 'Exit AR' : 'Exit VR', sub: '' }];
     items.forEach((it, i) => {
       const exit = it.id === '__exit';
       const c = i % this.mcols, r = Math.floor(i / this.mcols);
       const bx = 36 + c * cw + 6, by = top + r * 128 + 6, bw = cw - 12, bh = 116;
-      const on = it.id === cur || (it.id === '__explode' && this.ex.on) || (it.id === '__screens' && this.scr.on) || (it.id === '__data' && this.dataP?.mesh.visible) || (it.id === '__size' && this.life) || (it.id === '__train' && this.trainP?.mesh.visible) || (it.id === '__narr' && this.opt.narr.on()) || (it.id === '__talk' && this.opt.listening()) || (it.id === '__ride' && this.ride.on), hov = this.hover === i;
+      const on = it.id === cur || (it.id === '__explode' && this.ex.on) || (it.id === '__screens' && this.scr.on) || (it.id === '__data' && this.dataP?.mesh.visible) || (it.id === '__real' && this.clarity.real()) || (it.id === '__size' && this.life) || (it.id === '__train' && this.trainP?.mesh.visible) || (it.id === '__narr' && this.opt.narr.on()) || (it.id === '__talk' && this.opt.listening()) || (it.id === '__ride' && this.ride.on), hov = this.hover === i;
       x.fillStyle = on ? 'rgba(111,214,255,0.22)' : hov ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.05)';
       rr(x, bx, by, bw, bh, 20); x.fill();
       if (on || hov) { x.strokeStyle = on ? '#6fd6ff' : 'rgba(255,255,255,0.5)'; x.lineWidth = 3; x.stroke(); }
@@ -306,7 +309,7 @@ export class VR {
 
   // everything that changes how the menu looks, as one string (repaint when it changes)
   menuSig() {
-    return [this.getMode(), this.hover, this.ex.on, this.scr.on, this.dataP?.mesh.visible, this.life, this.trainP?.mesh.visible, this.opt.narr.on(), this.opt.listening(), this.ride.on].join('|');
+    return [this.getMode(), this.hover, this.ex.on, this.scr.on, this.clarity.real(), this.dataP?.mesh.visible, this.life, this.trainP?.mesh.visible, this.opt.narr.on(), this.opt.listening(), this.ride.on].join('|');
   }
 
   menuHit(ctrl) { return this.hitRay(this.ctrlRay(ctrl)); }
@@ -550,6 +553,7 @@ export class VR {
     else if (it.id === '__screens') { this.setScreens(!this.scr.on); this.paintMenu(); }
     else if (it.id === '__size') { this.setLife(!this.life); this.paintMenu(); }
     else if (it.id === '__reset') { this.stopRide(); this.ex.on = false; this.setLife(this.life); this.toMe(); this.paintMenu(); }
+    else if (it.id === '__real') { this.clarity.toggle(); this.paintMenu(); }
     else if (it.id === '__acq') { this.acquireFn(); this.dataP.mesh.visible = true; this.dataP.sig = null; this.toMeData(); this.paintMenu(); }
     else if (it.id === '__data') { const m = this.dataP.mesh; m.visible = !m.visible; if (m.visible) this.toMeData(); this.dataP.sig = null; this.paintMenu(); }
     else if (it.id === '__train') { const m = this.trainP.mesh; m.visible = !m.visible; this.tr.view = this.opt.training.state().active ? 'run' : this.tr.view; this.trainP.sig = null; this.paintMenu(); }
@@ -801,7 +805,7 @@ export class VR {
     this.placeAt(this.menu, H, -0.55, -0.15, 0.75, 0);
     this.placeAt(this.slP.mesh, H, 0.55, -0.1, 0.7);
     this.toMeData();
-    this.scr.list.forEach((s, i) => { this.placeAt(s.mesh, H, i ? 0.95 : 0, i ? -0.05 : 0.1, i ? 1.9 : 2.0); s.handle.rotation.y = s.mesh.rotation.y; });
+    this.placeScreens(H.f.clone().negate());
     this.scrT = 1;
   }
   paintData(x, W, H) {
@@ -836,12 +840,11 @@ export class VR {
     this.sd = null;
     L.list = [];
     if (!on || !this.active) return;
-    const defs = [[0.0, 1.78, -2.0, 1.1], [0.95, 1.5, -1.9, 0.6]]; // x, y, z, width (m)
+    const defs = [[0, 0, 0, 0.55], [0, 0, 0, 0.34]]; // widths (m); the places come from placeScreens()
     this.screensFn().forEach((sc, i) => {
       const d = defs[i]; if (!d) return;
       const tex = new THREE.CanvasTexture(sc.canvas); tex.colorSpace = THREE.SRGBColorSpace;
       const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false, side: THREE.DoubleSide }));
-      mesh.position.set(d[0], d[1], d[2]); mesh.rotation.y = -d[0] * 0.25;
       if (this.preview) mesh.material.color.setScalar(0.75);
       this.sc.scene.add(mesh);
       const handle = new THREE.Mesh(new THREE.PlaneGeometry(0.06, 0.06), new THREE.MeshBasicMaterial({ color: 0x6fd6ff, transparent: true, opacity: 0.85, toneMapped: false }));
@@ -849,7 +852,21 @@ export class VR {
       this.sc.scene.add(handle);
       L.list.push({ mesh, tex, canvas: sc.canvas, ver: sc.ver, seen: null, w: d[3], handle });
     });
+    this.placeScreens();
     this.scrT = 1;
+  }
+  // the screens stand at the bottom of the column, where the detectors are, tilted back like bench monitors; `toward` is where you are
+  placeScreens(toward) {
+    if (!this.world || !this.scr.list.length) return;
+    const to = toward ? toward.clone().setY(0).normalize() : new THREE.Vector3(0, 0, 1), side = new THREE.Vector3(-to.z, 0, to.x);
+    const base = this.world.localToWorld(new THREE.Vector3(0, Y.cam, 0));
+    const sc = this.world.scale.x / TABLE;
+    this.scr.list.forEach((s, i) => {
+      const h = s.w * (s.canvas.height / s.canvas.width || 1), off = (0.62 + 0.08 * i) * sc, sd = (i ? 0.5 : 0) * sc;
+      s.mesh.position.copy(base).addScaledVector(to, off).addScaledVector(side, sd); s.mesh.position.y = base.y + h * 0.5 - 0.03 * sc;
+      s.mesh.rotation.set(-0.3, Math.atan2(to.x, to.z), 0, 'YXZ');
+      s.handle.rotation.copy(s.mesh.rotation);
+    });
   }
   fitScreen(s) {
     const c = s.canvas;
