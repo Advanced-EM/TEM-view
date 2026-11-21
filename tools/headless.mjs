@@ -8,8 +8,8 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { Sim } from '../js/sim.js';
 import { MODE_IDS, isMode, family } from '../js/registry.js';
-import { defaultState, SESSION_KEYS } from '../js/state.js';
-import { sanitizeProfile } from '../js/profile.js';
+import { defaultState } from '../js/state.js';
+import { readSession } from '../js/session.js';
 import * as P from '../js/physics.js';
 import { collectData, toNpz } from '../js/export.js';
 
@@ -18,8 +18,9 @@ for (let i = 0; i < args.length; i++) if (args[i].startsWith('--')) { const k = 
 
 const S = defaultState();
 if (opt.session) {
-  const ses = JSON.parse(readFileSync(opt.session, 'utf8'));
-  for (const k of SESSION_KEYS) if (k in (ses.state ?? {})) S[k] = k === 'profile' ? sanitizeProfile(ses.state.profile) : ses.state[k];
+  const { state, warnings } = readSession(JSON.parse(readFileSync(opt.session, 'utf8')), S);
+  for (const w of warnings) console.warn(`session: ${w}`);
+  Object.assign(S, state);
 }
 if (opt.spec) { if (!P.SPECIMENS[opt.spec]) throw new Error(`unknown specimen ${opt.spec}`); const sp = P.SPECIMENS[opt.spec]; S.spec = opt.spec; S.fov = sp.fov; [S.cx, S.cy] = sp.center; }
 for (const k of ['kV', 'dose', 'thick', 'fov']) if (opt[k] !== undefined) S[k] = +opt[k];

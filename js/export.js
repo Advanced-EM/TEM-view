@@ -1,7 +1,7 @@
 // Collect the current detector data and its metadata, and package it as a NumPy .npz.
 // Shared by the exhibit's "Export data" button and the headless runner (tools/headless.mjs).
 import { npy, zip, jsonBytes } from './npy.js';
-import { SESSION_KEYS } from './state.js';
+import { snapshot, activeMods } from './session.js';
 
 const A = (data, shape, units) => ({ data, shape, units });
 
@@ -61,10 +61,10 @@ export function collectData(sim, S) {
   } else if (sim.main) {
     arrays.image = A(sim.main.arr, [sim.main.h, sim.main.w], 'a.u.');
   }
-  const state = Object.fromEntries(SESSION_KEYS.map((k) => [k, S[k]]));
+  const state = snapshot(S);
   const meta = {
     format: 'tem-view-data/1', generator: 'Seeing with Electrons (TEM-view)', created: new Date().toISOString(),
-    simulated: true, mode: m, specimen: sim.spec.name, calibration: cal,
+    simulated: true, mode: m, technique: m, mods: activeMods(S), specimen: sim.spec.name, calibration: cal,
     specimen_temperature_K: sim.temp(), holder: S.holder,
     optics: { wavelength_A: sim.lam, focal_spread_A: sim.focalSpread(), information_limit_A: sim.infoLimit(), Cs_A: sim.CsA() },
     arrays: Object.fromEntries(Object.entries(arrays).map(([k, v]) => [k, { shape: v.shape, units: v.units }])),

@@ -8,6 +8,7 @@ import { renderComponent } from './components.js';
 import * as N from './narration.js';
 import { DISPLAY, KEYS, family } from './registry.js';
 import { defaultState, SESSION_KEYS, CORR_RANGE } from './state.js';
+import { toSession, readSession, isSession } from './session.js';
 import { PRESETS, newProfile, sanitizeProfile } from './profile.js';
 import { HOLDERS } from './holder.js';
 import { Panel } from './panel.js';
@@ -933,26 +934,18 @@ function download(blob, name) {
 }
 const stamp = () => new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
 function saveSession() {
-  const state = Object.fromEntries(SESSION_KEYS.map((k) => [k, S[k]]));
-  const ses = { format: 'tem-view-session/1', saved: new Date().toISOString(), note: 'Seeing with Electrons (TEM-view) session', state };
-  download(new Blob([JSON.stringify(ses, null, 1)], { type: 'application/json' }), `tem-view-session-${stamp()}.json`);
+  download(new Blob([JSON.stringify(toSession(S), null, 1)], { type: 'application/json' }), `tem-view-session-${stamp()}.json`);
   explainChange('session');
 }
-// a saved session, or an instrument profile on its own
+// a saved session (v1 or v2, session.js), or an instrument profile on its own
 function loadSessionFile(text) {
   const o = JSON.parse(text);
   if (o.format?.startsWith('tem-view-profile')) { setProfile(sanitizeProfile(o), 'calibrated'); return; }
-  if (!o.format?.startsWith('tem-view-session') || !o.state) throw new Error('not a TEM-view session or profile');
-  const st = o.state, d = defaultState(), mode = typeof st.mode === 'string' && KEYS[st.mode] ? st.mode : S.mode;
-  if (st.cryo === true && !st.holder) { st.holder = 'ln2'; st.tempSet = 90; } // sessions saved before the temperature setting
-  for (const k of SESSION_KEYS) {
-    if (!(k in st) || k === 'mode') continue;
-    if (k === 'holder' && !HOLDERS[st.holder]) continue;
-    if (k === 'profile') S.profile = sanitizeProfile(st.profile);
-    else if (k === 'spec') { if (P.SPECIMENS[st.spec]) S.spec = st.spec; }
-    else if (k === 'ab' || k === 'dfFam') { if (st[k] && typeof st[k] === 'object') S[k] = { ...d[k], ...Object.fromEntries(Object.entries(st[k]).filter(([, v]) => typeof v === 'number')) }; }
-    else if (typeof st[k] === typeof d[k]) S[k] = st[k];
-  }
+  if (!isSession(o)) throw new Error('not a TEM-view session or profile');
+  const { state, warnings } = readSession(o, S);
+  if (warnings.length) console.warn('session:', warnings.join('; '));
+  const mode = state.mode;
+  for (const k of [...SESSION_KEYS, 'mods']) if (k !== 'mode') S[k] = state[k];
   sim.freshArea();
   resetVdet();
   sim.invalidate('spec');

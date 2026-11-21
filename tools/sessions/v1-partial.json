@@ -1,0 +1,10 @@
+{
+ "format": "tem-view-session/1",
+ "saved": "2026-01-01T00:00:00.000Z",
+ "note": "fixture",
+ "state": {
+  "mode": "diff",
+  "kV": 80,
+  "spec": "au"
+ }
+}

@@ -23,6 +23,8 @@ export const defaultState = () => ({
   // vortex's chirality and core polarity, and the Lorentz-STEM view and probe semi-angle (µrad)
   magSpec: 'vortex', lorThick: 30, lorFov: 2.5, lorDf: -400, lorDiv: 2, lorView: 'fresnel', lorFouc: '+x', lorApR: 8,
   lorField: 0, lorChir: 1, lorPol: 1, lstemView: 'color', lorAlpha: 300,
+  // cross-cutting modifiers by registry id (session.js); the Zernike plate is still objAp: 'zpp' while running
+  mods: {},
   // hidden misalignment added to the knob settings (training scenarios); never shown in the controls
   mis: null,
 });
