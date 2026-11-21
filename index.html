@@ -7,52 +7,55 @@
 <title>Seeing with Electrons</title>
 <meta name="description" content="An interactive transmission electron microscope: TEM, STEM, 4D-STEM, diffraction, EDS and EELS, computed from wave optics in your browser.">
 <link rel="stylesheet" href="fonts/fonts.css">
-<link rel="stylesheet" href="css/style.css?v=202611212202">
+<link rel="stylesheet" href="css/style.css?v=202611212227">
 <script type="importmap">
 {
  "imports": {
   "three": "./vendor/three@0.160.0/build/three.module.js",
   "three/addons/": "./vendor/three@0.160.0/examples/jsm/",
-  "./js/abtem.js": "./js/abtem.js?v=202611212202",
-  "./js/acquire.js": "./js/acquire.js?v=202611212202",
-  "./js/agent.js": "./js/agent.js?v=202611212202",
-  "./js/align.js": "./js/align.js?v=202611212202",
-  "./js/analyze.js": "./js/analyze.js?v=202611212202",
-  "./js/calibrate.js": "./js/calibrate.js?v=202611212202",
-  "./js/calibui.js": "./js/calibui.js?v=202611212202",
-  "./js/components.js": "./js/components.js?v=202611212202",
-  "./js/config.js": "./js/config.js?v=202611212202",
-  "./js/connect.js": "./js/connect.js?v=202611212202",
-  "./js/drive.js": "./js/drive.js?v=202611212202",
-  "./js/explain.js": "./js/explain.js?v=202611212202",
-  "./js/export.js": "./js/export.js?v=202611212202",
-  "./js/footprint.js": "./js/footprint.js?v=202611212202",
-  "./js/holder.js": "./js/holder.js?v=202611212202",
-  "./js/holography.js": "./js/holography.js?v=202611212202",
-  "./js/ide.js": "./js/ide.js?v=202611212202",
-  "./js/lorentz.js": "./js/lorentz.js?v=202611212202",
-  "./js/main.js": "./js/main.js?v=202611212202",
-  "./js/megalibrary.js": "./js/megalibrary.js?v=202611212202",
-  "./js/narration.js": "./js/narration.js?v=202611212202",
-  "./js/npy.js": "./js/npy.js?v=202611212202",
-  "./js/ops.js": "./js/ops.js?v=202611212202",
-  "./js/panel.js": "./js/panel.js?v=202611212202",
-  "./js/physics.js": "./js/physics.js?v=202611212202",
-  "./js/profile.js": "./js/profile.js?v=202611212202",
-  "./js/registry.js": "./js/registry.js?v=202611212202",
-  "./js/render2d.js": "./js/render2d.js?v=202611212202",
-  "./js/scenarios.js": "./js/scenarios.js?v=202611212202",
-  "./js/scene3d.js": "./js/scene3d.js?v=202611212202",
-  "./js/scripting.js": "./js/scripting.js?v=202611212202",
-  "./js/session.js": "./js/session.js?v=202611212202",
-  "./js/sim.js": "./js/sim.js?v=202611212202",
-  "./js/state.js": "./js/state.js?v=202611212202",
-  "./js/techniques.js": "./js/techniques.js?v=202611212202",
-  "./js/telemetry.js": "./js/telemetry.js?v=202611212202",
-  "./js/usage.js": "./js/usage.js?v=202611212202",
-  "./js/voice.js": "./js/voice.js?v=202611212202",
-  "./js/vpanel.js": "./js/vpanel.js?v=202611212202",
-  "./js/vr.js": "./js/vr.js?v=202611212202"
+  "./js/abtem.js": "./js/abtem.js?v=202611212227",
+  "./js/acquire.js": "./js/acquire.js?v=202611212227",
+  "./js/agent.js": "./js/agent.js?v=202611212227",
+  "./js/align.js": "./js/align.js?v=202611212227",
+  "./js/analyze.js": "./js/analyze.js?v=202611212227",
+  "./js/calibrate.js": "./js/calibrate.js?v=202611212227",
+  "./js/calibui.js": "./js/calibui.js?v=202611212227",
+  "./js/components.js": "./js/components.js?v=202611212227",
+  "./js/config.js": "./js/config.js?v=202611212227",
+  "./js/connect.js": "./js/connect.js?v=202611212227",
+  "./js/drive.js": "./js/drive.js?v=202611212227",
+  "./js/explain.js": "./js/explain.js?v=202611212227",
+  "./js/export.js": "./js/export.js?v=202611212227",
+  "./js/footprint.js": "./js/footprint.js?v=202611212227",
+  "./js/holder.js": "./js/holder.js?v=202611212227",
+  "./js/holography.js": "./js/holography.js?v=202611212227",
+  "./js/ide.js": "./js/ide.js?v=202611212227",
+  "./js/lorentz.js": "./js/lorentz.js?v=202611212227",
+  "./js/main.js": "./js/main.js?v=202611212227",
+  "./js/megalibrary.js": "./js/megalibrary.js?v=202611212227",
+  "./js/narration.js": "./js/narration.js?v=202611212227",
+  "./js/npy.js": "./js/npy.js?v=202611212227",
+  "./js/ops.js": "./js/ops.js?v=202611212227",
+  "./js/panel.js": "./js/panel.js?v=202611212227",
+  "./js/physics.js": "./js/physics.js?v=202611212227",
+  "./js/profile.js": "./js/profile.js?v=202611212227",
+  "./js/registry.js": "./js/registry.js?v=202611212227",
+  "./js/render2d.js": "./js/render2d.js?v=202611212227",
+  "./js/scenarios.js": "./js/scenarios.js?v=202611212227",
+  "./js/scene3d.js": "./js/scene3d.js?v=202611212227",
+  "./js/scripting.js": "./js/scripting.js?v=202611212227",
+  "./js/session.js": "./js/session.js?v=202611212227",
+  "./js/sim.js": "./js/sim.js?v=202611212227",
+  "./js/specui.js": "./js/specui.js?v=202611212227",
+  "./js/specview.js": "./js/specview.js?v=202611212227",
+  "./js/state.js": "./js/state.js?v=202611212227",
+  "./js/structure.js": "./js/structure.js?v=202611212227",
+  "./js/techniques.js": "./js/techniques.js?v=202611212227",
+  "./js/telemetry.js": "./js/telemetry.js?v=202611212227",
+  "./js/usage.js": "./js/usage.js?v=202611212227",
+  "./js/voice.js": "./js/voice.js?v=202611212227",
+  "./js/vpanel.js": "./js/vpanel.js?v=202611212227",
+  "./js/vr.js": "./js/vr.js?v=202611212227"
  }
 }
 </script>
@@ -97,6 +100,7 @@
     <span class="dicons">
       <button id="btnAcquire" class="acq" title="Acquire (I)" aria-label="Acquire: record what the detector shows"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 8h3l2-2.5h6L17 8h3v11H4z"/><circle cx="12" cy="13.5" r="3.5"/></svg><span>Acquire</span></button>
       <button id="btnGallery" title="Acquisitions" aria-label="Acquisitions"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3.5" y="5.5" width="13" height="11" rx="1.5"/><path d="M7.5 19.5h13v-11"/></svg><i id="acqCount" hidden></i></button>
+      <button id="btnStruct" title="Show the specimen structure in 3D instead of the detector" aria-label="Show the specimen structure in 3D" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="8" r="2.4"/><circle cx="17" cy="8" r="2.4"/><circle cx="12" cy="17" r="2.4"/><path d="M9.2 9.2 11 15M14.8 9.2 13 15M9.4 8h5.2"/></svg><span>Structure</span></button>
       <button id="btnExpand" title="Enlarge the results (X)" aria-label="Enlarge the results panel" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg></button>
       <button id="btnPopout" title="Open the results in a separate window" aria-label="Open the results in a separate window"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M13 4h7v7M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></button>
     </span>
@@ -104,6 +108,7 @@
   <div class="dbody">
     <canvas id="detMain" aria-label="Detector image"></canvas>
     <canvas id="detSec" aria-label="Secondary detector view"></canvas>
+    <div id="detStruct" class="detstruct" aria-label="Specimen structure in 3D"></div>
   </div>
 </section>
 
@@ -179,6 +184,6 @@
 <div id="connect" class="modal connect" hidden><div class="card"><button class="close" aria-label="Close">×</button><div class="cnBody"></div></div></div>
 <div id="abtem" class="modal abtem" hidden><div class="card"><button class="close" aria-label="Close">×</button><div class="abBody"></div></div></div>
 
-<script type="module" src="js/main.js?v=202611212202"></script>
+<script type="module" src="js/main.js?v=202611212227"></script>
 </body>
 </html>

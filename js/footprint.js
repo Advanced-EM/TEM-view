@@ -20,6 +20,8 @@
 //   compression       sparse counting data (< 1 e⁻ per pixel per frame) 3–10×, dense data 1.2–2×
 //   badge (first match)  browser: working set ≤ 512 MB and processing ≤ 60 s; local GPU: ≤ the worker's memory
 //                     and ≤ 2 h; HPC otherwise
+import { beamThickness } from './structure.js';
+
 export const E_CHARGE = 1.602176634e-19;
 export const BROWSER_BYTES = 512 * 2 ** 20;
 export const BROWSER_SECONDS = 60;
@@ -169,6 +171,8 @@ export function footprint(technique, plan, ctx) {
   }
   if (f.dose.current_pA > 1000) f.notes.push(`needs ${f.dose.current_pA.toFixed(0)} pA, more than a sub-ångström probe carries (tens to a few hundred pA): lengthen the dwell or lower the dose`);
 
+  if (ctx.thickness_A) f.specimen = { thickness_A: ctx.thickness_A, tau: ctx.tau ?? null };
+  if (ctx.tau > 1) f.notes.push(`t/λ ≈ ${ctx.tau.toFixed(2)} along the beam: plural scattering dominates; spectra and phase need a thinner region`);
   f.badge = badge(f, ctx.vram_bytes);
   return f;
 }
@@ -190,7 +194,9 @@ export function contextFor(S, sim, extra = {}) {
   return {
     field_A: lor ? S.lorFov * 1e4 : sim.fovA(),
     dose: S.dose, current_pA: S.eelsCurrent, lambda_A: sim.lam, alpha_mrad: S.mode === '4d' ? S.alpha4d : S.alpha,
-    Dc: sim.spec?.beamSensitive && !lor ? sim.critDose() : null, ...extra,
+    Dc: sim.spec?.beamSensitive && !lor ? sim.critDose() : null,
+    ...(() => { const b = beamThickness(S, sim); return { thickness_A: b.t_A, tau: b.tau }; })(), // along the beam, with the tilt
+    ...extra,
   };
 }
 export function footprintFor(S, sim, extra = {}) {
@@ -210,6 +216,7 @@ export function summary(f) {
     ...(f.dose.current_pA !== undefined ? { probe_current_pA: r(f.dose.current_pA) } : {}),
     ...(f.dose.Dc ? { critical_dose_e_per_A2: r(f.dose.Dc), dose_over_critical: r(f.dose.ratio, 3) } : {}),
     ...(f.dose_from ? { dose_from: f.dose_from } : {}),
+    ...(f.specimen ? { thickness_nm: r(f.specimen.thickness_A / 10), ...(f.specimen.tau != null ? { t_over_lambda: r(f.specimen.tau, 3) } : {}) } : {}),
     tier: f.badge.tier, tier_reason: f.badge.reason, notes: f.notes,
   };
 }

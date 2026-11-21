@@ -10,6 +10,7 @@ import { DISPLAY, KEYS, family } from './registry.js';
 import { defaultState, SESSION_KEYS, CORR_RANGE } from './state.js';
 import { toSession, readSession, isSession } from './session.js';
 import { footprintFor, fmtBytes, fmtTime, PLAN_FIELDS, PLAN_KINDS } from './footprint.js';
+import { createSpecimenUI } from './specui.js';
 import { PRESETS, newProfile, sanitizeProfile } from './profile.js';
 import { HOLDERS } from './holder.js';
 import { Panel } from './panel.js';
@@ -146,11 +147,12 @@ function planOpts(k) {
 }
 const CONTROLS = [
   { sec: 'The specimen' },
-  { chips: 'spec', modes: NOT_LOR, opts: [['au', 'Gold on carbon'], ['si', 'Si / SiO₂'], ['sto', 'SrTiO₃ boundary'], ['gr', 'Graphene'], ['mof', 'UiO-66 (MOF)'], ['bio', 'Proteins in ice'], ['lib', 'NP megalibrary'], ['hesi', 'He bubbles in Si'], ['cspb', 'CsPbBr₃ nanocubes'], ['mapb', 'MAPbBr₃ nanocubes']] },
+  { specView: true },
+  { specGrid: true, modes: NOT_LOR },
+  { specInfo: true },
   { modes: NOT_LOR, pFn: () => sim.spec.status?.(sim.temp()) ?? '', show: () => !!sim.spec.status },
   { buttons: [['restore', 'Fresh as-implanted sample']], modes: NOT_LOR, show: () => !!sim.spec.reset },
   { modes: NOT_LOR, pFn: () => { const ij = ML.nearest(S.cx / 1e4, S.cy / 1e4); return `Stage at (${(S.cx / 1e4).toFixed(3)}, ${(S.cy / 1e4).toFixed(3)}) µm: ${ij ? `particle (${ij[0]}, ${ij[1]}) of 1000 × 1000, pen block (${Math.floor(ij[0] / 100)}, ${Math.floor(ij[1] / 100)}). ${ML.describe(ML.particle(...ij))}` : 'outside the library'}. Thickness is the Si₃N₄ membrane. Script a screen with goto(i, j) in Python.`; }, show: () => S.spec === 'lib' },
-  { buttons: [['loadXYZ', 'Load an XYZ file…']] },
   { modes: NOT_LOR, pFn: () => `${sim.spec.name.replace(/[<>&]/g, '')}. Tilt the stage to turn it; the thickness setting is the carbon support underneath.`, show: () => S.spec === 'xyz' },
   { buttons: [['libPrev', '← Particle'], ['libNext', 'Particle →'], ['libRow', 'Next row']], modes: NOT_LOR, show: () => S.spec === 'lib' },
   { buttons: [['libRand', 'Random particle'], ['libAuCo', 'Au–Co, phase-separated'], ['libChip', 'Whole chip']], modes: NOT_LOR, show: () => S.spec === 'lib' },
@@ -306,6 +308,23 @@ const ICONS = {
 };
 
 // ------------------------------------------------------------------ build controls
+// the specimen section: cards, 3D structure viewer, details, preview of uploaded structures (specui.js)
+let specUI = null;
+function specimenUI() {
+  return (specUI ??= createSpecimenUI({
+    S, get sim() { return sim; }, setSpec, setMode, download,
+    isLor: () => LOR.split(' ').includes(S.mode),
+    explain: (html) => { $('#change').hidden = false; $('#change').innerHTML = html; },
+    usage: (k) => usage.count(k),
+    showInResults: (on) => setStructView(on),
+  }));
+}
+// the results panel shows the 3D structure instead of the detector (button in its header)
+function setStructView(on) {
+  document.body.classList.toggle('detStruct', on);
+  $('#btnStruct')?.setAttribute('aria-pressed', on);
+  specimenUI().showInResults(on);
+}
 const panel = $('#controlsBody');
 const bound = [];
 // on narrow screens, control sections fold; these start folded
@@ -384,6 +403,11 @@ function build() {
       el.className = 'ctl note';
       el.innerHTML = c.p ?? '';
       bound.push({ c, el });
+    } else if (c.specGrid || c.specView || c.specInfo) {
+      el = document.createElement('div');
+      const ui = specimenUI();
+      if (c.specGrid) ui.grid(el); else if (c.specView) ui.card(el); else ui.info(el);
+      bound.push({ c, el });
     } else if (c.footprint) {
       el = document.createElement('table');
       el.className = 'data footprint';
@@ -437,6 +461,7 @@ function renderChips({ c, box }) {
 
 function refreshControls() {
   document.body.dataset.mode = S.mode;
+  specUI?.update();
   for (const b of bound) {
     const stacked = document.body.classList.contains('stacked');
     if (b.c.sec) b.el.classList.toggle('closed', stacked && folded.has(b.c.sec));
@@ -534,18 +559,7 @@ function action(id, el) {
     S.lorChir = Math.random() < 0.5 ? -1 : 1; S.lorPol = Math.random() < 0.5 ? -1 : 1;
     sim.invalidate('magnet'); explainChange('lorReset');
   }
-  if (id === 'loadXYZ') {
-    const inp = Object.assign(document.createElement('input'), { type: 'file', accept: '.xyz,chemical/x-xyz,text/plain' });
-    inp.addEventListener('change', async () => {
-      const f = inp.files[0];
-      if (!f) return;
-      const esc = (t) => String(t).replace(/[<>&]/g, '');
-      // the Lorentz modes image magnetic specimens only, so a structure opens in TEM
-      try { P.loadXYZ(await f.text(), f.name); usage.count('xyz'); if (LOR.split(' ').includes(S.mode)) setMode('tem'); setSpec('xyz'); }
-      catch (err) { $('#change').hidden = false; $('#change').innerHTML = `<small>Could not load ${esc(f.name)}</small><p>${esc(err.message)}</p>`; }
-    });
-    inp.click();
-  }
+  if (id === 'loadXYZ') specimenUI().pickFile(); // preview first: check, orient and load from the structure card
   if (id.startsWith('lib')) {
     const [i, j] = ML.nearest(S.cx / 1e4, S.cy / 1e4) ?? [0, 0], n = ML.LIB.n;
     const to = { libPrev: [Math.max(0, i - 1), j], libNext: [Math.min(n - 1, i + 1), j], libRow: [i, Math.min(n - 1, j + 1)], libRand: [Math.floor(Math.random() * n), Math.floor(Math.random() * n)], libAuCo: [945, 49] }[id]; // libAuCo: in the Au–Co pen's block
@@ -1140,6 +1154,7 @@ function wire() {
   $('#btnPanel').addEventListener('click', () => { usage.count('panel_setup'); $('#panelCfg').hidden = false; hwPanel.renderConfig($('#panelCfg .pBody')); });
   $('#panelCfg').addEventListener('click', (e) => { if (e.target.id === 'panelCfg' || e.target.closest('.close')) $('#panelCfg').hidden = true; });
   $('#btnExpand').addEventListener('click', () => setExpanded(!document.body.classList.contains('detBig')));
+  $('#btnStruct')?.addEventListener('click', () => setStructView(!document.body.classList.contains('detStruct')));
   $('#btnPopout').addEventListener('click', openPopout);
   $('#help').addEventListener('click', (e) => { if (e.target.id === 'help' || e.target.closest('.close')) $('#help').hidden = true; });
 
@@ -1294,6 +1309,7 @@ let redraw = false;
 let last = performance.now(), lastDraw = 0, lastVer = -1, lastSlow = 0, frames = 0, fpsT = 0, fps = 0;
 const camCv = document.createElement('canvas');
 camCv.width = camCv.height = 256;
+let specPaused = false;
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
@@ -1325,9 +1341,11 @@ function frame(now) {
   }
   frames++;
   if (now - fpsT > 1000) { fps = Math.round((frames * 1000) / (now - fpsT)); frames = 0; fpsT = now; }
+  if (specUI && scene.renderer.xr.isPresenting !== specPaused) { specPaused = scene.renderer.xr.isPresenting; specUI.pause(specPaused); } // one WebGL context in a headset
   if (now - lastSlow > 300 && !scene.renderer.xr.isPresenting) { // the page's readouts are not visible in a headset
     lastSlow = now;
     updateTable();
+    specUI?.update();
     hwPanel.hud($('#panelHud'));
     vPanel.update();
     if (!$('#panelCfg').hidden) { if (hwPanel.pad && !$('#pLive')) hwPanel.renderConfig($('#panelCfg .pBody')); hwPanel.renderLive($('#pLive')); }
@@ -1419,7 +1437,7 @@ updateDetectorHeader();
 explainChange('spec');
 resize();
 requestAnimationFrame(() => { resize(); requestAnimationFrame(frame); });
-window.__tem = { S, sim, scene, vr, panel: hwPanel, vpanel: vPanel, scn, voice, agent, runOp };
+window.__tem = { S, sim, scene, vr, panel: hwPanel, vpanel: vPanel, scn, voice, agent, runOp, get specUI() { return specUI; } };
 // deep link from the printed guides: ?train=<scenario id> opens that training task's intro
 { const id = new URLSearchParams(location.search).get('train'); if (id && /^[a-z0-9-]+$/.test(id)) setTimeout(() => { try { scn.start(id); } catch { /* unknown id */ } }, 600); }
 // ?script=<example> opens the Python IDE with that example (tools/temview-py/examples/<example>.py); ?script alone opens it

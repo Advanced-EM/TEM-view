@@ -16,6 +16,7 @@ import { SCENARIOS } from './scenarios.js';
 import { MODES } from './ops.js';
 import { SESSION_KEYS } from './state.js';
 import { planFor, validPlanValue, footprintFor, summary as fpSummary } from './footprint.js';
+import { buildStructure, beamThickness } from './structure.js';
 import { libGoto, stageMove, stagePos } from './ops.js';
 import * as ML from './megalibrary.js';
 
@@ -223,9 +224,22 @@ export class ScriptCore {
     return fpSummary(footprintFor({ ...S, mode: t, plan: { ...S.plan, [t]: merged } }, this.sim, this.h.vram ? { vram_bytes: this.h.vram } : {}));
   }
 
+  // the specimen as a 3D structure (structure.js): atoms in the region around the stage, formula, size, and the
+  // thickness along the beam including the goniometer tilt (the number footprint() uses)
+  structure() {
+    const st = buildStructure(this.S, this.sim), bt = beamThickness(this.S, this.sim);
+    return {
+      name: st.name, kind: st.kind, atoms_in_view: st.total, atoms_drawn: st.count, formula: st.formula,
+      species: Object.fromEntries(st.species.filter((s) => s.count).map((s) => [s.label, s.count])),
+      size_nm: st.box.map((v) => +(v / 10).toFixed(3)), thickness_nm: +(bt.t_A / 10).toFixed(3), flat_thickness_nm: +(bt.slab_A / 10).toFixed(3),
+      t_over_lambda: bt.tau != null ? +bt.tau.toFixed(4) : null, tilt_deg: [this.S.tiltX, this.S.tiltY],
+      materials: [...st.voxels.map((v) => v.name), ...new Set(st.shells.map((s) => s.label))], notes: st.notes,
+    };
+  }
+
   // one entry point for remote callers (desktop Python): only these names can be called
   call(name, args = {}) {
-    if (!['info', 'state', 'set', 'command', 'aberrations', 'acquire', 'analyze', 'step', 'challenge', 'score', 'reveal', 'end_challenge', 'move', 'library', 'goto', 'particle', 'load_xyz', 'abtem_request', 'footprint'].includes(name)) throw new Error(`unknown call ${name}`);
+    if (!['info', 'state', 'set', 'command', 'aberrations', 'acquire', 'analyze', 'step', 'challenge', 'score', 'reveal', 'end_challenge', 'move', 'library', 'goto', 'particle', 'load_xyz', 'abtem_request', 'footprint', 'structure'].includes(name)) throw new Error(`unknown call ${name}`);
     return this[name](args ?? {});
   }
 }

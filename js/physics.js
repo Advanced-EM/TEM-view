@@ -801,7 +801,8 @@ function makeLibrary() {
 // columns are ignored). Atoms keep their 3D positions, centred on the stage origin, and are rotated by the
 // stage tilt and projected, so any orientation can be explored; an amorphous carbon support (the thickness
 // setting) sits underneath. Replaces any structure loaded before.
-export function loadXYZ(text, name = 'structure.xyz') {
+// Parse an XYZ file without loading it: element symbols and Cartesian coordinates (Å), validated.
+export function parseXYZ(text) {
   const lines = String(text).split(/\r?\n/);
   const n = parseInt(lines[0], 10);
   if (!(n > 0)) throw new Error('not an XYZ file: the first line must be the number of atoms');
@@ -816,6 +817,11 @@ export function loadXYZ(text, name = 'structure.xyz') {
     sym.push(s);
     for (let c = 0; c < 3; c++) { const v = +f[c + 1]; if (!Number.isFinite(v)) throw new Error(`line ${k + 3}: bad coordinate`); P3[3 * k + c] = v; }
   }
+  return { n, sym, P3, comment: (lines[1] ?? '').trim() };
+}
+
+export function loadXYZ(text, name = 'structure.xyz') {
+  const { n, sym, P3 } = parseXYZ(text);
   const els = [...new Set(sym)], idx = Object.fromEntries(els.map((s) => [s, addElement(s)])), e = Uint8Array.from(sym, (s) => idx[s]);
   // centre on the centroid
   const c = [0, 0, 0];
@@ -855,6 +861,7 @@ export function loadXYZ(text, name = 'structure.xyz') {
       return true;
     },
   };
+  spec.xyz3 = { sym, P3 }; // the centred 3D coordinates, for the structure viewer
   spec.locate(0, 0);
   for (const g of spec.grains) g.b = reciprocal(g.a1, g.a2);
   SPECIMENS.xyz = spec;

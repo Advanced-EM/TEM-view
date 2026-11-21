@@ -107,6 +107,11 @@ class Microscope:
         """Advance the simulation n frames of 50 ms (drift, dose, temperature change with time)."""
         return self._t.call("step", {"n": int(n)})
 
+    def structure(self) -> dict:
+        """The specimen as a 3D structure: atoms in the region around the stage, formula, species counts, size
+        (nm, x y z) and the thickness along the beam including the goniometer tilt, with t/λ."""
+        return self._t.call("structure")
+
     def footprint(self, technique: str | None = None, apply: bool = False, **plan) -> dict:
         """Data, dose and compute estimate for the current technique (or `technique`): raw and compressed size,
         working memory, acquisition and processing time, dose and probe current, and where the analysis can run

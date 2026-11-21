@@ -204,3 +204,17 @@ def test_footprint_matches_hand_calculation(tem):
     assert tem.footprint(technique="tem")["shape"] == [4096, 4096]
     with pytest.raises(TemviewError):
         tem.footprint(technique="tem", scan=256)
+
+
+def test_structure_and_tilted_thickness(tem):
+    tem.set(specimen="sto", mode="tem", tilt_x_deg=0, tilt_y_deg=0)
+    s = tem.structure()
+    assert s["formula"].endswith("SrTiO₃") and s["atoms_in_view"] > 1000 and s["kind"] == "atoms"
+    assert abs(s["thickness_nm"] - s["flat_thickness_nm"]) < 1e-9
+    tem.set(tilt_x_deg=20)
+    t = tem.structure()
+    import math
+    a, b = (math.radians(v) for v in t["tilt_deg"])  # the tilt actually applied (atomic specimens stop at ±3°)
+    assert a > 0 and abs(t["thickness_nm"] - t["flat_thickness_nm"] / (math.cos(a) * math.cos(b))) < 1e-3
+    assert abs(tem.footprint()["thickness_nm"] - t["thickness_nm"]) < 1e-3  # the estimator uses the same path
+    tem.set(tilt_x_deg=0)
