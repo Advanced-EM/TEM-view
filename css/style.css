@@ -300,6 +300,13 @@ label.file input { font: 12px var(--sans); color: #c3cad3; text-transform: none;
 .cres canvas.wide { grid-column: 1 / -1; aspect-ratio: 3; }
 .calib table.data { width: 100%; margin: 6px 0; }
 table.data.twin td:last-child { white-space: normal; }
+table.data.footprint td:first-child { width: 34%; vertical-align: top; }
+table.data.footprint td:last-child { white-space: normal; text-align: left; font-size: 11px; line-height: 1.45; }
+table.data.footprint .warn { color: var(--warm); }
+table.data.footprint .tier { display: inline-block; padding: 1px 7px; margin: 0 4px 2px 0; border-radius: 9px; font: 600 10.5px var(--mono); border: 1px solid currentColor; }
+table.data.footprint .tier-browser { color: var(--accent); }
+table.data.footprint .tier-gpu { color: var(--warm); }
+table.data.footprint .tier-hpc { color: #e0607a; }
 @media (max-width: 640px) { .cres { grid-template-columns: 1fr; } .cres canvas + canvas { min-height: 180px; } }
 
 /* hardware control panel: heads-up display and configuration */

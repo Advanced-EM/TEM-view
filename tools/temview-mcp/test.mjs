@@ -14,7 +14,7 @@ const ok = (c, m) => { console.log(c ? 'ok  ' : 'FAIL', m); if (!c) process.exit
 const body = (r) => r.content.filter((c) => c.type === 'text').map((c) => c.text).join('\n');
 
 const { tools } = await client.listTools();
-ok(tools.length === 9, `9 tools: ${tools.map((t) => t.name).join(', ')}`);
+ok(tools.length === 10, `10 tools: ${tools.map((t) => t.name).join(', ')}`);
 
 let r = await client.callTool({ name: 'simulate', arguments: { mode: 'tem', specimen: 'au', kV: 300, defocus_nm: -60 } });
 const sim = JSON.parse(body(r));
@@ -23,6 +23,12 @@ ok(Math.abs(sim.wavelength_pm - 1.9687) < 0.001, `300 kV wavelength ${sim.wavele
 r = await client.callTool({ name: 'simulate', arguments: { mode: 'ltem', magnetic_specimen: 'landau', lorentz_view: 'tie' } });
 const lor = JSON.parse(body(r));
 ok(!r.isError && lor.arrays.induction_x && lor.calibration.magnetic_state === 'Landau flux closure', `simulate Lorentz TEM (${Object.keys(lor.arrays).join(', ')})`);
+ok(sim.footprint?.raw_bytes === 4096 * 4096 * 2 && sim.footprint.tier === 'browser', `simulate carries the footprint (${sim.footprint?.tier})`);
+r = await client.callTool({ name: 'footprint', arguments: { mode: '4d', specimen: 'sto', fov_nm: 5, dose: 400, plan: { scan: 256, det: 256, bits: 16, dwell_us: 1000 } } });
+const fp = JSON.parse(body(r));
+ok(!r.isError && fp.raw_bytes === 256 ** 4 * 2 && Math.abs(fp.acquire_s - 65.536) < 1e-6 && fp.tier !== 'browser', `footprint 4D-STEM: ${fp.raw_bytes} bytes, ${fp.acquire_s} s, ${fp.tier} (${fp.tier_reason})`);
+r = await client.callTool({ name: 'footprint', arguments: { mode: 'tem', plan: { scan: 256 } } });
+ok(r.isError && /no plan field scan/.test(body(r)), 'footprint rejects a field the technique does not use');
 r = await client.callTool({ name: 'exhibit_set', arguments: { mode: 'stem' } });
 ok(r.isError && /No exhibit is connected/.test(body(r)), 'exhibit_set without an exhibit explains how to connect');
 

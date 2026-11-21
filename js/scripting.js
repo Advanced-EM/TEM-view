@@ -15,6 +15,7 @@ import { parseCommand } from './voice.js';
 import { SCENARIOS } from './scenarios.js';
 import { MODES } from './ops.js';
 import { SESSION_KEYS } from './state.js';
+import { planFor, validPlanValue, footprintFor, summary as fpSummary } from './footprint.js';
 import { libGoto, stageMove, stagePos } from './ops.js';
 import * as ML from './megalibrary.js';
 
@@ -206,9 +207,25 @@ export class ScriptCore {
     return abtemRequest(this.S, this.sim, { preset, algorithm, seed });
   }
 
+  // data, dose and compute estimate (footprint.js) for the current technique, or `technique`; `plan` overrides
+  // the acquisition plan (scan, det, bits, dwell_us, exposure_s, frames, channels, format, analysis, iters);
+  // apply=True keeps those overrides for the technique (saved with the session)
+  footprint({ technique, plan = {}, apply = false } = {}) {
+    const S = this.S, t = technique ?? S.mode;
+    if (!MODES.includes(t)) throw new Error(`technique must be one of ${MODES.join(', ')}`);
+    const d = planFor(t);
+    for (const [k, v] of Object.entries(plan ?? {})) {
+      if (!(k in d) || k === 'kind') throw new Error(`${t} has no plan field ${k}: use ${Object.keys(d).filter((x) => x !== 'kind').join(', ')}`);
+      if (!validPlanValue(k, v)) throw new Error(`invalid ${k}: ${JSON.stringify(v)}`);
+    }
+    if (apply) { this.guard(); S.plan = { ...S.plan, [t]: { ...(S.plan?.[t] ?? {}), ...plan } }; this.h.refresh?.(); }
+    const merged = { ...(S.plan?.[t] ?? {}), ...plan };
+    return fpSummary(footprintFor({ ...S, mode: t, plan: { ...S.plan, [t]: merged } }, this.sim, this.h.vram ? { vram_bytes: this.h.vram } : {}));
+  }
+
   // one entry point for remote callers (desktop Python): only these names can be called
   call(name, args = {}) {
-    if (!['info', 'state', 'set', 'command', 'aberrations', 'acquire', 'analyze', 'step', 'challenge', 'score', 'reveal', 'end_challenge', 'move', 'library', 'goto', 'particle', 'load_xyz', 'abtem_request'].includes(name)) throw new Error(`unknown call ${name}`);
+    if (!['info', 'state', 'set', 'command', 'aberrations', 'acquire', 'analyze', 'step', 'challenge', 'score', 'reveal', 'end_challenge', 'move', 'library', 'goto', 'particle', 'load_xyz', 'abtem_request', 'footprint'].includes(name)) throw new Error(`unknown call ${name}`);
     return this[name](args ?? {});
   }
 }

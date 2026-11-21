@@ -13,9 +13,10 @@ import { isMode, MODIFIERS, modifiersFor } from './registry.js';
 import { sanitizeProfile } from './profile.js';
 import { HOLDERS } from './holder.js';
 import * as P from './physics.js';
+import { planFor, validPlanValue } from './footprint.js';
 
 export const SESSION_FORMAT = 'tem-view-session/2';
-export const ACQ_KEYS = ['kV', 'dose', 'camera', 'clarity'];
+export const ACQ_KEYS = ['kV', 'dose', 'camera', 'clarity']; // plus acq.plan (footprint.js overrides by technique)
 export const ENV_KEYS = ['holder', 'tempSet'];
 const MOD_IDS = new Set(MODIFIERS.map((m) => m.id));
 
@@ -36,7 +37,7 @@ export function toSession(S, extra = {}) {
   return {
     format: SESSION_FORMAT, saved: new Date().toISOString(), note: 'Seeing with Electrons (TEM-view) session', ...extra,
     technique: S.mode, mods: activeMods(S),
-    acq: Object.fromEntries(ACQ_KEYS.map((k) => [k, S[k]])),
+    acq: { ...Object.fromEntries(ACQ_KEYS.map((k) => [k, S[k]])), plan: structuredClone(S.plan ?? {}) },
     env: Object.fromEntries(ENV_KEYS.map((k) => [k, S[k]])),
     state,
   };
@@ -78,6 +79,15 @@ export function readSession(o, base = defaultState()) {
   }
   if (mods.zpp) out.objAp = 'zpp';
   else if (out.objAp === 'zpp') out.objAp = 'none'; // a v2 file that switched the plate off in mods
+  // acquisition plan overrides: known techniques and fields with valid values only
+  out.plan = {};
+  const plan = version >= 2 && o.acq?.plan && typeof o.acq.plan === 'object' ? o.acq.plan : {};
+  for (const [t, ov] of Object.entries(plan)) {
+    if (!isMode(t) || !ov || typeof ov !== 'object') { warnings.push(`plan for unknown technique ${t}`); continue; }
+    const d = planFor(t), keep = Object.fromEntries(Object.entries(ov).filter(([k, v]) => k in d && k !== 'kind' && validPlanValue(k, v)));
+    if (Object.keys(keep).length !== Object.keys(ov).length) warnings.push(`plan for ${t}: invalid fields dropped`);
+    if (Object.keys(keep).length) out.plan[t] = keep;
+  }
   // a modifier that the technique cannot take is kept (it applies again on switching back) but reported
   const ok = new Set(modifiersFor(out.mode).map((m) => m.id));
   for (const k of Object.keys(activeMods(out))) if (!ok.has(k)) warnings.push(`${k} has no effect in ${out.mode}`);

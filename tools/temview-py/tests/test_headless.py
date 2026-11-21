@@ -188,3 +188,19 @@ def test_load_xyz(tem):
     assert {"map_Au", "map_Pd", "map_O"} <= set(a.arrays)
     with pytest.raises(TemviewError, match="not an XYZ file"):
         tem.load_xyz("hello\nworld\n")
+
+
+def test_footprint_matches_hand_calculation(tem):
+    tem.set(specimen="sto", mode="4d", fov_nm=5, dose=400)
+    f = tem.footprint(scan=256, det=256, bits=16, dwell_us=1000)
+    assert f["technique"] == "4d" and f["raw_bytes"] == 256**4 * 2
+    assert abs(f["acquire_s"] - 65.536) < 1e-9
+    assert f["tier"] in ("gpu", "hpc") and "browser budget" in f["tier_reason"]
+    # the same numbers the export metadata carries, once the plan is applied
+    tem.footprint(scan=64, det=64, analysis="ptycho", apply=True)
+    acq = tem.acquire(steps=5)
+    fp = acq.meta["footprint"]
+    assert fp["plan"]["scan"] == 64 and fp["raw_bytes"] == 64**4 * 2 and fp["tier"] == "browser"
+    assert tem.footprint(technique="tem")["shape"] == [4096, 4096]
+    with pytest.raises(TemviewError):
+        tem.footprint(technique="tem", scan=256)

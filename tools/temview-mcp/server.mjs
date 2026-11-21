@@ -21,6 +21,7 @@ import { MODE_IDS, family } from '../../js/registry.js';
 import { defaultState } from '../../js/state.js';
 import * as P from '../../js/physics.js';
 import { collectData, toNpz } from '../../js/export.js';
+import { planFor, footprintFor, summary as fpSummary } from '../../js/footprint.js';
 import { analyze, ANALYSES } from '../../js/analyze.js';
 import { MAGSPECS } from '../../js/lorentz.js';
 import { particle as libParticle } from '../../js/megalibrary.js';
@@ -112,7 +113,7 @@ function toOps(a) {
 }
 
 // ------------------------------------------------------------------ headless simulation
-function simulate(a) {
+function stateFrom(a) {
   const S = defaultState();
   if (a.specimen) { const sp = P.SPECIMENS[a.specimen]; S.spec = a.specimen; S.fov = sp.fov; [S.cx, S.cy] = sp.center; if (a.specimen === 'lib') S.thick = 10; }
   if (a.xyz_file) { const r = P.loadXYZ(readFileSync(a.xyz_file, 'utf8'), basename(a.xyz_file)); S.spec = 'xyz'; S.fov = a.fov_nm ?? r.fov_nm; S.cx = 0; S.cy = 0; S.thick = a.thickness_nm ?? 3; }
@@ -133,6 +134,10 @@ function simulate(a) {
   if (a.lorentz_defocus_um !== undefined) S.lorDf = a.lorentz_defocus_um;
   if (a.field_mT !== undefined) S.lorField = a.field_mT;
   if (a.probe_urad !== undefined) S.lorAlpha = a.probe_urad;
+  return S;
+}
+function simulate(a) {
+  const S = stateFrom(a);
   const sim = new Sim(S);
   const steps = a.steps ?? (S.mode === '4d' ? 400 : S.mode === 'ilh' ? 600 : 10);
   for (let i = 0; i < steps; i++) { sim.update(0.05); if (S.mode === 'ilh' && sim.ilh.st?.it >= sim.ilh.st.maxIt) break; }
@@ -143,7 +148,7 @@ function simulate(a) {
   const arrays = Object.fromEntries(Object.entries(data.arrays).map(([k, v]) => [k, v.shape]));
   let analysis;
   if (a.analysis) { try { analysis = analyze(sim, S, a.analysis === 'auto' ? undefined : a.analysis); } catch (e) { analysis = { error: e.message }; } }
-  return { file, mode: S.mode, specimen: sim.spec.name, kV: S.kV, defocus_nm: S.df, temperature_K: +sim.temp().toFixed(1), arrays, analysis,
+  return { file, mode: S.mode, footprint: data.meta?.footprint, specimen: sim.spec.name, kV: S.kV, defocus_nm: S.df, temperature_K: +sim.temp().toFixed(1), arrays, analysis,
     calibration: data.meta?.calibration ?? data.meta?.calibrations ?? undefined, wavelength_pm: +(sim.lam * 100).toFixed(4) };
 }
 
@@ -159,6 +164,23 @@ server.registerTool('simulate', {
     analysis: z.enum(['auto', ...Object.keys(ANALYSES)]).optional().describe('also analyze the result: fit_ctf (emskills ctf-fitter), fit_lattice (lattice-dspacing), identify_edges (eels-edge-id), fit_eds, fit_zlp, fit_hologram; auto picks by mode') },
   annotations: { readOnlyHint: false, openWorldHint: false },
 }, safe(async (a) => text(simulate(a))));
+
+server.registerTool('footprint', {
+  title: 'Estimate data size, dose and compute for an acquisition',
+  description: 'For a technique and an acquisition plan (scan size, detector pixels, bit depth, dwell or exposure, frames), return the raw and compressed data size, the working memory of the analysis, acquisition and processing time, the dose (and the probe current it needs, and the ratio to the specimen critical dose for beam-sensitive specimens), and where the analysis can run: tier browser, gpu or hpc with the reason. The same numbers as the exhibit panel and the Python footprint().',
+  inputSchema: { ...settings,
+    plan: z.object({ scan: z.number().int().positive().optional(), det: z.number().int().positive().optional(), bits: z.union([z.literal(8), z.literal(16), z.literal(32)]).optional(),
+      dwell_us: z.number().positive().optional(), exposure_s: z.number().positive().optional(), frames: z.number().int().positive().optional(), channels: z.number().int().positive().optional(),
+      format: z.enum(['frames', 'events']).optional(), analysis: z.enum(['virtual', 'ptycho']).optional(), iters: z.number().int().positive().optional(),
+      detectors: z.number().int().positive().optional(), flyback_us: z.number().nonnegative().optional() }).optional().describe('acquisition plan overrides; fields a technique does not use are rejected'),
+    vram_GB: z.number().positive().optional().describe('memory of the GPU worker that would run the analysis (default: assume 24 GB)') },
+  annotations: { readOnlyHint: true, openWorldHint: false },
+}, safe(async (a) => {
+  const S = stateFrom(a), d = planFor(S.mode);
+  for (const k of Object.keys(a.plan ?? {})) if (!(k in d)) throw new Error(`${S.mode} has no plan field ${k}: use ${Object.keys(d).filter((x) => x !== 'kind').join(', ')}`);
+  S.plan = { [S.mode]: a.plan ?? {} };
+  return text(fpSummary(footprintFor(S, new Sim(S), a.vram_GB ? { vram_bytes: a.vram_GB * 2 ** 30 } : {})));
+}));
 
 server.registerTool('exhibit_status', {
   title: 'Exhibit status',

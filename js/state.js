@@ -25,6 +25,8 @@ export const defaultState = () => ({
   lorField: 0, lorChir: 1, lorPol: 1, lstemView: 'color', lorAlpha: 300,
   // cross-cutting modifiers by registry id (session.js); the Zernike plate is still objAp: 'zpp' while running
   mods: {},
+  // acquisition plan overrides by technique (footprint.js): scan size, detector pixels, bit depth, dwell, ...
+  plan: {},
   // hidden misalignment added to the knob settings (training scenarios); never shown in the controls
   mis: null,
 });

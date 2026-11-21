@@ -84,6 +84,9 @@ for (const f of files) {
   ok(r.state.objAp === 'none' && !r.mods.zpp, 'mods {} switches the plate off');
   ok(readSession({ ...v2, mods: { zpp: true, ped: { angle_mrad: 20 } } }).mods.ped?.angle_mrad === 20, 'ped modifier carried');
   ok(readSession({ ...v2, mods: { warp: 1 } }).warnings.some((w) => w.includes('warp')), 'unknown modifier reported');
+  const pl = readSession({ ...v2, acq: { ...v2.acq, plan: { '4d': { scan: 512, bits: 8, kind: 'x', det: -3 }, warp: { scan: 1 } } } });
+  ok(same(pl.state.plan, { '4d': { scan: 512, bits: 8 } }) && pl.warnings.some((w) => w.includes('warp')), 'acq.plan sanitized');
+  ok(same(readSession(JSON.parse(JSON.stringify(toSession({ ...S, plan: { stem: { dwell_us: 2 } } })))).state.plan, { stem: { dwell_us: 2 } }), 'acq.plan round trip');
   let threw = false; try { readSession({ format: 'tem-view-profile/1' }); } catch { threw = true; }
   ok(threw, 'non-session rejected');
   console.log('  ok v2 blocks, modifiers, rejection');

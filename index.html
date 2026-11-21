@@ -7,51 +7,52 @@
 <title>Seeing with Electrons</title>
 <meta name="description" content="An interactive transmission electron microscope: TEM, STEM, 4D-STEM, diffraction, EDS and EELS, computed from wave optics in your browser.">
 <link rel="stylesheet" href="fonts/fonts.css">
-<link rel="stylesheet" href="css/style.css?v=202611211203">
+<link rel="stylesheet" href="css/style.css?v=202611211255">
 <script type="importmap">
 {
  "imports": {
   "three": "./vendor/three@0.160.0/build/three.module.js",
   "three/addons/": "./vendor/three@0.160.0/examples/jsm/",
-  "./js/abtem.js": "./js/abtem.js?v=202611211203",
-  "./js/acquire.js": "./js/acquire.js?v=202611211203",
-  "./js/agent.js": "./js/agent.js?v=202611211203",
-  "./js/align.js": "./js/align.js?v=202611211203",
-  "./js/analyze.js": "./js/analyze.js?v=202611211203",
-  "./js/calibrate.js": "./js/calibrate.js?v=202611211203",
-  "./js/calibui.js": "./js/calibui.js?v=202611211203",
-  "./js/components.js": "./js/components.js?v=202611211203",
-  "./js/config.js": "./js/config.js?v=202611211203",
-  "./js/connect.js": "./js/connect.js?v=202611211203",
-  "./js/drive.js": "./js/drive.js?v=202611211203",
-  "./js/explain.js": "./js/explain.js?v=202611211203",
-  "./js/export.js": "./js/export.js?v=202611211203",
-  "./js/holder.js": "./js/holder.js?v=202611211203",
-  "./js/holography.js": "./js/holography.js?v=202611211203",
-  "./js/ide.js": "./js/ide.js?v=202611211203",
-  "./js/lorentz.js": "./js/lorentz.js?v=202611211203",
-  "./js/main.js": "./js/main.js?v=202611211203",
-  "./js/megalibrary.js": "./js/megalibrary.js?v=202611211203",
-  "./js/narration.js": "./js/narration.js?v=202611211203",
-  "./js/npy.js": "./js/npy.js?v=202611211203",
-  "./js/ops.js": "./js/ops.js?v=202611211203",
-  "./js/panel.js": "./js/panel.js?v=202611211203",
-  "./js/physics.js": "./js/physics.js?v=202611211203",
-  "./js/profile.js": "./js/profile.js?v=202611211203",
-  "./js/registry.js": "./js/registry.js?v=202611211203",
-  "./js/render2d.js": "./js/render2d.js?v=202611211203",
-  "./js/scenarios.js": "./js/scenarios.js?v=202611211203",
-  "./js/scene3d.js": "./js/scene3d.js?v=202611211203",
-  "./js/scripting.js": "./js/scripting.js?v=202611211203",
-  "./js/session.js": "./js/session.js?v=202611211203",
-  "./js/sim.js": "./js/sim.js?v=202611211203",
-  "./js/state.js": "./js/state.js?v=202611211203",
-  "./js/techniques.js": "./js/techniques.js?v=202611211203",
-  "./js/telemetry.js": "./js/telemetry.js?v=202611211203",
-  "./js/usage.js": "./js/usage.js?v=202611211203",
-  "./js/voice.js": "./js/voice.js?v=202611211203",
-  "./js/vpanel.js": "./js/vpanel.js?v=202611211203",
-  "./js/vr.js": "./js/vr.js?v=202611211203"
+  "./js/abtem.js": "./js/abtem.js?v=202611211255",
+  "./js/acquire.js": "./js/acquire.js?v=202611211255",
+  "./js/agent.js": "./js/agent.js?v=202611211255",
+  "./js/align.js": "./js/align.js?v=202611211255",
+  "./js/analyze.js": "./js/analyze.js?v=202611211255",
+  "./js/calibrate.js": "./js/calibrate.js?v=202611211255",
+  "./js/calibui.js": "./js/calibui.js?v=202611211255",
+  "./js/components.js": "./js/components.js?v=202611211255",
+  "./js/config.js": "./js/config.js?v=202611211255",
+  "./js/connect.js": "./js/connect.js?v=202611211255",
+  "./js/drive.js": "./js/drive.js?v=202611211255",
+  "./js/explain.js": "./js/explain.js?v=202611211255",
+  "./js/export.js": "./js/export.js?v=202611211255",
+  "./js/footprint.js": "./js/footprint.js?v=202611211255",
+  "./js/holder.js": "./js/holder.js?v=202611211255",
+  "./js/holography.js": "./js/holography.js?v=202611211255",
+  "./js/ide.js": "./js/ide.js?v=202611211255",
+  "./js/lorentz.js": "./js/lorentz.js?v=202611211255",
+  "./js/main.js": "./js/main.js?v=202611211255",
+  "./js/megalibrary.js": "./js/megalibrary.js?v=202611211255",
+  "./js/narration.js": "./js/narration.js?v=202611211255",
+  "./js/npy.js": "./js/npy.js?v=202611211255",
+  "./js/ops.js": "./js/ops.js?v=202611211255",
+  "./js/panel.js": "./js/panel.js?v=202611211255",
+  "./js/physics.js": "./js/physics.js?v=202611211255",
+  "./js/profile.js": "./js/profile.js?v=202611211255",
+  "./js/registry.js": "./js/registry.js?v=202611211255",
+  "./js/render2d.js": "./js/render2d.js?v=202611211255",
+  "./js/scenarios.js": "./js/scenarios.js?v=202611211255",
+  "./js/scene3d.js": "./js/scene3d.js?v=202611211255",
+  "./js/scripting.js": "./js/scripting.js?v=202611211255",
+  "./js/session.js": "./js/session.js?v=202611211255",
+  "./js/sim.js": "./js/sim.js?v=202611211255",
+  "./js/state.js": "./js/state.js?v=202611211255",
+  "./js/techniques.js": "./js/techniques.js?v=202611211255",
+  "./js/telemetry.js": "./js/telemetry.js?v=202611211255",
+  "./js/usage.js": "./js/usage.js?v=202611211255",
+  "./js/voice.js": "./js/voice.js?v=202611211255",
+  "./js/vpanel.js": "./js/vpanel.js?v=202611211255",
+  "./js/vr.js": "./js/vr.js?v=202611211255"
  }
 }
 </script>
@@ -178,6 +179,6 @@
 <div id="connect" class="modal connect" hidden><div class="card"><button class="close" aria-label="Close">×</button><div class="cnBody"></div></div></div>
 <div id="abtem" class="modal abtem" hidden><div class="card"><button class="close" aria-label="Close">×</button><div class="abBody"></div></div></div>
 
-<script type="module" src="js/main.js?v=202611211203"></script>
+<script type="module" src="js/main.js?v=202611211255"></script>
 </body>
 </html>

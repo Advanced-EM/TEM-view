@@ -9,6 +9,7 @@ import * as N from './narration.js';
 import { DISPLAY, KEYS, family } from './registry.js';
 import { defaultState, SESSION_KEYS, CORR_RANGE } from './state.js';
 import { toSession, readSession, isSession } from './session.js';
+import { footprintFor, fmtBytes, fmtTime, PLAN_FIELDS, PLAN_KINDS } from './footprint.js';
 import { PRESETS, newProfile, sanitizeProfile } from './profile.js';
 import { HOLDERS } from './holder.js';
 import { Panel } from './panel.js';
@@ -128,6 +129,21 @@ const TILTABLE = 'tem stem 4d diff eds eels cbed oah ilh ltem lstem';
 // the atomic-scale specimens and the objective lens: not in the Lorentz modes (objective off, magnetic specimens)
 const NOT_LOR = 'tem stem 4d diff cbed eds eels ronch oah ilh';
 const LOR = 'ltem lstem';
+// acquisition plan (footprint.js): the current technique's plan, and the chip options for one field
+const curPlan = () => { try { return footprintFor(S, sim).plan; } catch { return {}; } };
+const PLAN_LABEL = { scan: 'Scan (pixels per side)', det: 'Detector / camera (pixels per side)', bits: 'Bit depth', dwell_us: 'Dwell per position', exposure_s: 'Exposure per frame', frames: 'Frames', format: 'Recording', analysis: 'Analysis' };
+function planOpts(k) {
+  const fmt = { dwell_us: (v) => (v >= 1000 ? `${v / 1000} ms` : `${v} µs`), exposure_s: (v) => `${v} s`, bits: (v) => `${v}-bit`, format: (v) => ({ frames: 'Frames', events: 'Event counting' })[v], analysis: (v) => ({ virtual: 'Virtual detectors', ptycho: 'Ptychography' })[v] }[k] ?? ((v) => `${v}`);
+  if (k === 'det' && PLAN_KINDS[S.mode] === 'camera') return [1024, 2048, 4096].map((v) => [v, `${v}`]);
+  if (k === 'dwell_us' && S.mode === '4d') return [10, 100, 1000, 10000].map((v) => [v, fmt(v)]);
+  if (k === 'dwell_us' && S.mode === 'eels') return [1000, 10000, 100000].map((v) => [v, fmt(v)]);
+  if (k === 'dwell_us') return [0.5, 1, 5, 10, 50].map((v) => [v, fmt(v)]);
+  if (k === 'scan' && S.mode === '4d') return [64, 128, 256, 512, 1024].map((v) => [v, `${v}`]);
+  if (k === 'scan') return [128, 256, 512, 1024, 2048].map((v) => [v, `${v}`]);
+  if (k === 'det') return [64, 128, 256, 512].map((v) => [v, `${v}`]);
+  if (k === 'frames') return [1, 10, 40, 100].map((v) => [v, `${v}`]);
+  return PLAN_FIELDS[k].map((v) => [v, fmt(v)]);
+}
 const CONTROLS = [
   { sec: 'The specimen' },
   { chips: 'spec', modes: NOT_LOR, opts: [['au', 'Gold on carbon'], ['si', 'Si / SiO₂'], ['sto', 'SrTiO₃ boundary'], ['gr', 'Graphene'], ['mof', 'UiO-66 (MOF)'], ['bio', 'Proteins in ice'], ['lib', 'NP megalibrary'], ['hesi', 'He bubbles in Si'], ['cspb', 'CsPbBr₃ nanocubes'], ['mapb', 'MAPbBr₃ nanocubes']] },
@@ -268,6 +284,10 @@ const CONTROLS = [
   { sec: 'Python scripting' },
   { p: 'Script the microscope in Python: set the optics, acquire NumPy data, run analyses, and test automation against a hidden misalignment (challenges). The IDE runs Python in this browser; the same scripts run on a desktop with <code>tools/temview-py</code>, headless or driving this exhibit. Shortcut <kbd>P</kbd>.' },
   { buttons: [['ide', 'Open the Python IDE']] },
+  { sec: 'Data, dose and compute' },
+  { p: 'What this acquisition would be on a real instrument: data size, time, dose, the memory its analysis needs, and where that analysis can run. Choose the scan, detector and timing; the estimate updates with every setting and is written into exported data.' },
+  ...['scan', 'det', 'bits', 'dwell_us', 'exposure_s', 'frames', 'format', 'analysis'].map((k) => ({ chips: `plan.${k}`, label: PLAN_LABEL[k], small: true, get: () => curPlan()[k], dynOpts: () => planOpts(k), show: () => k in curPlan() && planOpts(k).length > 1 })),
+  { footprint: true },
   { sec: 'Digital twin' },
   { p: 'The instrument profile holds what belongs to one particular microscope (energy spread, Cc, Cs, illumination). Calibrate it from your own data, save the whole session, and export what the detectors record.' },
   { chips: 'profile', label: 'Instrument profile', get: () => S.profile.preset, dynOpts: () => Object.entries(PRESETS).map(([k, v]) => [k, v.name.split(',')[0]]) },
@@ -364,6 +384,11 @@ function build() {
       el.className = 'ctl note';
       el.innerHTML = c.p ?? '';
       bound.push({ c, el });
+    } else if (c.footprint) {
+      el = document.createElement('table');
+      el.className = 'data footprint';
+      el.innerHTML = '<tbody id="fpBody"></tbody>';
+      bound.push({ c, el });
     } else if (c.twin) {
       el = document.createElement('table');
       el.className = 'data twin';
@@ -453,6 +478,7 @@ function set(key, v, inv = key) {
 
 function chip(key, v) {
   if (key === 'spec') return setSpec(v);
+  if (key.startsWith('plan.')) { S.plan = { ...S.plan, [S.mode]: { ...(S.plan[S.mode] ?? {}), [key.slice(5)]: v } }; refreshControls(); return updateFootprint(); }
   if (key === 'profile') return setProfile(newProfile(v), 'profile');
   const why = chipState(S, sim, key, v);
   if (why) { refreshControls(); return explainChange(why); }
@@ -945,7 +971,7 @@ function loadSessionFile(text) {
   const { state, warnings } = readSession(o, S);
   if (warnings.length) console.warn('session:', warnings.join('; '));
   const mode = state.mode;
-  for (const k of [...SESSION_KEYS, 'mods']) if (k !== 'mode') S[k] = state[k];
+  for (const k of [...SESSION_KEYS, 'mods', 'plan']) if (k !== 'mode') S[k] = state[k];
   sim.freshArea();
   resetVdet();
   sim.invalidate('spec');
@@ -979,8 +1005,29 @@ function updateTwin() {
   rows.push(['Measured from data', `${Object.keys(cal).length ? Object.keys(cal).map((k) => ({ ctf: 'Thon rings', zlp: 'zero loss', lattice: 'lattice', rings: 'rings', disk: 'disk', eds: 'EDS', holo: 'hologram' })[k]).join(', ') : 'nothing yet'}`]);
   tb.innerHTML = rows.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('');
 }
+// the data, dose and compute estimate for the current technique and plan (footprint.js)
+function updateFootprint() {
+  const tb = $('#fpBody');
+  if (!tb || tb.closest('[hidden]')) return;
+  let f;
+  try { f = footprintFor(S, sim); } catch { tb.innerHTML = ''; return; }
+  const e = (x) => String(x).replace(/[<>&]/g, ''), sig = (x) => (x >= 1e4 || x < 0.01 ? x.toExponential(1).replace('e+', 'e') : ((t) => (t.includes('.') ? t.replace(/\.?0+$/, '') : t))(x.toPrecision(3)));
+  const rows = [
+    ['Data', `${fmtBytes(f.raw.bytes)} · ${f.shape.join(' × ')} ${f.raw.dtype}`],
+    ['Compressed (lossless)', `${fmtBytes(f.compressed.bytes[0])} – ${fmtBytes(f.compressed.bytes[1])} (${f.compressed.ratio[0]}–${f.compressed.ratio[1]}×, ${f.compressed.sparse ? 'sparse counts' : 'dense'})`],
+    ['Acquisition time', fmtTime(f.time.acquire_s)],
+    ['Dose', `${sig(f.dose.total)} e⁻/Å² at ${sig(f.dose.rate)} e⁻/Å²/s · pixel ${sig(f.dose.pixel_A)} Å`],
+  ];
+  if (f.dose.current_pA !== undefined) rows.push(['Probe current', f.dose.current_pA < 1 ? `${sig(f.dose.current_pA * 1000)} fA` : `${sig(f.dose.current_pA)} pA`]);
+  if (f.dose.Dc) rows.push(['Critical dose', `${sig(f.dose.Dc)} e⁻/Å² (${f.dose.ratio > 1 ? '<b class="warn">' : ''}${sig(f.dose.ratio)}× used${f.dose.ratio > 1 ? '</b>' : ''})`]);
+  rows.push(['Analysis memory', `${fmtBytes(f.working.bytes)}: ${f.working.parts.map((p) => `${e(p.name)} ${fmtBytes(p.bytes)}`).join(', ')}`]);
+  rows.push(['Runs', `<b class="tier tier-${f.badge.tier}">${f.badge.label}</b> ${e(f.badge.reason)}`]);
+  for (const n of f.notes) rows.push(['Note', e(n)]);
+  tb.innerHTML = rows.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('');
+}
 function updateTable() {
   updateTwin();
+  updateFootprint();
   const rows = dataRows(S, sim);
   $('#dataBody').innerHTML = rows.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('');
 }

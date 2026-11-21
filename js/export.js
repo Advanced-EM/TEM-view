@@ -2,6 +2,7 @@
 // Shared by the exhibit's "Export data" button and the headless runner (tools/headless.mjs).
 import { npy, zip, jsonBytes } from './npy.js';
 import { snapshot, activeMods } from './session.js';
+import { footprintFor, summary as fpSummary } from './footprint.js';
 
 const A = (data, shape, units) => ({ data, shape, units });
 
@@ -68,6 +69,7 @@ export function collectData(sim, S) {
     specimen_temperature_K: sim.temp(), holder: S.holder,
     optics: { wavelength_A: sim.lam, focal_spread_A: sim.focalSpread(), information_limit_A: sim.infoLimit(), Cs_A: sim.CsA() },
     arrays: Object.fromEntries(Object.entries(arrays).map(([k, v]) => [k, { shape: v.shape, units: v.units }])),
+    footprint: fpSummary(footprintFor(S, sim)),
     state,
   };
   return { arrays, meta };

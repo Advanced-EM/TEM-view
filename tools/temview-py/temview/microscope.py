@@ -107,6 +107,17 @@ class Microscope:
         """Advance the simulation n frames of 50 ms (drift, dose, temperature change with time)."""
         return self._t.call("step", {"n": int(n)})
 
+    def footprint(self, technique: str | None = None, apply: bool = False, **plan) -> dict:
+        """Data, dose and compute estimate for the current technique (or `technique`): raw and compressed size,
+        working memory, acquisition and processing time, dose and probe current, and where the analysis can run
+        (tier: browser, gpu or hpc, with the reason). Plan overrides as keywords: scan, det, bits, dwell_us,
+        exposure_s, frames, channels, format ("frames"/"events"), analysis ("virtual"/"ptycho"), iters.
+        apply=True keeps them for the technique. Example: footprint(scan=512, det=128, analysis="ptycho")."""
+        args: dict = {"plan": plan, "apply": bool(apply)}
+        if technique is not None:
+            args["technique"] = technique
+        return self._t.call("footprint", args)
+
     # -- a structure of your own
     def load_xyz(self, xyz: str, name: str | None = None) -> dict:
         """Use an XYZ file (a path, or the file's text) as the specimen "xyz": atoms in Å, any elements, on a
