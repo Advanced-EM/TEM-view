@@ -156,6 +156,7 @@ export class Sim {
     const map = {
       objAp: ['tem'], alpha: ['stem', 'fd', 'vimg', 'si', 'eels', 'probe'], det: ['stem'],
       sa: ['diff'], camL: ['diff'], beamStop: [], camera: [], vdet: ['vimg'], eelsWin: ['eels'], eelsRange: ['eels'], eelsDisp: ['eels'], eelsOffset: ['eels'], eelsExp: ['eels'], eelsExpLow: ['eels'], eelsCurrent: ['eels'], dualEels: ['eels'], bgsub: ['eels'],
+      pedOn: ['diff'], pedPhi: ['diff'], pedSteps: ['diff'], pedDescan: ['diff'],
       eelsSource: ['eels'], eelsBeta: ['eels'], eelsDet: ['eels'], eelsPx: ['eels'], eelsYScale: [], eelsFit: [], eelsPre: [], eelsDeconv: [], eelsLine: [],
       dose: ['si'], edsSel: [], mode: [],
       // progressive beam damage: refresh images and patterns in place, but don't restart 4D scans or spectrum accumulation
@@ -390,7 +391,9 @@ export class Sim {
     const tx = (S.tiltX * Math.PI) / 180, ty = (S.tiltY * Math.PI) / 180;
     const tEff = 30 + 0.25 * S.thick * 10;
     const dk = 1 / (n * dx);
-    for (let y = 0; y < n; y++)
+    const ped = this.pedParams();
+    if (ped) this.precessDiff(re, im, I, n, dk, tEff, tx, ty, ped);
+    else for (let y = 0; y < n; y++)
       for (let x = 0; x < n; x++) {
         const i = y * n + x, j = ((y + n / 2) % n) * n + ((x + n / 2) % n);
         const kx = P.freq(x, n, dx), ky = P.freq(y, n, dx);
@@ -413,6 +416,76 @@ export class Sim {
     for (let b = 0; b < nb; b++) prof[b] = cnt[b] ? prof[b] / cnt[b] : 0;
     this.diff = { I, n, dk, prof, kStep, lam };
     this.resampleDiff();
+  }
+
+  // the precession modifier (registry MODIFIERS: ped) in effect for the current technique, or null
+  pedParams() {
+    const S = this.S;
+    if (!S.pedOn || !['diff', 'cbed'].includes(S.mode)) return null;
+    return { phi: S.pedPhi, steps: Math.max(4, S.pedSteps | 0), descan: S.pedDescan };
+  }
+  // Precession electron diffraction (Vincent & Midgley 1994): the beam is tilted by φ and rotated on a hollow
+  // cone, and descanned below the specimen, so each pattern is an average over N azimuths θ of the excitation
+  // error s(θ) = ½λk² + k·(tilt + φ(cos θ, sin θ)). Each crystal reflection gets its two-beam intensity,
+  //   I_g = sin²(πt·s_eff) / (ξ_g² s_eff²),   s_eff² = s² + ξ_g⁻²,
+  // with ξ_g from the structure factors (CBED.lists); the FFT supplies the spot shapes and anything that is not a
+  // crystal reflection (amorphous rings, defects), weighted kinematically. Averaging over the cone integrates
+  // through each reflection's rocking curve, which damps the thickness (Pendellösung) oscillation and excites
+  // reflections far from the Ewald sphere. A descan error leaves each azimuth's pattern shifted by δφ/λ, so
+  // spots smear into small rings.
+  precessDiff(re, im, I, n, dk, tEff, tx, ty, ped) {
+    const S = this.S, spec = this.spec, lam = this.lam, t = spec.fixedT ?? S.thick * 10;
+    const phi = ped.phi * 1e-3, N = ped.steps, del = ped.descan / 100;
+    const A = new Float32Array(n * n);
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) { const i = y * n + x; A[((y + n / 2) % n) * n + ((x + n / 2) % n)] = re[i] * re[i] + im[i] * im[i]; }
+    const c0 = (n / 2) * n + n / 2, W2 = A[c0] || 1;
+    // crystal reflections: their extinction distance and FFT peak over each spot's footprint
+    let xiMap = null, pkMap = null;
+    const crystal = !spec.poly && !spec.twoD && !!P.CRYST[spec.id];
+    if (crystal) {
+      const L = this.cbed.lists(), rp = Math.max(2, Math.ceil(2 / (S.sa * 10 * dk)));
+      xiMap = new Float32Array(n * n); pkMap = new Float32Array(n * n);
+      for (const r of spec.grainRot) {
+        const cr = Math.cos(r), sr = Math.sin(r);
+        for (const z of L.zolz) {
+          const gx = z.gx * cr - z.gy * sr, gy = z.gx * sr + z.gy * cr, px = Math.round(gx / dk + n / 2), py = Math.round(gy / dk + n / 2);
+          if (px < rp || py < rp || px >= n - rp || py >= n - rp) continue;
+          let pk = 0;
+          for (let v = -rp; v <= rp; v++) for (let u = -rp; u <= rp; u++) if (u * u + v * v <= rp * rp) pk = Math.max(pk, A[(py + v) * n + px + u]);
+          if (!(pk > 0)) continue;
+          for (let v = -rp; v <= rp; v++) for (let u = -rp; u <= rp; u++) {
+            if (u * u + v * v > rp * rp) continue;
+            const j = (py + v) * n + px + u;
+            if (!xiMap[j] || z.xi < xiMap[j]) { xiMap[j] = z.xi; pkMap[j] = pk; }
+          }
+        }
+      }
+    }
+    const shift = (del * phi) / lam / dk, thr = 1e-12 * W2;
+    for (let q = 0; q < N; q++) {
+      const th = (2 * Math.PI * (q + 0.5)) / N, ct = Math.cos(th), st = Math.sin(th), ex = tx + phi * ct, ey = ty + phi * st, sx = shift * ct, sy = shift * st;
+      for (let y = 0; y < n; y++) {
+        const ky = (y - n / 2) * dk;
+        for (let x = 0; x < n; x++) {
+          const j = y * n + x, a = A[j];
+          if (a < thr) continue;
+          const kx = (x - n / 2) * dk, s = 0.5 * lam * (kx * kx + ky * ky) + kx * ex + ky * ey;
+          let v;
+          if (xiMap && xiMap[j]) { const xi = xiMap[j], se2 = s * s + 1 / (xi * xi), sn = Math.sin(Math.PI * t * Math.sqrt(se2)); v = ((a / pkMap[j]) * W2 * sn * sn) / (xi * xi * se2); }
+          else v = j === c0 || !crystal ? a : a * Math.exp(-Math.pow(1.6 * tEff * s, 2));
+          if (!sx && !sy) { I[j] += v; continue; }
+          const fx = x + sx, fy = y + sy, x0 = Math.floor(fx), y0 = Math.floor(fy);
+          if (x0 < 0 || y0 < 0 || x0 >= n - 1 || y0 >= n - 1) continue;
+          const ax = fx - x0, ay = fy - y0, b = y0 * n + x0;
+          I[b] += v * (1 - ax) * (1 - ay); I[b + 1] += v * ax * (1 - ay); I[b + n] += v * (1 - ax) * ay; I[b + n + 1] += v * ax * ay;
+        }
+      }
+    }
+    for (let j = 0; j < n * n; j++) I[j] /= N;
+    // how much of the diffracted FFT power the crystal reflections account for (the rest: amorphous, defects)
+    let pin = 0, pall = 0;
+    if (xiMap) for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) { const j = y * n + x; if (Math.hypot(x - n / 2, y - n / 2) * dk < 0.08) continue; pall += A[j]; if (xiMap[j]) pin += A[j]; }
+    this.pedInfo = { covered: xiMap ? xiMap.reduce((c, v) => c + (v ? 1 : 0), 0) : 0, powerInReflections: pall ? pin / pall : 0, N, phi: ped.phi };
   }
 
   // Map k-space onto the camera: radius on the detector = λ·L·k.

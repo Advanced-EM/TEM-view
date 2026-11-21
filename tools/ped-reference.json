@@ -1,0 +1,8 @@
+{
+ "note": "Hashes of SAED (diff.I) and CBED (cbed.disp.arr) from the code before M4, precession off.",
+ "sto-diff": "8fb2b8bb764a2f86f4fad8e51af84be3c2b76885cb6ea0b0d290f03dbde79e0a",
+ "si-diff": "88a1e8ba652cf6d648d5da1edcdc3aa5ab716d80c5022519f0ed3c8b465164c3",
+ "si-cbed": "9920e6fbf514fa939f6d0acdc374765a5f22096fd1693e51f8672e94cf124899",
+ "sto-cbed": "762d3f0970ad245e0662f9044f07a415d4a61e2f52bf17bdc0ded78dff2110f3",
+ "au-diff": "ef7ab8b786ba6b140091c4c9e0db414bf4b593f4444520791743927360c6d7e8"
+}

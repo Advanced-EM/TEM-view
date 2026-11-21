@@ -381,7 +381,8 @@ function drawDiff(sim, S, m, s) {
   paint(ctx, arr, d.W, d.W, dst, { lo: deep ? 0.3 : 0.05, hi: deep ? 5.4 : real(S) ? 3.3 : 3.0, log: true, lut: scr ? LUT.phosphor : real(S) ? LUT.gray : LUT.magma, gamma: 1.05, noise });
   ctx.filter = 'none';
   const kPx = W / (d.W * d.kPerPx), cx = W / 2, cy = H / 2;
-  const spec = sim.spec;
+  const spec = sim.spec, ped = S.pedOn ? 1 / (1 + S.pedPhi / 5) : 1; // precession averages Kikuchi bands away
+  if (S.pedOn) label(ctx, `PRECESSION · φ ${S.pedPhi} mrad · ${S.pedSteps} azimuths${S.pedDescan ? ` · descan error ${S.pedDescan} %` : ''}`, 10 * dpr, 34 * dpr, dpr, { color: C.warm });
   // Kikuchi lines (fixed to the crystal, so they sweep across the screen as you tilt); a monolayer has none
   if (!spec.poly && !spec.twoD) {
     const lam = sim.lam, sx = -((S.tiltX * Math.PI) / 180) / lam, sy = -((S.tiltY * Math.PI) / 180) / lam;
@@ -395,7 +396,7 @@ function drawDiff(sim, S, m, s) {
         for (const sgn of [-1, 1]) {
           const off = sgn * gl / 2;
           const px = cx + (sx + ux * off) * kPx, py = cy + (sy + uy * off) * kPx;
-          ctx.strokeStyle = sgn > 0 ? `rgba(255,255,255,${real(S) ? 0.16 : 0.1})` : `rgba(0,0,0,${real(S) ? 0.35 : 0.2})`;
+          ctx.strokeStyle = sgn > 0 ? `rgba(255,255,255,${(real(S) ? 0.16 : 0.1) * ped})` : `rgba(0,0,0,${(real(S) ? 0.35 : 0.2) * ped})`;
           ctx.lineWidth = 1.4 * dpr;
           ctx.beginPath(); ctx.moveTo(px - uy * 2000, py + ux * 2000); ctx.lineTo(px + uy * 2000, py - ux * 2000); ctx.stroke();
         }

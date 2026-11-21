@@ -35,6 +35,7 @@ const SETTINGS = {
   lorentz_fov_um: 'field of view in µm (Lorentz modes)', film_thickness_nm: 'magnetic film thickness', field_mT: 'objective-lens field along the beam',
   divergence_urad: 'illumination divergence (ltem)', foucault: '+x, -x, +y, -y: the deflection the Foucault aperture passes', dpc_view: 'color, x, y, sum (lstem)',
   probe_urad: 'Lorentz-STEM probe semi-angle',
+  precession_mrad: 'precession semi-angle φ in mrad, 0 for off (SAED, CBED)', precession_steps: 'azimuth steps around the cone', descan_error_pct: 'descan error, % of φ',
   eels_offset_eV: 'energy at the first channel', eels_dispersion: '0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1 eV per channel', eels_window_eV: '[centre, width] of the energy window',
   eels_beta_mrad: 'collection semi-angle β, 1–100 mrad', eels_source: 'profile, schottky, cfeg, mono', eels_detector: 'ccd, direct', dual_eels: 'True or False',
   eels_current_pA: 'probe current', eels_exposure_s: 'exposure per readout', eels_probe: '[i, j] spectrum-image pixel (0–127), or None for the whole field',
@@ -72,6 +73,10 @@ export function settingsToOps(a) {
   if (a.field_mT !== undefined) ops.push({ op: 'set', k: 'lorField', v: +a.field_mT });
   if (a.divergence_urad !== undefined) ops.push({ op: 'set', k: 'lorDiv', v: +a.divergence_urad });
   if (a.probe_urad !== undefined) ops.push({ op: 'set', k: 'lorAlpha', v: +a.probe_urad });
+  // precession (modifier ped): φ > 0 switches it on
+  if (a.precession_mrad !== undefined) { const v = +a.precession_mrad; if (!(v >= 0 && v <= 60)) throw new Error('precession_mrad must be 0–60'); ops.push({ op: 'set', k: 'pedOn', v: v > 0 }); if (v > 0) ops.push({ op: 'set', k: 'pedPhi', v }); }
+  if (a.precession_steps !== undefined) ops.push({ op: 'set', k: 'pedSteps', v: +a.precession_steps });
+  if (a.descan_error_pct !== undefined) ops.push({ op: 'set', k: 'pedDescan', v: +a.descan_error_pct });
   // the EELS spectrometer
   const eelsSet = { eels_offset_eV: 'eelsOffset', eels_beta_mrad: 'eelsBeta', eels_current_pA: 'eelsCurrent', eels_exposure_s: 'eelsExp' };
   for (const [k, key] of Object.entries(eelsSet)) if (a[k] !== undefined) ops.push({ op: 'set', k: key, v: +a[k] });

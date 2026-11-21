@@ -82,7 +82,9 @@ for (const f of files) {
   const r = readSession(v2);
   ok(r.state.mode === 'diff' && r.state.kV === 80 && r.state.holder === 'lhe' && r.state.tempSet === 12, 'v2 blocks override the mirror');
   ok(r.state.objAp === 'none' && !r.mods.zpp, 'mods {} switches the plate off');
-  ok(readSession({ ...v2, mods: { zpp: true, ped: { angle_mrad: 20 } } }).mods.ped?.angle_mrad === 20, 'ped modifier carried');
+  const pr = readSession({ ...v2, mods: { zpp: true, ped: { phi_mrad: 25, steps: 48, descan_pct: 2 } } });
+  ok(pr.mods.ped?.phi_mrad === 25 && pr.state.pedOn && pr.state.pedSteps === 48 && pr.state.pedDescan === 2, 'ped modifier carried into the precession settings');
+  ok(!readSession({ ...v2, mods: {} }).state.pedOn, 'no mods.ped: precession off');
   ok(readSession({ ...v2, mods: { warp: 1 } }).warnings.some((w) => w.includes('warp')), 'unknown modifier reported');
   const pl = readSession({ ...v2, acq: { ...v2.acq, plan: { '4d': { scan: 512, bits: 8, kind: 'x', det: -3 }, warp: { scan: 1 } } } });
   ok(same(pl.state.plan, { '4d': { scan: 512, bits: 8 } }) && pl.warnings.some((w) => w.includes('warp')), 'acq.plan sanitized');

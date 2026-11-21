@@ -345,6 +345,23 @@ export class Scene3D {
     this.heatGlow.position.set(0, 0.03, 0);
     this.holder.add(this.heatLeads, this.heatGlow);
     col.add(this.holder);
+    // precession: the hollow cone of incident directions above the specimen and its mirror below (angle
+    // exaggerated), the beam on it at this instant, and the precession (above) and descan (below) coil pairs
+    {
+      const g = (this.pedG = new THREE.Group()), h = 0.62;
+      g.position.y = Y.spec; g.visible = false;
+      const coneMat = new THREE.MeshBasicMaterial({ color: 0x6fd6ff, transparent: true, opacity: 0.1, side: THREE.DoubleSide, depthWrite: false });
+      const up = new THREE.ConeGeometry(1, h, 48, 1, true); up.rotateX(Math.PI); up.translate(0, h / 2, 0); // apex at the specimen, opening upwards
+      const down = up.clone(); down.rotateX(Math.PI);
+      this.pedCones = [new THREE.Mesh(up, coneMat), new THREE.Mesh(down, coneMat)];
+      const coilMat = new THREE.MeshStandardMaterial({ color: 0xc9874a, metalness: 0.6, roughness: 0.4, emissive: 0x6fd6ff, emissiveIntensity: 0 });
+      this.pedCoils = [0.48, 0.36, -0.36, -0.48].map((y) => { const m = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.018, 8, 40), coilMat); m.rotation.x = Math.PI / 2; m.position.y = y; return m; });
+      this.pedBeamGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()]);
+      this.pedBeam = new THREE.Line(this.pedBeamGeo, new THREE.LineBasicMaterial({ color: 0xbff0ff, transparent: true, opacity: 0.95 }));
+      this.pedH = h; this.pedCoilMat = coilMat;
+      g.add(...this.pedCones, ...this.pedCoils, this.pedBeam);
+      col.add(g);
+    }
     this.specGlow = this.sprite(0x8dffae, 0.5);
     col.add(this.specGlow);
     // EDS detector
@@ -501,6 +518,8 @@ export class Scene3D {
       ['EDS X-ray detector', [-1.3, Y.spec + 0.9, -0.8], ['eds'], 'left'],
       ['Objective aperture', [-0.5, Y.bfp, 0], (S) => S.mode === 'tem' && S.objAp !== 'zpp', 'left'],
       ['Zernike phase plate', [-0.5, Y.bfp, 0], (S) => S.mode === 'tem' && S.objAp === 'zpp', 'left'],
+      ['Precession cone', [0.75, Y.spec + 0.55, 0], (S) => ['diff', 'cbed'].includes(S.mode) && S.pedOn, 'left'],
+      ['Descan coils', [0.75, Y.spec - 0.45, 0], (S) => ['diff', 'cbed'].includes(S.mode) && S.pedOn, 'left'],
       ['Cryo holder', [3.9, Y.spec + 0.75, 0], (S) => S.holder === 'ln2' || S.holder === 'lhe'],
       ['Heating holder', [3.1, Y.spec + 0.35, 0], (S) => S.holder === 'heat'],
       ['Back focal plane', [-0.5, Y.bfp, 0], ['diff', 'stem', '4d', 'eds', 'eels', 'ronch', 'cbed', 'oah', 'ilh', 'ltem', 'lstem'], 'left'],
@@ -718,6 +737,19 @@ export class Scene3D {
   // ---------------------------------------------------------------- per-frame
   update(dt, S, sim) {
     this.time += dt;
+    // precession: the cone's half-angle follows φ (×7, so 20 mrad reads as ~8°), the beam goes round it
+    {
+      const on = ['diff', 'cbed'].includes(S.mode) && !!S.pedOn;
+      this.pedG.visible = on;
+      if (on) {
+        const h = this.pedH, r = h * Math.tan(Math.min(0.5, S.pedPhi * 1e-3 * 7)), th = (this.pedTh = (this.pedTh ?? 0) + (S.paused ? 0 : dt * S.speed * 2 * Math.PI * 0.6));
+        for (const c of this.pedCones) c.scale.set(r || 1e-3, 1, r || 1e-3);
+        const c = Math.cos(th), sn = Math.sin(th), err = 1 + (S.pedDescan ?? 0) / 100 * 4, p = this.pedBeamGeo.attributes.position;
+        p.setXYZ(0, r * c, h, r * sn); p.setXYZ(1, 0, 0, 0); p.setXYZ(2, -r * c * 0.75, -h * 0.75, -r * sn * 0.75); p.setXYZ(3, -r * c * (err - 1) * 0.6, -h * 1.15, -r * sn * (err - 1) * 0.6);
+        p.needsUpdate = true;
+        this.pedCoilMat.emissiveIntensity = 0.25 + 0.2 * Math.sin(th * 2);
+      }
+    }
     // pan the view down to the spectrometer in EELS mode (and back up afterwards)
     const inVR = this.renderer.xr.isPresenting;
     const wantShift = S.mode === 'eels' ? -1.5 : 0;

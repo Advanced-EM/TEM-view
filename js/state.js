@@ -29,6 +29,8 @@ export const defaultState = () => ({
   lorField: 0, lorChir: 1, lorPol: 1, lstemView: 'color', lorAlpha: 300,
   // cross-cutting modifiers by registry id (session.js); the Zernike plate is still objAp: 'zpp' while running
   mods: {},
+  // precession (modifier ped, on SAED and CBED): on/off, cone semi-angle φ (mrad), azimuth steps, descan error (% of φ)
+  pedOn: false, pedPhi: 20, pedSteps: 32, pedDescan: 0,
   // acquisition plan overrides by technique (footprint.js): scan size, detector pixels, bit depth, dwell, ...
   plan: {},
   // hidden misalignment added to the knob settings (training scenarios); never shown in the controls
@@ -40,7 +42,8 @@ export const SESSION_KEYS = [
   'mode', 'clarity', 'spec', 'thick', 'tiltX', 'tiltY', 'fov', 'cx', 'cy', 'kV', 'dose', 'df', 'dfFam', 'corrector', 'csUnc', 'csCor',
   'objAp', 'alpha', 'alpha4d', 'detIn', 'detOut', 'detPreset', 'camL', 'sa', 'beamStop', 'camera', 'vdet', 'vdIn', 'vdOut', 'vdX', 'vdY', 'vdR',
   'edsSel', 'eelsRange', 'eelsWin', 'eelsWidth', 'bgsub', 'eelsDisp', 'eelsOffset', 'eelsExp', 'eelsExpLow', 'eelsCurrent', 'dualEels',
-  'eelsSource', 'eelsBeta', 'eelsDet', 'eelsYScale', 'eelsFit', 'eelsPre', 'eelsDeconv', 'eelsPx', 'eelsLine', 'ab', 'ronchAp', 'cbedKind', 'alphaCB', 'alphaLA', 'strain', 'holz',
+  'eelsSource', 'eelsBeta', 'eelsDet', 'eelsYScale', 'eelsFit', 'eelsPre', 'eelsDeconv', 'eelsPx', 'eelsLine',
+  'pedOn', 'pedPhi', 'pedSteps', 'pedDescan', 'ab', 'ronchAp', 'cbedKind', 'alphaCB', 'alphaLA', 'strain', 'holz',
   'biprism', 'sbR', 'numCorr', 'holoView', 'nFocal', 'focalStep', 'ilhView', 'holder', 'tempSet', 'profile', 'mis',
   'magSpec', 'lorThick', 'lorFov', 'lorDf', 'lorDiv', 'lorView', 'lorFouc', 'lorApR', 'lorField', 'lorChir', 'lorPol', 'lstemView', 'lorAlpha',
 ];

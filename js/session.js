@@ -24,8 +24,9 @@ const MOD_IDS = new Set(MODIFIERS.map((m) => m.id));
 // running state (it occupies the back focal plane), and is written to files as mods.zpp.
 export function activeMods(S) {
   const mods = {};
-  for (const [k, v] of Object.entries(S.mods ?? {})) if (MOD_IDS.has(k) && k !== 'zpp' && v) mods[k] = v;
+  for (const [k, v] of Object.entries(S.mods ?? {})) if (MOD_IDS.has(k) && k !== 'zpp' && k !== 'ped' && v) mods[k] = v;
   if (S.objAp === 'zpp') mods.zpp = true;
+  if (S.pedOn) mods.ped = { phi_mrad: S.pedPhi, steps: S.pedSteps, descan_pct: S.pedDescan }; // precession (pedOn, pedPhi, ...)
   return mods;
 }
 
@@ -74,8 +75,14 @@ export function readSession(o, base = defaultState()) {
   out.mods = {};
   for (const [k, v] of Object.entries(mods)) {
     if (!MOD_IDS.has(k)) { warnings.push(`unknown modifier ${k}`); continue; }
-    if (k === 'zpp') continue;
+    if (k === 'zpp' || k === 'ped') continue;
     if (v) out.mods[k] = v;
+  }
+  // precession: mods.ped in a v2 file sets the precession keys (absent: off)
+  if (version >= 2) {
+    const p = mods.ped && typeof mods.ped === 'object' ? mods.ped : null, num = (x, lo, hi, d) => (Number.isFinite(+x) ? Math.min(hi, Math.max(lo, +x)) : d);
+    out.pedOn = !!p;
+    if (p) { out.pedPhi = num(p.phi_mrad, 0, 60, d.pedPhi); out.pedSteps = Math.round(num(p.steps, 4, 128, d.pedSteps)); out.pedDescan = num(p.descan_pct, 0, 20, d.pedDescan); }
   }
   if (mods.zpp) out.objAp = 'zpp';
   else if (out.objAp === 'zpp') out.objAp = 'none'; // a v2 file that switched the plate off in mods

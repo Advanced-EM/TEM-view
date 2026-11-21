@@ -88,10 +88,11 @@ export function modeState(S, sim, m) {
 // numeric settings [min, max, decimals] and choices that commands, scripts and agents can set directly
 // (Lorentz microscopy, and the EELS spectrometer)
 export const LOR_LIMITS = { lorDf: [-3000, 3000, 0], lorFov: [0.3, 10, 3], lorThick: [10, 150, 0], lorField: [0, 600, 0], lorDiv: [0.5, 30, 1], lorAlpha: [20, 3000, 0], lorApR: [2, 40, 1],
+  pedPhi: [0, 60, 1], pedSteps: [4, 128, 0], pedDescan: [0, 20, 1],
   eelsBeta: [1, 100, 1], eelsOffset: [-50, 3000, 1], eelsWin: [0, 6000, 2], eelsWidth: [0.5, 80, 1], eelsCurrent: [5, 2000, 0], eelsExp: [1e-4, 10, 5], eelsExpLow: [1e-5, 0.1, 6] };
 export const LOR_CHOICES = { lorView: ['fresnel', 'foucault', 'tie', 'phase'], lstemView: ['color', 'x', 'y', 'sum'], lorFouc: ['+x', '-x', '+y', '-y'],
   eelsSource: ['profile', 'schottky', 'cfeg', 'mono'], eelsDet: ['ccd', 'direct'], eelsYScale: ['log', 'lin', 'split'], eelsDisp: [0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1],
-  dualEels: [true, false], eelsFit: [true, false], eelsDeconv: [true, false], eelsLine: [true, false], bgsub: [true, false] };
+  pedOn: [true, false], dualEels: [true, false], eelsFit: [true, false], eelsDeconv: [true, false], eelsLine: [true, false], bgsub: [true, false] };
 // a Lorentz setting from a command, clamped; true if `op` was one
 export function lorSet(S, set, op) {
   // the EELS probe: a spectrum-image pixel [i, j], or null for the whole field

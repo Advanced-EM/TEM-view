@@ -278,28 +278,40 @@ export class CBED {
       for (let i = 0; i < n * n; i++) mx = Math.max(mx, shadow.zHi[i]);
       shadow = { ...shadow, mx };
     }
+    // the pattern at detector angle (thx, thy) with an extra illumination tilt (ex, ey); precession averages this
+    // over the cone (tilt φ(cos θ, sin θ)), with the descan error leaving the pattern displaced by δφ (same angle)
+    const at = (thx, thy, ex, ey) => {
+      let v = 0;
+      const tx = tx0 + ex, ty = ty0 + ey;
+      if (lac) {
+        if (Math.hypot(thx, thy) > a) return 0;
+        const X = S.cx + thx * dh, Y = S.cy + thy * dh, gi = spec.grainAt(X, Y);
+        v = gi < 0 ? 0.92 : I0(rotated[gi], thx + tx, thy + ty);
+        const sx = Math.floor((X - shadow.x0) / shadow.dx), sy = Math.floor((Y - shadow.y0) / shadow.dx);
+        if (sx >= 0 && sy >= 0 && sx < shadow.n && sy < shadow.n) v *= 1 - 0.3 * Math.sqrt(shadow.zHi[sy * shadow.n + sx] / shadow.mx);
+        return v;
+      }
+      if (grainC < 0) return Math.hypot(thx, thy) <= a ? 0.9 : 0;
+      const R = rotated[grainC];
+      if (Math.hypot(thx, thy) <= a) v += I0(R, thx + tx, thy + ty);
+      for (const z of R.zolz) {
+        const cx = lam * z.gx, cy = lam * z.gy, dx = thx - cx, dy = thy - cy;
+        if (dx * dx + dy * dy <= a * a) v += Ig(z, dx + tx, dy + ty);
+      }
+      return v;
+    };
+    const ped = sim.pedParams(), cone = [];
+    const NC = ped ? Math.min(ped.steps, 12) : 0; // 12 azimuths are enough for disks and HOLZ lines (spots need more: SAED)
+    if (ped) for (let q = 0; q < NC; q++) { const th = (2 * Math.PI * (q + 0.5)) / NC, p = ped.phi * 1e-3; cone.push([p * Math.cos(th), p * Math.sin(th), (ped.descan / 100) * p * Math.cos(th), (ped.descan / 100) * p * Math.sin(th)]); }
     for (let j = 0; j < W; j++)
       for (let i = 0; i < W; i++) {
         const thx = ((i + 0.5) / W * 2 - 1) * span, thy = ((j + 0.5) / W * 2 - 1) * span;
+        if (!cone.length) { out[j * W + i] = at(thx, thy, 0, 0); continue; }
         let v = 0;
-        if (lac) {
-          if (Math.hypot(thx, thy) > a) continue;
-          const X = S.cx + thx * dh, Y = S.cy + thy * dh, gi = spec.grainAt(X, Y);
-          v = gi < 0 ? 0.92 : I0(rotated[gi], thx + tx0, thy + ty0);
-          const sx = Math.floor((X - shadow.x0) / shadow.dx), sy = Math.floor((Y - shadow.y0) / shadow.dx);
-          if (sx >= 0 && sy >= 0 && sx < shadow.n && sy < shadow.n) v *= 1 - 0.3 * Math.sqrt(shadow.zHi[sy * shadow.n + sx] / shadow.mx);
-        } else {
-          if (grainC < 0) { if (Math.hypot(thx, thy) <= a) v = 0.9; out[j * W + i] = v; continue; }
-          const R = rotated[grainC];
-          if (Math.hypot(thx, thy) <= a) v += I0(R, thx + tx0, thy + ty0);
-          for (const z of R.zolz) {
-            const cx = lam * z.gx, cy = lam * z.gy, dx = thx - cx, dy = thy - cy;
-            if (dx * dx + dy * dy <= a * a) v += Ig(z, dx + tx0, dy + ty0);
-          }
-        }
-        out[j * W + i] = v;
+        for (const [ex, ey, dx, dy] of cone) v += at(thx - dx, thy - dy, ex, ey);
+        out[j * W + i] = v / cone.length;
       }
-    this.disp = { arr: out, W, span, a, lac, grainC };
+    this.disp = { arr: out, W, span, a, lac, grainC, ped: !!ped };
     this.rot = rotated;
     this.fringeFit(rotated, grainC, t);
     this.stale = false;
@@ -366,10 +378,12 @@ export function drawCBED(sim, S, m, s) {
   }
   if (d.lac) {
     label(ctx, `LACBED · α = ${Math.round(d.a * 1000)} mrad · shadow image + Bragg/HOLZ lines`, 10 * dpr, 16 * dpr, dpr, { color: C.accent, size: 9 });
+    if (d.ped) label(ctx, `precessed · φ ${S.pedPhi} mrad: HOLZ lines and fringes averaged over the cone`, 10 * dpr, 34 * dpr, dpr, { color: C.warm, size: 9 });
     if (!real(S) && sim.spec.id === 'sto') label(ctx, 'lines break at the grain boundary', cx, H - 16 * dpr, dpr, { color: C.warm, size: 9, align: 'center' });
   } else {
     if (d.grainC < 0) label(ctx, 'probe on amorphous material: drag the stage onto a crystal', cx, 20 * dpr, dpr, { color: C.warm, size: 9, align: 'center' });
     else label(ctx, `CBED · α = ${Math.round(d.a * 1000)} mrad · ${P.CRYST[sim.spec.id].name}`, 10 * dpr, 16 * dpr, dpr, { color: C.accent, size: 9 });
+    if (d.ped && d.grainC >= 0) label(ctx, `precessed · φ ${S.pedPhi} mrad${S.pedDescan ? ` · descan error ${S.pedDescan} %` : ''}`, 10 * dpr, 34 * dpr, dpr, { color: C.warm, size: 9 });
     if (!real(S) && d.grainC >= 0) {
       const R = cb.rot[d.grainC], lam = sim.lam;
       const shown = R.zolz.filter((z) => Math.abs(lam * z.gx) < d.span * 0.9 && Math.abs(lam * z.gy) < d.span * 0.9).sort((p, q) => p.g - q.g).slice(0, 6);
