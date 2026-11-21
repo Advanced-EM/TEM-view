@@ -105,6 +105,7 @@ export class ScriptCore {
   // advance the simulation so the detectors show the current settings
   settle(steps) {
     const S = this.S, n = steps ?? (S.mode === '4d' ? 400 : S.mode === 'ilh' ? 600 : 12);
+    if (S.mode === '4d') { this.sim.update(0); this.sim.syncCompute?.(); } // a worker scan is finished on this thread
     for (let i = 0; i < n; i++) { this.sim.update(0.05); if (S.mode === 'ilh' && this.sim.ilh.st?.it >= this.sim.ilh.st.maxIt) break; }
   }
 

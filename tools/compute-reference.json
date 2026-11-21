@@ -1,0 +1,63 @@
+{
+ "note": "Hashes of the 4D-STEM data and ePIE / MS-ePIE objects from the main-thread code before M3 (orders shuffled by mulberry32 seeds 1234 and 99).",
+ "sto": {
+  "data": "875bea3f045046aff8e39fd108560175718cc8495de0aa816b90932a7f1e7546",
+  "scanMs": 1311,
+  "epie": {
+   "re": "05b44523d612c03b71799377b9b3a1f5914072231d5d59a7019ca4f08453ad65",
+   "im": "f3847b81acaa1c2b262fb384c8066fcdcb8b63c6d95ceaa5f82cbaed2b218519",
+   "iter": 30,
+   "err": 64978.966998316006,
+   "ms": 21168
+  },
+  "msepie": {
+   "O": [
+    [
+     "8020bfe97f83e1f4fef6f1eb81f591ac9be2da1c775f8c84d50119d4724022d2",
+     "d7bee67e30c34d4442a155dcfd4785ad9e4d1c1369a75aff77b4b7fc555589e8"
+    ],
+    [
+     "f44e64020788a244f6d7eecc0047d0c7cdd63ef63c322e6d575244b8a6ea4527",
+     "e7fbba43c4585e84af59f159f9d78573a0da369c978688f2ec4f951d61c134f4"
+    ],
+    [
+     "c126ecac0f3aa1fb0b008fbcc1a82051a71cf1dc6e09e0332d34f0c5dd85c910",
+     "ffb01141fcfe982d0c7864dff77436316e4f1aa1cb31403b852442f5cd70a48a"
+    ]
+   ],
+   "iter": 10,
+   "err": 1477.6852196384507,
+   "ms": 26332
+  }
+ },
+ "au": {
+  "data": "fcf41d4e1cf2657f7458d94f2637475460a075972f4609859c85daa94154ce76",
+  "scanMs": 1208,
+  "epie": {
+   "re": "bad0b0ece6c9b7f9435b462d9b34f32a381da630ee9ed4de6f4bdf9bf8220e14",
+   "im": "f1e8213c50ae139b3c10050c3d10bf355e8b0611324c80a36e1e110894c44f8a",
+   "iter": 30,
+   "err": 55209.70356532379,
+   "ms": 19000
+  },
+  "msepie": {
+   "O": [
+    [
+     "264f8c3b6997327a3c4b802793c03ae6b0d0ae30f42dcea35e9dea93d46fe1e9",
+     "a20e31fa78e91bd787ae4e2cef069ab06f42013bc8e9e7001005d312ac0b7e6b"
+    ],
+    [
+     "d30049ad875c77d59ebd02fcd17a591d5950df1fa37cdb37fdabd3129829a724",
+     "a5b6100119f0f60dbd466529548d4fb94b5cf88c0eae5df8ddf2c15a66771863"
+    ],
+    [
+     "054977c09cf8bfef7c0336fa284539a20a2b21191ae1ac1737f6579043cc44d0",
+     "10718c7237d617551b8d8f036b1167b8e313cd1620ffb9f3e85de2bbe23cd3e4"
+    ]
+   ],
+   "iter": 10,
+   "err": 9085.479279039231,
+   "ms": 26356
+  }
+ }
+}

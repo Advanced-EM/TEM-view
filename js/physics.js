@@ -68,53 +68,9 @@ export function poisson(l) {
 }
 
 // ---------------------------------------------------------------- FFT
-const plans = new Map();
-function plan(n) {
-  let p = plans.get(n);
-  if (p) return p;
-  const lv = Math.round(Math.log2(n));
-  const rev = new Uint32Array(n);
-  for (let i = 0; i < n; i++) {
-    let r = 0, x = i;
-    for (let b = 0; b < lv; b++) { r = (r << 1) | (x & 1); x >>= 1; }
-    rev[i] = r;
-  }
-  const cos = new Float64Array(n / 2), sin = new Float64Array(n / 2);
-  for (let i = 0; i < n / 2; i++) { cos[i] = Math.cos((2 * Math.PI * i) / n); sin[i] = Math.sin((2 * Math.PI * i) / n); }
-  p = { rev, cos, sin, tr: new Float64Array(n), ti: new Float64Array(n) };
-  plans.set(n, p);
-  return p;
-}
-// In-place radix-2 FFT along a strided line (offset o, stride st): no copies for rows or columns.
-function fft1(re, im, n, inv, o = 0, st = 1) {
-  const { rev, cos, sin } = plan(n);
-  for (let i = 0; i < n; i++) {
-    const j = rev[i];
-    if (j > i) {
-      const a = o + i * st, b = o + j * st;
-      let t = re[a]; re[a] = re[b]; re[b] = t;
-      t = im[a]; im[a] = im[b]; im[b] = t;
-    }
-  }
-  for (let size = 2; size <= n; size <<= 1) {
-    const half = size >> 1, step = n / size;
-    for (let i = 0; i < n; i += size) {
-      for (let j = 0, k = 0; j < half; j++, k += step) {
-        const c = cos[k], s = inv ? sin[k] : -sin[k];
-        const a = o + (i + j) * st, b = a + half * st;
-        const br = re[b], bi = im[b];
-        const tr = br * c - bi * s, ti = br * s + bi * c;
-        re[b] = re[a] - tr; im[b] = im[a] - ti;
-        re[a] += tr; im[a] += ti;
-      }
-    }
-  }
-}
-export function fft2(re, im, n, inv = false) {
-  for (let y = 0; y < n; y++) fft1(re, im, n, inv, y * n, 1);
-  for (let x = 0; x < n; x++) fft1(re, im, n, inv, x, n);
-  if (inv) { const f = 1 / (n * n); for (let i = 0; i < n * n; i++) { re[i] *= f; im[i] *= f; } }
-}
+// one implementation, shared with the compute kernels (main thread, worker and Node)
+import { fft2 } from './kernels.js';
+export { fft2 };
 export const freq = (i, n, dx) => (i < n / 2 ? i : i - n) / (n * dx);
 
 // Aberration phase χ(k): defocus (negative = underfocus) and spherical aberration.

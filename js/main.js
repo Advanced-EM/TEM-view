@@ -11,6 +11,7 @@ import { defaultState, SESSION_KEYS, CORR_RANGE } from './state.js';
 import { toSession, readSession, isSession } from './session.js';
 import { footprintFor, fmtBytes, fmtTime, PLAN_FIELDS, PLAN_KINDS } from './footprint.js';
 import { createSpecimenUI } from './specui.js';
+import { defaultBackend } from './compute.js';
 import { ZLP_SOURCES, toMSA } from './eels.js';
 import { PRESETS, newProfile, sanitizeProfile } from './profile.js';
 import { HOLDERS } from './holder.js';
@@ -50,6 +51,9 @@ const fmtFov = (nm) => (nm < 1000 ? `${nm.toFixed(1)} nm` : nm < 1e6 ? `${+(nm /
 S.df = S.dfFam[fam(S.mode)];
 
 const sim = new Sim(S);
+// 4D-STEM and ptychography run in a Web Worker (compute.js), so the page stays responsive; the worker gets the
+// same cache-busting stamp as this module. Without workers they run on the main thread as before.
+sim.setCompute(defaultBackend(new URL(`./compute-worker.js${new URL(import.meta.url).search}`, import.meta.url)));
 const scene = new Scene3D($('#gl'), $('#labels'));
 const mainCv = $('#detMain'), secCv = $('#detSec');
 

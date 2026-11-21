@@ -6,6 +6,8 @@ import { OffAxis, FocalSeries } from './holography.js';
 import { Lorentz } from './lorentz.js';
 import { focalSpread } from './profile.js';
 import * as EELS from './eels.js';
+import * as KR from './kernels.js';
+import { InlineBackend } from './compute.js';
 import { HOLDERS, specimenT, u2Ratio, thermalStrain, radiolysisFactor, iceSublimation, DEVITRIFY_K } from './holder.js';
 
 const SP = P.SPECIMENS;
@@ -90,6 +92,7 @@ export function zlpStats(spec, E0, dE) {
 export class Sim {
   constructor(S) {
     this.S = S;
+    this.compute = new InlineBackend();
     this.mapCache = new Map();
     this.stale = { tem: 1, stem: 1, diff: 1, fd: 1, vimg: 1, si: 1, eels: 1, probe: 1 };
     this.version = 0;
@@ -480,40 +483,31 @@ export class Sim {
       wr: new Float64Array(n4 * n4), wi: new Float64Array(n4 * n4),
       vimg: new Float32Array(N * N), comX: new Float32Array(N * N), comY: new Float32Array(N * N), vDone: 0,
     };
+    this.fd.geom = { N, n4, gridN, dx, step, scan, K, dz };
+    // the scan runs on the compute backend (compute.js): inline, or in a worker in the exhibit
+    for (const t of [this.fdTask, this.ptyTask, this.msTask]) t?.cancel();
+    this.pty = this.mpty = null;
+    this.fdTask = this.compute.run({ kind: 'fd-scan', geom: this.fd.geom, slices, prop, pr: sr, pi: si }, { data: this.fd.data });
     this.stale.vimg = 1;
   }
+  // Scripts step the simulation in a synchronous loop, in which worker results cannot arrive: take what the worker
+  // has sent, then finish the scan here (same kernels, same result)
+  syncCompute() {
+    const f = this.fd, t = this.fdTask;
+    if (!f || !t?.remote || f.done >= f.N * f.N) return;
+    t.pump(1); f.done = t.done;
+    t.cancel();
+    this.fdTask = new InlineBackend().run({ ...t.job, done: f.done }, { data: f.data });
+  }
+  // where the heavy loops run: InlineBackend (default: headless, tests) or WorkerBackend (the exhibit)
+  setCompute(backend) { for (const t of [this.fdTask, this.ptyTask, this.msTask]) t?.cancel(); this.compute = backend; this.stale.fd = 1; this.pty = this.mpty = null; }
 
   step4D(budget) {
     const f = this.fd;
     if (!f || f.done >= f.N * f.N) return false;
-    const t0 = performance.now(), { N, n4, gridN, re, im, pr, pi, wr, wi, data, dx, step, scan } = f;
-    const h = n4 / 2;
-    while (f.done < N * N && performance.now() - t0 < budget) {
-      const idx = f.done, i = idx % N, j = (idx / N) | 0;
-      const left = Math.round(gridN / 2 + (-scan / 2 + (i + 0.5) * step) / dx) - h;
-      const top = Math.round(gridN / 2 + (-scan / 2 + (j + 0.5) * step) / dx) - h;
-      wr.set(pr); wi.set(pi);
-      for (let k = 0; k < f.K; k++) {
-        const s = f.slices[k];
-        for (let y = 0; y < n4; y++) {
-          const go = (top + y) * gridN + left, po = y * n4;
-          for (let x = 0; x < n4; x++) {
-            const g = go + x, p = po + x, a = wr[p], b = wi[p];
-            wr[p] = s.re[g] * a - s.im[g] * b;
-            wi[p] = s.re[g] * b + s.im[g] * a;
-          }
-        }
-        if (k < f.K - 1) this.propagate(wr, wi, n4, f.prop, false);
-      }
-      P.fft2(wr, wi, n4);
-      const o = idx * n4 * n4;
-      for (let y = 0; y < n4; y++)
-        for (let x = 0; x < n4; x++) {
-          const p = y * n4 + x;
-          data[o + ((y + h) % n4) * n4 + ((x + h) % n4)] = wr[p] * wr[p] + wi[p] * wi[p];
-        }
-      f.done++;
-    }
+    if (this.fdTask.error) { console.warn('compute:', this.fdTask.error, '(running on the main thread)'); this.fdTask = new InlineBackend().run({ ...this.fdTask.job, done: f.done }, { data: f.data }); }
+    this.fdTask.pump(budget);
+    f.done = this.fdTask.done;
     return true;
   }
 
@@ -574,75 +568,25 @@ export class Sim {
     }
     return { re, im };
   }
-  propagate(wr, wi, n, H, back) {
-    P.fft2(wr, wi, n);
-    const s = back ? -1 : 1;
-    for (let i = 0; i < n * n; i++) { const a = wr[i], b = wi[i], c = H.re[i], d = s * H.im[i]; wr[i] = a * c - b * d; wi[i] = a * d + b * c; }
-    P.fft2(wr, wi, n, true);
-  }
+  propagate(wr, wi, n, H, back) { KR.propagate(wr, wi, n, H, back); }
+
 
   // ------------------------------------------------------------ multislice ptychography (MS-ePIE / 3PIE)
   // The object is a stack of K slices; the wave is propagated between them in the forward model, and the
   // correction is back-propagated slice by slice, updating each slice's transmission and the wave entering it.
+  // (kernels.js msStep) on the compute backend; the display reads this.mpty (slices O, iter, k, errHist)
   startMSPtycho() {
-    const f = this.fd, G = f.gridN;
-    const O = Array.from({ length: f.K }, () => ({ re: new Float64Array(G * G).fill(1), im: new Float64Array(G * G) }));
-    const n2 = f.n4 * f.n4, mk = () => ({ re: new Float64Array(n2), im: new Float64Array(n2) });
-    this.mpty = { fd: f, O, iter: 0, k: 0, order: Array.from({ length: f.N * f.N }, (_, i) => i), errSum: 0, errHist: [],
-      inc: Array.from({ length: f.K }, mk), ex: Array.from({ length: f.K }, mk), w: mk(), maxIter: 10, win: new Int32Array(f.n4 * f.n4) };
+    const f = this.fd;
+    this.msTask?.cancel();
+    this.mpty = { fd: f };
+    this.msJob = { kind: 'msepie', geom: f.geom, pr: f.pr, pi: f.pi, prop: f.prop, seed: 99, dataset: this.fdTask?.id };
+    this.msTask = this.compute.run(this.msJob, { data: f.data, out: this.mpty });
   }
   stepMSPtycho(budget) {
-    const T = this.mpty, f = T.fd, { N, n4, gridN, dx, step, scan, K } = f;
-    if (T.iter >= T.maxIter) return false;
-    const h = n4 / 2, n2 = n4 * n4, t0 = performance.now(), beta = 0.8;
-    while (performance.now() - t0 < budget) {
-      if (T.k === 0) {
-        for (let i = T.order.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; [T.order[i], T.order[j]] = [T.order[j], T.order[i]]; }
-        T.errSum = 0;
-      }
-      const idx = T.order[T.k], i = idx % N, j = (idx / N) | 0;
-      const left = Math.round(gridN / 2 + (-scan / 2 + (i + 0.5) * step) / dx) - h;
-      const top = Math.round(gridN / 2 + (-scan / 2 + (j + 0.5) * step) / dx) - h;
-      const Wi = T.win;
-      for (let y = 0, p = 0; y < n4; y++) { const r = (top + y) * gridN + left; for (let x = 0; x < n4; x++, p++) Wi[p] = r + x; }
-      // forward through the slices
-      T.inc[0].re.set(f.pr); T.inc[0].im.set(f.pi);
-      for (let k = 0; k < K; k++) {
-        const O = T.O[k], I = T.inc[k], E = T.ex[k];
-        for (let p = 0; p < n2; p++) { const g = Wi[p]; E.re[p] = O.re[g] * I.re[p] - O.im[g] * I.im[p]; E.im[p] = O.re[g] * I.im[p] + O.im[g] * I.re[p]; }
-        if (k < K - 1) { T.inc[k + 1].re.set(E.re); T.inc[k + 1].im.set(E.im); this.propagate(T.inc[k + 1].re, T.inc[k + 1].im, n4, f.prop, false); }
-      }
-      // modulus constraint at the detector
-      const W = T.w; W.re.set(T.ex[K - 1].re); W.im.set(T.ex[K - 1].im);
-      P.fft2(W.re, W.im, n4);
-      const o = idx * n2;
-      for (let p = 0; p < n2; p++) {
-        const y = (p / n4) | 0, x = p % n4, meas = Math.sqrt(f.data[o + ((y + h) % n4) * n4 + ((x + h) % n4)]);
-        const amp = Math.hypot(W.re[p], W.im[p]);
-        T.errSum += (amp - meas) ** 2;
-        const sc = amp > 1e-12 ? meas / amp : 0;
-        W.re[p] *= sc; W.im[p] *= sc;
-      }
-      P.fft2(W.re, W.im, n4, true);
-      // back through the slices: W holds the corrected exit wave of slice k
-      for (let k = K - 1; k >= 0; k--) {
-        const O = T.O[k], I = T.inc[k], E = T.ex[k];
-        let mI = 0, mO = 0;
-        for (let p = 0; p < n2; p++) { mI = Math.max(mI, I.re[p] * I.re[p] + I.im[p] * I.im[p]); const g = Wi[p]; mO = Math.max(mO, O.re[g] * O.re[g] + O.im[g] * O.im[g]); }
-        for (let p = 0; p < n2; p++) {
-          const g = Wi[p], dr = W.re[p] - E.re[p], di = W.im[p] - E.im[p];
-          const ir = I.re[p], ii = I.im[p], or = O.re[g], oi = O.im[g];
-          O.re[g] += (beta * (ir * dr + ii * di)) / (mI || 1);
-          O.im[g] += (beta * (ir * di - ii * dr)) / (mI || 1);
-          if (k > 0) { // corrected wave entering this slice, then back-propagate to the previous exit
-            W.re[p] = ir + (beta * (or * dr + oi * di)) / (mO || 1);
-            W.im[p] = ii + (beta * (or * di - oi * dr)) / (mO || 1);
-          }
-        }
-        if (k > 0) this.propagate(W.re, W.im, n4, f.prop, true);
-      }
-      if (++T.k >= N * N) { T.k = 0; T.iter++; T.errHist.push(T.errSum); if (T.iter >= T.maxIter) break; }
-    }
+    const T = this.mpty;
+    if (this.msTask.error) { console.warn('compute:', this.msTask.error, '(running on the main thread)'); this.msTask = new InlineBackend().run(this.msJob, { data: this.fd.data, out: T }); }
+    if (T.iter >= T.maxIter || this.msTask.finished && !this.msTask.queue?.length) return false;
+    this.msTask.pump(budget);
     return true;
   }
   msPhase(k, S = 96) { // phase of slice k (or the sum when k < 0) over the scanned area
@@ -660,55 +604,19 @@ export class Sim {
 
   // ------------------------------------------------------------ ptychography (ePIE, known probe)
   // Reconstruct the specimen's complex transmission from the recorded diffraction intensities alone.
+  // (kernels.js epieStep) on the compute backend; the display reads this.pty (re, im, iter, k, errHist)
   startPtycho() {
-    const f = this.fd, G = f.gridN;
-    const re = new Float64Array(G * G).fill(1), im = new Float64Array(G * G);
-    let pm = 0;
-    for (let i = 0; i < f.n4 * f.n4; i++) pm = Math.max(pm, f.pr[i] * f.pr[i] + f.pi[i] * f.pi[i]);
-    const order = Array.from({ length: f.N * f.N }, (_, i) => i);
-    this.pty = { fd: f, re, im, pm, iter: 0, k: 0, order, err: 0, errSum: 0, errHist: [] };
+    const f = this.fd;
+    this.ptyTask?.cancel();
+    this.pty = { fd: f };
+    this.ptyJob = { kind: 'epie', geom: f.geom, pr: f.pr, pi: f.pi, seed: 1234, dataset: this.fdTask?.id };
+    this.ptyTask = this.compute.run(this.ptyJob, { data: f.data, out: this.pty });
   }
   stepPtycho(budget) {
-    const T = this.pty, f = T.fd, { N, n4, gridN, pr, pi, data, dx, step, scan, wr, wi } = f;
-    if (T.iter >= 30) return false;
-    const h = n4 / 2, t0 = performance.now(), beta = 0.9;
-    const pr0 = new Float64Array(n4 * n4), pi0 = new Float64Array(n4 * n4);
-    while (performance.now() - t0 < budget) {
-      if (T.k === 0) {
-        for (let i = T.order.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; [T.order[i], T.order[j]] = [T.order[j], T.order[i]]; }
-        T.errSum = 0;
-      }
-      const idx = T.order[T.k], i = idx % N, j = (idx / N) | 0;
-      const left = Math.round(gridN / 2 + (-scan / 2 + (i + 0.5) * step) / dx) - h;
-      const top = Math.round(gridN / 2 + (-scan / 2 + (j + 0.5) * step) / dx) - h;
-      for (let y = 0; y < n4; y++)
-        for (let x = 0; x < n4; x++) {
-          const g = (top + y) * gridN + left + x, p = y * n4 + x;
-          wr[p] = T.re[g] * pr[p] - T.im[g] * pi[p];
-          wi[p] = T.re[g] * pi[p] + T.im[g] * pr[p];
-          pr0[p] = wr[p]; pi0[p] = wi[p];
-        }
-      P.fft2(wr, wi, n4);
-      const o = idx * n4 * n4;
-      for (let y = 0; y < n4; y++)
-        for (let x = 0; x < n4; x++) {
-          const p = y * n4 + x, meas = Math.sqrt(data[o + ((y + h) % n4) * n4 + ((x + h) % n4)]);
-          const amp = Math.hypot(wr[p], wi[p]);
-          T.errSum += (amp - meas) ** 2;
-          const sc = amp > 1e-12 ? meas / amp : 0;
-          wr[p] *= sc; wi[p] *= sc;
-        }
-      P.fft2(wr, wi, n4, true);
-      for (let y = 0; y < n4; y++)
-        for (let x = 0; x < n4; x++) {
-          const g = (top + y) * gridN + left + x, p = y * n4 + x;
-          const dr = wr[p] - pr0[p], di = wi[p] - pi0[p];
-          // O += β · conj(P) · Δψ / max|P|²
-          T.re[g] += (beta * (pr[p] * dr + pi[p] * di)) / T.pm;
-          T.im[g] += (beta * (pr[p] * di - pi[p] * dr)) / T.pm;
-        }
-      if (++T.k >= N * N) { T.k = 0; T.iter++; T.errHist.push(T.errSum); T.err = T.errSum; if (T.iter >= 30) break; }
-    }
+    const T = this.pty;
+    if (this.ptyTask.error) { console.warn('compute:', this.ptyTask.error, '(running on the main thread)'); this.ptyTask = new InlineBackend().run(this.ptyJob, { data: this.fd.data, out: T }); }
+    if (T.iter >= T.maxIter || this.ptyTask.finished && !this.ptyTask.queue?.length) return false;
+    this.ptyTask.pump(budget);
     return true;
   }
   // Reconstructed phase over the scanned area (N·s × N·s samples).
@@ -1197,13 +1105,13 @@ export class Sim {
       if (this.step4D(S.paused ? 0 : 7 * Math.min(2, Math.max(0.25, S.speed)))) this.version++;
       if (this.stale.vimg) { this.computeVirtual(0); this.stale.vimg = 0; this.version++; }
       else if (this.fd.done !== prev) this.computeVirtual(this.fd.vDone);
-      if (S.vdet === 'mptycho' && this.fd.done === this.fd.N * this.fd.N && !S.paused) {
+      if (S.vdet === 'mptycho' && this.fd.done === this.fd.N * this.fd.N) {
         if (!this.mpty || this.mpty.fd !== this.fd) this.startMSPtycho();
-        if (this.stepMSPtycho(11 * Math.min(2, Math.max(0.3, S.speed)))) this.version++;
+        if (this.stepMSPtycho(S.paused ? 0 : 11 * Math.min(2, Math.max(0.3, S.speed)))) this.version++;
       }
-      if (S.vdet === 'ptycho' && this.fd.done === this.fd.N * this.fd.N && !S.paused) {
+      if (S.vdet === 'ptycho' && this.fd.done === this.fd.N * this.fd.N) {
         if (!this.pty || this.pty.fd !== this.fd) this.startPtycho();
-        if (this.stepPtycho(9 * Math.min(2, Math.max(0.3, S.speed)))) this.version++;
+        if (this.stepPtycho(S.paused ? 0 : 9 * Math.min(2, Math.max(0.3, S.speed)))) this.version++;
       }
     }
     if (m === 'eds' || m === 'eels') {
