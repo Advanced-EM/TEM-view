@@ -85,10 +85,17 @@ export function modeState(S, sim, m) {
 }
 
 // Lorentz settings (lorentz.js): numeric ranges [min, max, decimals] and the allowed values of the choices
-export const LOR_LIMITS = { lorDf: [-3000, 3000, 0], lorFov: [0.3, 10, 3], lorThick: [10, 150, 0], lorField: [0, 600, 0], lorDiv: [0.5, 30, 1], lorAlpha: [20, 3000, 0], lorApR: [2, 40, 1] };
-export const LOR_CHOICES = { lorView: ['fresnel', 'foucault', 'tie', 'phase'], lstemView: ['color', 'x', 'y', 'sum'], lorFouc: ['+x', '-x', '+y', '-y'] };
+// numeric settings [min, max, decimals] and choices that commands, scripts and agents can set directly
+// (Lorentz microscopy, and the EELS spectrometer)
+export const LOR_LIMITS = { lorDf: [-3000, 3000, 0], lorFov: [0.3, 10, 3], lorThick: [10, 150, 0], lorField: [0, 600, 0], lorDiv: [0.5, 30, 1], lorAlpha: [20, 3000, 0], lorApR: [2, 40, 1],
+  eelsBeta: [1, 100, 1], eelsOffset: [-50, 3000, 1], eelsWin: [0, 6000, 2], eelsWidth: [0.5, 80, 1], eelsCurrent: [5, 2000, 0], eelsExp: [1e-4, 10, 5], eelsExpLow: [1e-5, 0.1, 6] };
+export const LOR_CHOICES = { lorView: ['fresnel', 'foucault', 'tie', 'phase'], lstemView: ['color', 'x', 'y', 'sum'], lorFouc: ['+x', '-x', '+y', '-y'],
+  eelsSource: ['profile', 'schottky', 'cfeg', 'mono'], eelsDet: ['ccd', 'direct'], eelsYScale: ['log', 'lin', 'split'], eelsDisp: [0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1],
+  dualEels: [true, false], eelsFit: [true, false], eelsDeconv: [true, false], eelsLine: [true, false], bgsub: [true, false] };
 // a Lorentz setting from a command, clamped; true if `op` was one
 export function lorSet(S, set, op) {
+  // the EELS probe: a spectrum-image pixel [i, j], or null for the whole field
+  if (op.k === 'eelsPx') { const v = Array.isArray(op.v) && op.v.length === 2 && op.v.every(Number.isFinite) ? op.v.map((x) => Math.max(0, Math.min(127, Math.round(x)))) : null; set('eelsPx', v, 'eelsPx'); op.v = S.eelsPx; return true; }
   const L = LOR_LIMITS[op.k];
   if (L) { set(op.k, +clamp(+op.v, L[0], L[1]).toFixed(L[2]), op.k); op.v = S[op.k]; return true; }
   if (LOR_CHOICES[op.k]) { if (LOR_CHOICES[op.k].includes(op.v)) set(op.k, op.v, op.k); return true; }

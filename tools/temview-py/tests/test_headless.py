@@ -218,3 +218,18 @@ def test_structure_and_tilted_thickness(tem):
     assert a > 0 and abs(t["thickness_nm"] - t["flat_thickness_nm"] / (math.cos(a) * math.cos(b))) < 1e-3
     assert abs(tem.footprint()["thickness_nm"] - t["thickness_nm"]) < 1e-3  # the estimator uses the same path
     tem.set(tilt_x_deg=0)
+
+
+def test_eels_msa_opens_in_hyperspy(tem, tmp_path):
+    hs = pytest.importorskip("hyperspy.api")
+    tem.set(specimen="sto", mode="eels", eels_offset_eV=400, eels_dispersion=0.25, eels_beta_mrad=30, dual_eels=False)
+    path = str(tmp_path / "sto.msa")
+    tem.save_msa(path)
+    s = hs.load(path)
+    ax = s.axes_manager.signal_axes[0]
+    assert ax.units == "eV" and abs(ax.scale - 0.25) < 1e-9 and abs(ax.offset - 400.125) < 1e-6 and ax.size == 2048
+    assert s.metadata.Signal.signal_type == "EELS"
+    tem_md = s.metadata.Acquisition_instrument.TEM
+    assert tem_md.beam_energy == 200 and abs(tem_md.Detector.EELS.collection_angle - 30) < 1e-9
+    a = tem.analyze("fit_edge")
+    assert 2 < a["result"]["r"] < 5 and a["result"]["S_over_N"] > 0

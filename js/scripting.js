@@ -17,6 +17,7 @@ import { MODES } from './ops.js';
 import { SESSION_KEYS } from './state.js';
 import { planFor, validPlanValue, footprintFor, summary as fpSummary } from './footprint.js';
 import { buildStructure, beamThickness } from './structure.js';
+import { toMSA } from './eels.js';
 import { libGoto, stageMove, stagePos } from './ops.js';
 import * as ML from './megalibrary.js';
 
@@ -34,6 +35,9 @@ const SETTINGS = {
   lorentz_fov_um: 'field of view in µm (Lorentz modes)', film_thickness_nm: 'magnetic film thickness', field_mT: 'objective-lens field along the beam',
   divergence_urad: 'illumination divergence (ltem)', foucault: '+x, -x, +y, -y: the deflection the Foucault aperture passes', dpc_view: 'color, x, y, sum (lstem)',
   probe_urad: 'Lorentz-STEM probe semi-angle',
+  eels_offset_eV: 'energy at the first channel', eels_dispersion: '0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1 eV per channel', eels_window_eV: '[centre, width] of the energy window',
+  eels_beta_mrad: 'collection semi-angle β, 1–100 mrad', eels_source: 'profile, schottky, cfeg, mono', eels_detector: 'ccd, direct', dual_eels: 'True or False',
+  eels_current_pA: 'probe current', eels_exposure_s: 'exposure per readout', eels_probe: '[i, j] spectrum-image pixel (0–127), or None for the whole field',
 };
 
 export function settingsToOps(a) {
@@ -68,6 +72,15 @@ export function settingsToOps(a) {
   if (a.field_mT !== undefined) ops.push({ op: 'set', k: 'lorField', v: +a.field_mT });
   if (a.divergence_urad !== undefined) ops.push({ op: 'set', k: 'lorDiv', v: +a.divergence_urad });
   if (a.probe_urad !== undefined) ops.push({ op: 'set', k: 'lorAlpha', v: +a.probe_urad });
+  // the EELS spectrometer
+  const eelsSet = { eels_offset_eV: 'eelsOffset', eels_beta_mrad: 'eelsBeta', eels_current_pA: 'eelsCurrent', eels_exposure_s: 'eelsExp' };
+  for (const [k, key] of Object.entries(eelsSet)) if (a[k] !== undefined) ops.push({ op: 'set', k: key, v: +a[k] });
+  if (a.eels_dispersion !== undefined) { if (![0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1].includes(+a.eels_dispersion)) throw new Error('eels_dispersion must be 0.01, 0.025, 0.05, 0.1, 0.25, 0.5 or 1'); ops.push({ op: 'set', k: 'eelsDisp', v: +a.eels_dispersion }); }
+  if (a.eels_window_eV !== undefined) { const [c, w] = a.eels_window_eV; ops.push({ op: 'set', k: 'eelsWin', v: +c }); if (w !== undefined) ops.push({ op: 'set', k: 'eelsWidth', v: +w }); }
+  if (a.eels_source !== undefined) { if (!['profile', 'schottky', 'cfeg', 'mono'].includes(a.eels_source)) throw new Error('eels_source must be profile, schottky, cfeg or mono'); ops.push({ op: 'set', k: 'eelsSource', v: a.eels_source }); }
+  if (a.eels_detector !== undefined) { if (!['ccd', 'direct'].includes(a.eels_detector)) throw new Error('eels_detector must be ccd or direct'); ops.push({ op: 'set', k: 'eelsDet', v: a.eels_detector }); }
+  if (a.dual_eels !== undefined) ops.push({ op: 'set', k: 'dualEels', v: !!a.dual_eels });
+  if (a.eels_probe !== undefined) ops.push({ op: 'set', k: 'eelsPx', v: a.eels_probe });
   return ops;
 }
 
@@ -237,9 +250,20 @@ export class ScriptCore {
     };
   }
 
+  // the EELS spectrum (and the low-loss one with Dual EELS) as EMSA/MSA text, for HyperSpy or DigitalMicrograph
+  export_msa({ steps } = {}) {
+    if (this.S.mode !== 'eels') throw new Error('export_msa needs EELS mode: set(mode="eels")');
+    this.settle(steps ?? 6);
+    const S = this.S, sim = this.sim, e = sim.eels, a = sim.accE, real = S.clarity === 'real';
+    const one = (sp, acc, fr, t, tag) => toMSA(real && fr ? Float32Array.from(acc, (v) => v / fr) : Float32Array.from(sp.ro.ro), {
+      title: `TEM-view ${sim.spec.short ?? S.spec} EELS ${tag}`, offset: +(sp.E0 + e.dE / 2).toFixed(4), dispersion: e.dE, kV: S.kV, alpha_mrad: S.alpha, beta_mrad: S.eelsBeta, exposure_s: t,
+      yunits: real ? 'counts per readout (mean)' : 'counts per readout (expected)', comment: `${sim.eelsDet().label}; source ${S.eelsSource}` });
+    return { msa: one(e, a?.spec, a?.frames, S.eelsExp, e.low ? 'core-loss' : 'spectrum'), ...(e.low ? { low_loss_msa: one(e.low, a?.low, a?.framesLow, S.eelsExpLow, 'low-loss') } : {}) };
+  }
+
   // one entry point for remote callers (desktop Python): only these names can be called
   call(name, args = {}) {
-    if (!['info', 'state', 'set', 'command', 'aberrations', 'acquire', 'analyze', 'step', 'challenge', 'score', 'reveal', 'end_challenge', 'move', 'library', 'goto', 'particle', 'load_xyz', 'abtem_request', 'footprint', 'structure'].includes(name)) throw new Error(`unknown call ${name}`);
+    if (!['info', 'state', 'set', 'command', 'aberrations', 'acquire', 'analyze', 'step', 'challenge', 'score', 'reveal', 'end_challenge', 'move', 'library', 'goto', 'particle', 'load_xyz', 'abtem_request', 'footprint', 'structure', 'export_msa'].includes(name)) throw new Error(`unknown call ${name}`);
     return this[name](args ?? {});
   }
 }

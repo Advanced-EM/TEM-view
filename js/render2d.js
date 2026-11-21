@@ -4,6 +4,7 @@ import { stemDetType, AP_MRAD, ZPP_CUTON, zlpStats, EELS_FULL_WELL } from './sim
 import { drawRonch, drawCBED } from './techniques.js';
 import { drawOAH, drawILH } from './holography.js';
 import { drawLTEM, drawLSTEM } from './lorentz.js';
+import { edgeStats, fourierRatio } from './eels.js';
 
 const C = {
   accent: '#6fd6ff', warm: '#ffb45e', text: '#e9edf2', muted: '#8a94a3', dim: '#566070',
@@ -715,95 +716,218 @@ function drawEELS(sim, S, m, s) {
   const inWin = P.EDGES.filter((ed) => sim.si.comp[ed.key] && ed.E < w1 && ed.E > w0 - 40);
   if (inWin.length) label(ctx, inWin.map((x) => x.name).join(' · '), 10 * dpr, 36 * dpr, dpr, { color: C.warm, size: 9 });
   else if (e.lowLoss) label(ctx, w1 < 4 ? 'zero-loss: thin areas bright' : 'plasmons: thickness map', 10 * dpr, 36 * dpr, dpr, { color: C.warm, size: 9 });
-  label(ctx, `t/λ ≈ ${si.tauMean.toFixed(2)}`, W - 10 * dpr, 16 * dpr, dpr, { color: C.muted, size: 9, align: 'right' });
+  const site = sim.eelsSite();
+  label(ctx, `t/λ ≈ ${site.tau.toFixed(2)}${site.px ? ' at the probe' : ''}`, W - 10 * dpr, 16 * dpr, dpr, { color: C.muted, size: 9, align: 'right' });
+  // the probe (spectrum from one pixel) and the line-scan row; double-click the map to place the probe
+  const pxX = W / n, pxY = H / n;
+  if (S.eelsLine) { const j = S.eelsPx?.[1] ?? (n / 2) | 0; ctx.setLineDash([4 * dpr, 3 * dpr]); ctx.strokeStyle = 'rgba(255,180,94,0.8)'; ctx.beginPath(); ctx.moveTo(0, (j + 0.5) * pxY); ctx.lineTo(W, (j + 0.5) * pxY); ctx.stroke(); ctx.setLineDash([]); }
+  if (site.px) { const [i, j] = site.px, cx = (i + 0.5) * pxX, cy = (j + 0.5) * pxY; ctx.strokeStyle = C.warm; ctx.lineWidth = 1.5 * dpr; ctx.beginPath(); ctx.arc(cx, cy, 6 * dpr, 0, 2 * Math.PI); ctx.moveTo(cx - 10 * dpr, cy); ctx.lineTo(cx - 3 * dpr, cy); ctx.moveTo(cx + 3 * dpr, cy); ctx.lineTo(cx + 10 * dpr, cy); ctx.stroke(); }
+  label(ctx, site.px ? 'spectrum from the probe · Whole field resets' : 'double-click: place the probe', 10 * dpr, H - 14 * dpr, dpr, { color: C.muted, size: 9 });
 
   const q = s.ctx;
   if (e.low) { // dual EELS: low loss (short exposure) above, core loss (long exposure) below
     const hTop = (s.H - 8 * s.dpr) * 0.4;
+    const kl = e.dE * S.eelsCurrent * 1e-12 / 1.602e-19 * S.eelsExpLow, lowData = real(S) && a.framesLow ? a.low.map((v) => v / a.framesLow) : e.low.spec.map((v) => v * kl);
+    const kc = e.dE * S.eelsCurrent * 1e-12 / 1.602e-19 * S.eelsExp, kr = kc / kl; // the low loss in core-loss readout units, for the Fourier ratio
     plotEELS(q, s.dpr, [0, 0, s.W, hTop], sim, S, e.low, a.low, a.framesLow, S.eelsExpLow, 'low loss', false);
-    plotEELS(q, s.dpr, [0, hTop + 8 * s.dpr, s.W, s.H - hTop - 8 * s.dpr], sim, S, e, a.spec, a.frames, S.eelsExp, 'core loss · drift-corrected on the zero loss', true);
+    plotEELS(q, s.dpr, [0, hTop + 8 * s.dpr, s.W, s.H - hTop - 8 * s.dpr], sim, S, e, a.spec, a.frames, S.eelsExp, 'core loss · drift-corrected on the zero loss', true, { data: lowData.map((v) => v * kr), E0: e.low.E0 });
   } else plotEELS(q, s.dpr, [0, 0, s.W, s.H], sim, S, e, a.spec, a.frames, S.eelsExp, null, true);
 }
 
 const fmtS = (t) => (t < 1e-3 ? `${+(t * 1e6).toPrecision(3)} µs` : t < 1 ? `${+(t * 1e3).toPrecision(3)} ms` : `${+t.toPrecision(3)} s`);
 
-// One recorded spectrum in electrons per channel per readout, on a log scale, with the camera's full well.
-// Educational view: the expected counts (clipped where the camera saturates, saturated channels in red).
-// Realistic view: the accumulated readouts, averaged per readout, with shot and read noise.
-function plotEELS(q, dpr, R, sim, S, sp, acc, frames, texp, title, main) {
-  const [rx, ry, rw, rh] = R, x0 = rx + 44 * dpr, y0 = ry + 16 * dpr, w = rw - 54 * dpr, h = rh - 46 * dpr;
-  const E0 = sp.E0, E1 = sp.E1, dE = sp.dE, nb = sp.nb, X = (E) => x0 + ((E - E0) / (E1 - E0)) * w;
-  if (main) layout.eels = { x0: x0 / dpr, w: w / dpr, E0, E1, y0: y0 / dpr, h: h / dpr };
-  const edu = !real(S), FW = EELS_FULL_WELL;
+// What the spectrum view keeps between frames (not saved): an energy zoom [Ea, Eb] and the pointer position
+export const eelsUI = { zoom: null, hover: null };
+const niceStep = (span, target = 6) => { const raw = span / target, p = 10 ** Math.floor(Math.log10(raw)), f = raw / p; return (f < 1.5 ? 1 : f < 3.5 ? 2 : f < 7.5 ? 5 : 10) * p; };
+const niceGain = (g) => { if (!(g > 1)) return 1; const p = 10 ** Math.floor(Math.log10(g)), f = g / p; return (f < 2 ? 1 : f < 5 ? 2 : 5) * p; };
+const fmtCount = (v) => (v >= 1e4 ? v.toExponential(0).replace('e+', 'e') : v >= 10 ? `${Math.round(v)}` : `${+v.toPrecision(2)}`);
+// the automatic pre-edge window for the background fit: just below the integration window
+export function eelsPreWindow(S, E0) {
+  if (S.eelsPre) return S.eelsPre;
+  const w0 = S.eelsWin - S.eelsWidth / 2, gap = Math.max(1, 0.1 * S.eelsWidth), len = Math.max(15, 1.5 * S.eelsWidth);
+  return [Math.max(E0 + 1, w0 - gap - len), w0 - gap];
+}
+
+// One recorded spectrum in electrons per channel per readout. y axis: log₁₀ (decades), linear, or split gain
+// (the part above the first edge multiplied up, as on a spectrometer display). Educational view: expected
+// counts; realistic: the accumulated readouts with shot and read noise. Optional: the power-law background
+// fit with net signal, r, S/B and S/N; the Fourier-ratio single-scattering edge (Dual EELS); a crosshair.
+function plotEELS(q, dpr, R, sim, S, sp, acc, frames, texp, title, main, low = null) {
+  const [rx, ry, rw, rh] = R, lineH = main && S.eelsLine ? 58 * dpr : 0;
+  const x0 = rx + 50 * dpr, y0 = ry + 16 * dpr, w = rw - 60 * dpr, h = rh - 46 * dpr - lineH;
+  const E0 = sp.E0, E1 = sp.E1, dE = sp.dE, nb = sp.nb;
+  let [Va, Vb] = main && eelsUI.zoom ? eelsUI.zoom : [E0, E1]; // the zoom belongs to the main (core-loss) spectrum
+  Va = Math.max(E0, Va); Vb = Math.min(E1, Vb); if (Vb - Va < 10 * dE) [Va, Vb] = [E0, E1];
+  const X = (E) => x0 + ((E - Va) / (Vb - Va)) * w, Ec = (b) => E0 + (b + 0.5) * dE;
+  const edu = !real(S), FW = sim.eelsDet().fullWell;
   const k = dE * S.eelsCurrent * 1e-12 / 1.602e-19 * texp; // electrons per channel per readout, per unit spectrum
   const data = new Float32Array(nb);
   for (let b = 0; b < nb; b++) data[b] = edu ? Math.min(FW, sp.spec[b] * k) : frames ? acc[b] / frames : 0;
+  const b0 = Math.max(0, Math.floor((Va - E0) / dE)), b1 = Math.min(nb - 1, Math.ceil((Vb - E0) / dE) - 1);
+  // edges present in the specimen and visible
+  const si = sim.si, present = P.EDGES.filter((ed) => si.comp[ed.key] && ed.E >= Va && ed.E <= Vb);
+  // split gain: everything above the first visible edge (or above 30 eV when the zero loss is in view) × G
+  const mode = S.eelsYScale ?? 'log';
+  let Es = Infinity, G = 1;
+  if (mode === 'split') {
+    Es = present.length ? Math.min(...present.map((e) => e.E)) - 5 : Va <= 0 ? 30 : Infinity;
+    let lo = 0, hi = 0;
+    for (let b = b0; b <= b1; b++) (Ec(b) < Es ? (lo = Math.max(lo, data[b])) : (hi = Math.max(hi, data[b])));
+    G = lo && hi ? niceGain((0.6 * lo) / hi) : 1;
+    if (G <= 1) Es = Infinity;
+  }
+  const tr = (v, E) => (E >= Es ? v * G : v);
   let mx = 1, mn = Infinity;
-  for (let b = 0; b < nb; b++) { mx = Math.max(mx, data[b]); if (data[b] > 0.5) mn = Math.min(mn, data[b]); }
+  for (let b = b0; b <= b1; b++) { const v = tr(data[b], Ec(b)); mx = Math.max(mx, v); if (data[b] > 0.5) mn = Math.min(mn, v); }
   const satN = edu ? sp.ro?.sat ?? 0 : (() => { let c = 0; for (let b = 0; b < nb; b++) if (data[b] >= FW * 0.995) c++; return c; })();
-  const lo = Math.log10(Math.max(0.5, (Number.isFinite(mn) ? mn : 1) * 0.6)), hi = Math.max(Math.log10(mx) + 0.1, satN ? Math.log10(FW) + 0.15 : 0);
-  const Y = (v) => y0 + h - clamp((Math.log10(Math.max(0.5, v)) - lo) / (hi - lo || 1), 0, 1) * h;
+  let Y, lo = 0, hi = 0;
+  if (mode === 'log') {
+    lo = Math.log10(Math.max(0.5, (Number.isFinite(mn) ? mn : 1) * 0.6)); hi = Math.max(Math.log10(mx) + 0.1, satN ? Math.log10(FW) + 0.15 : 0);
+    Y = (v) => y0 + h - clamp((Math.log10(Math.max(0.5, v)) - lo) / (hi - lo || 1), 0, 1) * h;
+  } else { hi = mx * 1.08; Y = (v) => y0 + h - clamp(v / (hi || 1), 0, 1.02) * h; }
+  const YE = (v, E) => Y(tr(v, E));
+  if (main) layout.eels = { x0: x0 / dpr, w: w / dpr, E0, E1, Va, Vb, y0: y0 / dpr, h: h / dpr, labels: [] };
   q.strokeStyle = C.grid; q.lineWidth = 1 * dpr; q.strokeRect(x0, y0, w, h);
-  // energy window (the map's)
+  q.save(); q.beginPath(); q.rect(x0, y0 - 2 * dpr, w, h + 4 * dpr); q.clip();
+  // the integration window (also the map's energy window)
+  const w0 = S.eelsWin - S.eelsWidth / 2, w1 = S.eelsWin + S.eelsWidth / 2;
   if (main) {
-    const w0 = S.eelsWin - S.eelsWidth / 2, w1 = S.eelsWin + S.eelsWidth / 2;
     q.fillStyle = 'rgba(111,214,255,0.12)'; q.fillRect(X(w0), y0, X(w1) - X(w0), h);
     q.strokeStyle = 'rgba(111,214,255,0.8)'; q.beginPath(); q.moveTo(X(w0), y0); q.lineTo(X(w0), y0 + h); q.moveTo(X(w1), y0); q.lineTo(X(w1), y0 + h); q.stroke();
   }
-  // energy axis
-  font(q, 9, dpr); q.fillStyle = C.muted; q.textAlign = 'center'; q.textBaseline = 'top';
-  const span = E1 - E0, step = span > 1200 ? 500 : span > 600 ? 200 : span > 250 ? 100 : span > 120 ? 20 : span > 50 ? 10 : span > 20 ? 5 : span > 8 ? 2 : 1;
-  for (let E = Math.ceil(E0 / step) * step; E <= E1; E += step) {
-    q.strokeStyle = C.grid; q.beginPath(); q.moveTo(X(E), y0); q.lineTo(X(E), y0 + h); q.stroke();
-    q.fillText(`${+E.toFixed(2)}`, X(E), y0 + h + 4 * dpr);
-  }
-  q.fillText('eV', x0 + w - 8 * dpr, y0 + h + 14 * dpr);
-  // counts axis (decades)
-  q.textAlign = 'right'; q.textBaseline = 'middle';
-  for (let d = Math.ceil(lo); d <= hi; d++) q.fillText(d >= 3 ? `10${'⁰¹²³⁴⁵⁶⁷⁸⁹'[d]}` : `${10 ** d}`, x0 - 4 * dpr, Y(10 ** d));
-  q.textAlign = 'left';
+  // grid
+  const step = niceStep(Vb - Va);
+  q.strokeStyle = C.grid;
+  for (let E = Math.ceil(Va / step) * step; E <= Vb; E += step) { q.beginPath(); q.moveTo(X(E), y0); q.lineTo(X(E), y0 + h); q.stroke(); }
   // full well
-  if (Math.log10(FW) < hi + 0.01) {
+  if (mode !== 'split' && (mode === 'log' ? Math.log10(FW) < hi + 0.01 : FW < hi)) {
     q.setLineDash([4 * dpr, 3 * dpr]); q.strokeStyle = 'rgba(255,107,107,0.7)';
     q.beginPath(); q.moveTo(x0, Y(FW)); q.lineTo(x0 + w, Y(FW)); q.stroke(); q.setLineDash([]);
     label(q, 'full well', x0 + w, Y(FW) + 9 * dpr, dpr, { color: '#ff8a8a', size: 8, align: 'right' });
   }
+  // split-gain boundary
+  if (Number.isFinite(Es) && Es > Va && Es < Vb) {
+    q.setLineDash([2 * dpr, 3 * dpr]); q.strokeStyle = C.warm; q.beginPath(); q.moveTo(X(Es), y0); q.lineTo(X(Es), y0 + h); q.stroke(); q.setLineDash([]);
+    label(q, `×${G >= 1e4 ? G.toExponential(0).replace('e+', 'e') : G}`, X(Es) + 4 * dpr, y0 + 12 * dpr, dpr, { color: C.warm, size: 9 });
+  }
   // edge contributions (educational)
   if (edu && sp.edgeCurves) {
     for (const key in sp.edgeCurves) {
-      const cv = sp.edgeCurves[key], col = P.EL[P.EI[key]].color;
+      const cv = sp.edgeCurves[key], col = P.EL[P.EI[key]]?.color ?? C.warm;
       q.beginPath();
-      for (let b = 0; b < nb; b++) { const E = E0 + (b + 0.5) * dE, yv = Y(Math.min(FW, (sp.bgc[b] + cv[b]) * k)); b ? q.lineTo(X(E), yv) : q.moveTo(X(E), yv); }
-      for (let b = nb - 1; b >= 0; b--) q.lineTo(X(E0 + (b + 0.5) * dE), Y(Math.min(FW, sp.bgc[b] * k)));
+      for (let b = b0; b <= b1; b++) { const yv = YE(Math.min(FW, (sp.bgc[b] + cv[b]) * k), Ec(b)); b > b0 ? q.lineTo(X(Ec(b)), yv) : q.moveTo(X(Ec(b)), yv); }
+      for (let b = b1; b >= b0; b--) q.lineTo(X(Ec(b)), YE(Math.min(FW, sp.bgc[b] * k), Ec(b)));
       q.closePath(); q.fillStyle = col + '55'; q.fill();
     }
   }
+  // background fit, net signal, statistics
+  let stats = null;
+  if (main && S.eelsFit) {
+    const pre = eelsPreWindow(S, E0), mult = edu ? 1 : Math.max(1, frames);
+    const E = new Float64Array(nb), I = new Float64Array(nb);
+    for (let b = 0; b < nb; b++) { E[b] = Ec(b); I[b] = data[b] * mult; }
+    stats = edgeStats(E, I, pre, [w0, w1]);
+    q.fillStyle = 'rgba(255,180,94,0.12)'; q.fillRect(X(pre[0]), y0, X(pre[1]) - X(pre[0]), h);
+    q.strokeStyle = 'rgba(255,180,94,0.85)'; q.beginPath(); for (const e of pre) { q.moveTo(X(e), y0); q.lineTo(X(e), y0 + h); } q.stroke();
+    for (const e of pre) { q.fillStyle = C.warm; q.fillRect(X(e) - 3 * dpr, y0 + h / 2 - 8 * dpr, 6 * dpr, 16 * dpr); }
+    if (stats) {
+      const end = Math.min(E1, w1 + 0.4 * (w1 - w0));
+      q.fillStyle = 'rgba(255,255,255,0.3)'; q.beginPath(); // net signal: data above the extrapolated background
+      let first = true;
+      for (let b = b0; b <= b1; b++) { if (Ec(b) < w0 || Ec(b) > w1) continue; const yv = YE(data[b], Ec(b)); first ? q.moveTo(X(Ec(b)), yv) : q.lineTo(X(Ec(b)), yv); first = false; }
+      for (let b = b1; b >= b0; b--) { if (Ec(b) < w0 || Ec(b) > w1) continue; q.lineTo(X(Ec(b)), YE(stats.bg[b] / mult, Ec(b))); }
+      q.closePath(); q.fill();
+      q.setLineDash([5 * dpr, 3 * dpr]); q.strokeStyle = C.warm; q.lineWidth = 1.2 * dpr; q.beginPath();
+      first = true;
+      for (let b = b0; b <= b1; b++) { if (Ec(b) < pre[0] || Ec(b) > end) continue; const yv = YE(stats.fit.predict(Ec(b)) / mult, Ec(b)); first ? q.moveTo(X(Ec(b)), yv) : q.lineTo(X(Ec(b)), yv); first = false; }
+      q.stroke(); q.setLineDash([]);
+      // Fourier-ratio single scattering (Dual EELS): the net edge deconvolved with the low-loss spectrum
+      if (low && S.eelsDeconv) {
+        const net = new Float32Array(nb);
+        for (let b = 0; b < nb; b++) net[b] = Ec(b) >= pre[0] ? data[b] - stats.fit.predict(Ec(b)) / mult : 0;
+        const ssd = fourierRatio(net, low.data, { dE, E0low: low.E0, fwhm: Math.max(sim.eelsRes(), 2 * dE) });
+        q.strokeStyle = '#c99bff'; q.lineWidth = 1.3 * dpr; q.beginPath();
+        first = true;
+        for (let b = b0; b <= b1; b++) { if (Ec(b) < w0 - 5) continue; const v = ssd[b] + stats.fit.predict(Ec(b)) / mult; const yv = YE(Math.max(0.5, v), Ec(b)); first ? q.moveTo(X(Ec(b)), yv) : q.lineTo(X(Ec(b)), yv); first = false; }
+        q.stroke();
+        stats.deconvolved = true;
+      }
+    }
+    layout.eels && (layout.eels.pre = pre);
+  }
   // the spectrum, with saturated channels in red
   q.beginPath();
-  for (let b = 0; b < nb; b++) { const E = E0 + (b + 0.5) * dE, yv = Y(data[b]); b ? q.lineTo(X(E), yv) : q.moveTo(X(E), yv); }
+  for (let b = b0; b <= b1; b++) { const yv = YE(data[b], Ec(b)); b > b0 ? q.lineTo(X(Ec(b)), yv) : q.moveTo(X(Ec(b)), yv); }
   q.strokeStyle = C.text; q.lineWidth = 1.3 * dpr; q.stroke();
   if (satN) {
     q.fillStyle = 'rgba(255,90,90,0.85)';
-    for (let b = 0; b < nb; b++) if ((edu ? sp.spec[b] * k : data[b]) >= FW * 0.995) q.fillRect(X(E0 + b * dE), Y(FW) - 2 * dpr, Math.max(1, (w / nb)), 4 * dpr);
+    for (let b = b0; b <= b1; b++) if ((edu ? sp.spec[b] * k : data[b]) >= FW * 0.995) q.fillRect(X(E0 + b * dE), Y(FW) - 2 * dpr, Math.max(1, w / (b1 - b0 + 1)), 4 * dpr);
   }
-  // edge labels
-  const si = sim.si;
-  for (const ed of P.EDGES) {
-    if (!si.comp[ed.key] || ed.E < E0 || ed.E > E1) continue;
-    const b = Math.min(nb - 1, Math.max(0, Math.floor((ed.E + 6 - E0) / dE)));
-    label(q, ed.name, X(ed.E), Math.max(y0 + 10 * dpr, Y(data[b]) - 16 * dpr), dpr, { color: P.EL[P.EI[ed.key]].color, size: 9, align: 'center' });
+  q.restore();
+  // axes: energy (1-2-5 steps) and counts (decades on log, 1-2-5 on linear)
+  font(q, 9, dpr); q.fillStyle = C.muted; q.textAlign = 'center'; q.textBaseline = 'top';
+  for (let E = Math.ceil(Va / step) * step; E <= Vb + 1e-9; E += step) q.fillText(`${+E.toFixed(3)}`, X(E), y0 + h + 4 * dpr);
+  q.textAlign = 'right'; q.fillText('energy loss (eV)', x0 + w, y0 + h + 15 * dpr);
+  q.textBaseline = 'middle';
+  if (mode === 'log') { for (let d = Math.ceil(lo); d <= hi; d++) q.fillText(d >= 3 ? `10${'⁰¹²³⁴⁵⁶⁷⁸⁹'[d]}` : `${10 ** d}`, x0 - 4 * dpr, Y(10 ** d)); }
+  else { const ys = niceStep(hi, 4); for (let v = 0; v <= hi; v += ys) q.fillText(fmtCount(v), x0 - 4 * dpr, Y(v)); }
+  q.save(); q.translate(rx + 9 * dpr, y0 + h / 2); q.rotate(-Math.PI / 2); q.textAlign = 'center'; q.fillText(`e⁻ / channel${mode === 'log' ? ' (log)' : ''}`, 0, 0); q.restore();
+  q.textAlign = 'left';
+  // edge labels: stacked in rows so they never overlap; a leader line drops to the edge onset; click to centre
+  {
+    font(q, 9, dpr);
+    const rows = [], items = present.map((ed) => ({ ed, x: X(ed.E), tw: q.measureText(ed.name).width + 8 * dpr })).sort((a, b) => a.x - b.x);
+    for (const it of items) {
+      let r = 0; while (rows[r] !== undefined && rows[r] > it.x - it.tw / 2) r++;
+      rows[r] = it.x + it.tw / 2; it.row = r;
+    }
+    for (const it of items) {
+      const ly = y0 + 10 * dpr + it.row * 13 * dpr, col = P.EL[P.EI[it.ed.key]]?.color ?? C.warm;
+      const bOn = clamp(Math.floor((it.ed.E + 3 - E0) / dE), 0, nb - 1);
+      q.strokeStyle = col + '88'; q.lineWidth = 1 * dpr; q.beginPath(); q.moveTo(it.x, ly + 5 * dpr); q.lineTo(it.x, Math.max(ly + 5 * dpr, YE(data[bOn], Ec(bOn)) - 4 * dpr)); q.stroke();
+      label(q, it.ed.name, it.x, ly, dpr, { color: col, size: 9, align: 'center' });
+      if (main) layout.eels.labels.push({ x0: (it.x - it.tw / 2) / dpr, x1: (it.x + it.tw / 2) / dpr, y0: (ly - 7 * dpr) / dpr, y1: (ly + 6 * dpr) / dpr, E: it.ed.E, name: it.ed.name });
+    }
   }
   // zero loss: position and width, measured from the recorded channels
   const z = edu ? sp.zlp : frames ? zlpStats(data, E0, dE) : null;
-  if (z) {
-    const yh = Y(z.peak / 2);
+  if (z && z.center > Va && z.center < Vb) {
+    const yh = YE(z.peak / 2, z.center);
     q.strokeStyle = C.warm; q.lineWidth = 1.2 * dpr;
     q.beginPath(); q.moveTo(X(z.center - z.fwhm / 2), yh); q.lineTo(X(z.center + z.fwhm / 2), yh); q.stroke();
-    q.setLineDash([2 * dpr, 3 * dpr]); q.beginPath(); q.moveTo(X(z.center), y0); q.lineTo(X(z.center), y0 + h); q.stroke(); q.setLineDash([]);
     label(q, `zero loss · FWHM ${z.fwhm.toFixed(2)} eV${satN && z.peak >= FW * 0.99 ? ' (clipped)' : ''}${Math.abs(z.center) > 0.05 ? ` · drifted ${z.center > 0 ? '+' : ''}${z.center.toFixed(2)} eV` : ''}`, Math.min(x0 + w - 170 * dpr, X(z.center) + 8 * dpr), Math.max(y0 + 26 * dpr, yh - 14 * dpr), dpr, { color: C.warm, size: 9 });
   }
+  // statistics of the fit
+  if (stats) {
+    const t = `r = ${stats.r.toFixed(2)} · S/B = ${stats.SB.toPrecision(2)} · S/N = ${stats.SN >= 100 ? Math.round(stats.SN) : stats.SN.toPrecision(2)} (h ${stats.h.toFixed(2)})${edu ? ' per readout' : ` · ${frames} readouts`}${stats.deconvolved ? ' · purple: single scattering (Fourier ratio)' : ''}`;
+    label(q, t, x0 + 4 * dpr, y0 + h - 10 * dpr, dpr, { color: C.text, size: 9 });
+    layout.eelsStats = { r: stats.r, S: stats.S, B: stats.B, SB: stats.SB, SN: stats.SN, h: stats.h, pre: layout.eels?.pre, window: [w0, w1] };
+  } else if (main) layout.eelsStats = null;
+  // crosshair
+  if (main && eelsUI.hover) {
+    const hx = eelsUI.hover.x * dpr, hy = eelsUI.hover.y * dpr;
+    if (hx >= x0 && hx <= x0 + w && hy >= y0 && hy <= y0 + h) {
+      const E = Va + ((hx - x0) / w) * (Vb - Va), b = clamp(Math.floor((E - E0) / dE), 0, nb - 1);
+      const nearE = present.reduce((a, ed) => (Math.abs(ed.E - E) < Math.abs((a?.E ?? 1e9) - E) ? ed : a), null);
+      q.strokeStyle = 'rgba(255,255,255,0.35)'; q.lineWidth = 1 * dpr; q.beginPath(); q.moveTo(hx, y0); q.lineTo(hx, y0 + h); q.moveTo(x0, YE(data[b], Ec(b))); q.lineTo(x0 + w, YE(data[b], Ec(b))); q.stroke();
+      label(q, `${E.toFixed(dE < 0.1 ? 3 : 2)} eV · ${fmtCount(data[b])} e⁻/ch${nearE && Math.abs(nearE.E - E) < 25 ? ` · ${nearE.name} ${nearE.E} eV` : ''}`, Math.min(hx + 8 * dpr, x0 + w - 200 * dpr), Math.max(y0 + 12 * dpr, YE(data[b], Ec(b)) - 14 * dpr), dpr, { color: C.text, size: 9 });
+    }
+  }
   // header
-  label(q, `${title ? `${title} · ` : ''}${fmtS(texp)} per readout · ${S.eelsDisp} eV/ch from ${E0} eV${edu ? '' : ` · ${frames} readouts`}`, x0, y0 - 8 * dpr, dpr, { color: C.muted, size: 9 });
-  if (satN) label(q, `${satN} channels saturated: shorter exposure${S.dualEels ? '' : ', dual EELS'} or move the zero loss off the detector`, x0 + w, y0 + 10 * dpr, dpr, { color: '#ff8a8a', size: 9, align: 'right' });
-  else if (main) label(q, edu ? 'e⁻ per channel per readout (log) · drag to move the window' : 'mean e⁻ per channel per readout (log)', x0 + w, y0 + 10 * dpr, dpr, { color: C.muted, size: 9, align: 'right' });
+  label(q, `${title ? `${title} · ` : ''}${fmtS(texp)} · ${S.eelsDisp} eV/ch · β ${(+S.eelsBeta).toPrecision(2)} mrad${edu ? '' : ` · ${frames} readouts`}${eelsUI.zoom && main ? ' · zoomed' : ''}`, x0, y0 - 8 * dpr, dpr, { color: C.muted, size: 9 });
+  if (satN) label(q, `${satN} channels saturated: shorter exposure${S.dualEels ? '' : ', dual EELS'} or move the zero loss off the detector`, x0 + w, y0 - 8 * dpr, dpr, { color: '#ff8a8a', size: 9, align: 'right' });
+  else if (main && w > 420 * dpr) label(q, eelsUI.zoom ? 'double-click: whole range' : 'drag window · wheel zoom · click a label', x0 + w, y0 - 8 * dpr, dpr, { color: C.muted, size: 9, align: 'right' });
+  // line scan: spectra across the map along the probe's row (energy across, position down)
+  if (main && S.eelsLine) {
+    const L = sim.eelsLineScan(Va, Vb), ly = y0 + h + 24 * dpr, lh = lineH - 30 * dpr;
+    if (L) {
+      let lmx = 0, lmn = Infinity;
+      for (const r of L.rows) for (const v of r) { if (v > lmx) lmx = v; if (v > 0 && v < lmn) lmn = v; }
+      const img = new Float32Array(L.m * L.n);
+      for (let j = 0; j < L.n; j++) for (let i = 0; i < L.m; i++) img[j * L.m + i] = Math.log(Math.max(L.rows[j][i], lmn) / lmn) / Math.log(lmx / lmn || 10);
+      paint(q, img, L.m, L.n, [x0, ly, w, lh], { lo: 0, hi: 1, lut: LUT.magma });
+      q.strokeStyle = C.grid; q.strokeRect(x0, ly, w, lh);
+      label(q, `line scan · ${L.n} positions along the probe row`, x0, ly - 6 * dpr, dpr, { color: C.muted, size: 8 });
+    }
+  }
 }

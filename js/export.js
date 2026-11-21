@@ -37,6 +37,14 @@ export function collectData(sim, S) {
     const rec = (acc, fr, sp) => (acc && fr ? acc.map((v) => v / fr) : sp);
     arrays.spectrum = A(rec(sim.accE?.spec, sim.accE?.frames, sim.eels.ro.ro), [sim.eels.nb], 'electrons per channel per readout');
     Object.assign(cal, { energy_start_eV: sim.eels.E0, energy_eV_per_channel: sim.eels.dE, exposure_s: S.eelsExp, probe_current_pA: S.eelsCurrent, saturated_channels: sim.eels.ro.sat, readouts: sim.accE?.frames ?? 0, map_pixel_A: sim.si?.dx });
+    const site = sim.eelsSite(), z = sim.zlp();
+    Object.assign(cal, {
+      collection_semi_angle_mrad: S.eelsBeta, convergence_semi_angle_mrad: S.alpha, beam_energy_keV: S.kV, source: S.eelsSource, zero_loss_fwhm_eV: +z.fwhm.toFixed(4),
+      detector: sim.eelsDet().label, probe_pixel: site.px, t_over_lambda: +site.tau.toFixed(4),
+      // the same information in HyperSpy's layout (signal axis and Acquisition_instrument.TEM), for hs.signals.EELSSpectrum
+      hyperspy: { axes: [{ name: 'Energy loss', units: 'eV', offset: sim.eels.E0 + sim.eels.dE / 2, scale: sim.eels.dE, size: sim.eels.nb }], signal_type: 'EELS',
+        Acquisition_instrument: { TEM: { beam_energy: S.kV, convergence_angle: S.alpha, Detector: { EELS: { collection_angle: S.eelsBeta, exposure: S.eelsExp } } } } },
+    });
     if (sim.eels.low) {
       arrays.spectrum_low_loss = A(rec(sim.accE?.low, sim.accE?.framesLow, sim.eels.low.ro.ro), [sim.eels.nb], 'electrons per channel per readout');
       Object.assign(cal, { dual_eels: true, low_loss_start_eV: sim.eels.low.E0, low_loss_exposure_s: S.eelsExpLow, low_loss_saturated_channels: sim.eels.low.ro.sat, thickness_t_over_lambda: sim.eels.low.tau });

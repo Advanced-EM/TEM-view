@@ -107,6 +107,21 @@ class Microscope:
         """Advance the simulation n frames of 50 ms (drift, dose, temperature change with time)."""
         return self._t.call("step", {"n": int(n)})
 
+    def save_msa(self, path: str, steps: int | None = None) -> list:
+        """Save the EELS spectrum as EMSA/MSA (HyperSpy: hs.load(path) gives an EELSSpectrum with the energy axis,
+        beam energy and collection angle). With Dual EELS the low-loss spectrum goes to <path>-low-loss.msa.
+        Returns the paths written."""
+        r = self._t.call("export_msa", {} if steps is None else {"steps": int(steps)})
+        out = [path]
+        with open(path, "w", newline="") as f:
+            f.write(r["msa"])
+        if "low_loss_msa" in r:
+            low = path[:-4] + "-low-loss.msa" if path.lower().endswith(".msa") else path + "-low-loss.msa"
+            with open(low, "w", newline="") as f:
+                f.write(r["low_loss_msa"])
+            out.append(low)
+        return out
+
     def structure(self) -> dict:
         """The specimen as a 3D structure: atoms in the region around the stage, formula, species counts, size
         (nm, x y z) and the thickness along the beam including the goniometer tilt, with t/λ."""

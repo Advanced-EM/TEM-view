@@ -207,8 +207,11 @@ export const EL = [
   { sym: 'Cs', Z: 55, name: 'Caesium', color: '#b58cff' },
   { sym: 'Pb', Z: 82, name: 'Lead', color: '#9aa7b8' },
   { sym: 'Br', Z: 35, name: 'Bromine', color: '#ff8f5a' },
+  // pseudo-elements: the same atom in a different bonding state, so EELS can tell them apart
+  { sym: 'C', key: 'Cg', Z: 6, name: 'Graphitic carbon', color: '#cfd8e3', pseudo: true },
+  { sym: 'Ti', key: 'Ti3', Z: 22, name: 'Ti³⁺ (at the boundary)', color: '#e0b3ff', pseudo: true },
 ];
-export const EI = { C: 0, O: 1, Si: 2, SiOx: 3, Ti: 4, Sr: 5, Au: 6, Zr: 7, N: 8, S: 9, P: 10, Fe: 11, Ag: 12, Cu: 13, Co: 14, Ni: 15, Cs: 16, Pb: 17, Br: 18 };
+export const EI = { C: 0, O: 1, Si: 2, SiOx: 3, Ti: 4, Sr: 5, Au: 6, Zr: 7, N: 8, S: 9, P: 10, Fe: 11, Ag: 12, Cu: 13, Co: 14, Ni: 15, Cs: 16, Pb: 17, Br: 18, Cg: 19, Ti3: 20 };
 export const VP = EL.map((e) => Math.pow(e.Z, 0.75)); // projected-potential weight per atom
 export const ZH = EL.map((e) => Math.pow(e.Z, 1.7)); // high-angle (Rutherford-like) weight
 export const ZL = EL.map((e) => Math.pow(e.Z, 1.2)); // low-angle ADF weight
@@ -358,6 +361,8 @@ function makeSilicon() {
     atoms: A, grains: [{ a1: [ax, 0], a2: [0, ay], label: (m, n) => `${bar(m)}${bar(-m)}${bar(n)}` }],
     period: ax, center: [0, 0], fov: 6, zone: '[110]',
     elements: [EI.Si, EI.SiOx, EI.O],
+    // O K of amorphous SiO₂: a broad main peak near 538 eV and a second at ~545 eV
+    elnes: { O: () => [[537.8, 3.2, 0.9], [544.5, 6, 0.45]] },
     amorph(x, y) { return x > bnd(y) + 0.8 ? 'SiO2' : null; },
     bnd,
     thicknessAt(x, y, t) { return t; },
@@ -391,6 +396,8 @@ function makeSTO() {
     if (!clash) A.push(x, y, B.e[i], B.L[i], 1);
   }
   A.finalize();
+  // oxygen vacancies at the boundary reduce the Ti there to Ti³⁺ (seen as a shifted, less split Ti L₂,₃ edge)
+  for (let i = 0; i < A.count; i++) if (A.e[i] === EI.Ti && Math.abs(A.x[i]) < 4) A.e[i] = EI.Ti3;
   const lab = (m, n) => `${bar(m)}${bar(n)}0`;
   return {
     id: 'sto', name: 'SrTiO₃ grain boundary', short: 'SrTiO₃ Σ5', alpha: 1.1e-5,
@@ -398,7 +405,9 @@ function makeSTO() {
     grainAt(x) { return x < 0 ? 0 : 1; },
     atoms: A, grains: [{ a1: rot([a, 0], th), a2: rot([0, a], th), label: lab }, { a1: rot([a, 0], -th), a2: rot([0, a], -th), label: lab }],
     period: a, center: [0, 0], fov: 5, zone: '[001]',
-    elements: [EI.Sr, EI.Ti, EI.O],
+    elements: [EI.Sr, EI.Ti, EI.Ti3, EI.O],
+    // O K ELNES of SrTiO₃: Ti 3d–O 2p (t₂g, e_g) peaks near threshold, then Sr 4d and O–O scattering
+    elnes: { O: () => [[530.9, 0.9, 0.55], [533.5, 1.4, 0.5], [538.3, 2.4, 0.55], [545, 4, 0.35]] },
     amorph() { return null; },
     thicknessAt(x, y, t) { return t; },
     tauAt(x, y, t, kV) { return t / (10 * imfp(kV, 24)); },
@@ -417,7 +426,7 @@ function makeSTO() {
 function makeGraphene() {
   const A = new AtomList();
   const a = 2.46, a1 = [a, 0], a2 = [a / 2, (a * Math.sqrt(3)) / 2], LAYER = 3.35;
-  const basis = [[0, 0, [EI.C]], [1 / 3, 1 / 3, [EI.C]]]; // honeycomb: C–C bond a/√3 = 1.42 Å
+  const basis = [[0, 0, [EI.Cg]], [1 / 3, 1 / 3, [EI.Cg]]]; // honeycomb: C–C bond a/√3 = 1.42 Å; sp² carbon (Cg)
   const hole = { x: -16, y: 8, r: 9 };
   const inHole = (x, y) => (x - hole.x) ** 2 + (y - hole.y) ** 2 < hole.r * hole.r;
   const tw = 5 * (Math.PI / 180), bilayerX = 14;
@@ -464,7 +473,7 @@ function makeGraphene() {
     atoms: A, grains: [{ a1, a2, label: hexLab }, { a1: rot(a1, tw), a2: rot(a2, tw), label: hexLab }],
     // phase per C atom calibrated to ~0.07 rad at 80 kV (≈4× a bulk column's per-atom weight): each atom counts as N = 4
     period: LAYER / 4, center: [0, 0], fov: 6, zone: '[0001]',
-    elements: [EI.C, EI.Si],
+    elements: [EI.Cg, EI.C, EI.Si], // the lattice (graphitic) and the hydrocarbon contamination (amorphous)
     // hydrocarbon contamination desorbs from hot graphene (above ~450 K)
     amorph(x, y, ctx) { return (ctx?.T ?? 293) < 450 && contam(x, y) ? 'C' : null; },
     thicknessAt(x, y) { return LAYER * layers(x, y); },
@@ -541,6 +550,9 @@ function makeUiO66() {
     atoms: A, grains: [{ a1: [ax, 0], a2: [0, ay], label: (m, n) => `${bar(m)}${bar(-m)}${bar(n)}` }],
     period: ax, center: [8, 0], fov: 10, zone: '[110]',
     elements: [EI.Zr, EI.O, EI.C],
+    // C K of the terephthalate linkers: aromatic 1s→π* (285.1 eV) and carboxylate π* (288.5 eV), which fade
+    // with dose as the linkers break, leaving amorphous carbon (ctx.q: damage fraction, 0 → 1)
+    elnes: { C: ({ q = 0 } = {}) => [[285.1, 0.7, 1.1 * (1 - q) + 0.3 * q], [288.5, 0.9, 0.6 * (1 - q)], [292.5, 5, 0.65], [300, 9, 0.3]] },
     amorph(x, y) { return x < edge(y) - 0.5 ? 'C' : null; },
     thicknessAt(x, y, t) { return x < edge(y) ? SUP : t; },
     tauAt(x, y, t, kV) { return (x < edge(y) ? SUP : t) / (10 * imfp(kV, 8)); },
@@ -1446,13 +1458,19 @@ export const edsFWHM = (E, fwhmMn = 128) => Math.sqrt(Math.max(0, fwhmMn * fwhmM
 
 // Core-loss edges (eV). h is per-atom edge height factor.
 export const EDGES = [
-  { key: 'C', el: 'C', name: 'C K', E: 284, kind: 'sharp', h: 1.0, elnes: [[285.4, 1.1, 1.1], [292.5, 3.5, 0.6], [300, 8, 0.3]] },
+  // carbon: amorphous / organic (weak, broad 1s→π*) and graphitic sp² (sharp π* and the σ* exciton)
+  { key: 'C', el: 'C', name: 'C K', E: 284, kind: 'sharp', h: 1.0, elnes: [[285.2, 1.4, 0.4], [292, 5, 0.65], [300, 9, 0.3]] },
+  { key: 'Cg', el: 'C', name: 'C K (sp²)', E: 284, kind: 'sharp', h: 1.0, elnes: [[285.4, 0.3, 1.6], [291.7, 0.5, 0.9], [293.8, 2.5, 0.7], [302, 8, 0.35]] },
   { key: 'O', el: 'O', name: 'O K', E: 532, kind: 'sharp', h: 0.7, elnes: [[533, 1.8, 0.55], [538.5, 3.5, 0.45], [545, 7, 0.35]] },
   { key: 'Si', el: 'Si', name: 'Si L₂,₃', E: 99.8, kind: 'delayed', h: 2.4, delay: 7, elnes: [[100.3, 0.9, 0.25]] },
   { key: 'SiOx', el: 'Si', name: 'Si L₂,₃ (oxide)', E: 105.6, kind: 'delayed', h: 2.4, delay: 5, elnes: [[108.2, 1.6, 0.6], [115, 3, 0.4]] },
   { key: 'Si', el: 'Si', name: 'Si K', E: 1839, kind: 'sharp', h: 0.07 },
   { key: 'SiOx', el: 'Si', name: 'Si K', E: 1844, kind: 'sharp', h: 0.07 },
-  { key: 'Ti', el: 'Ti', name: 'Ti L₃,₂', E: 456, kind: 'white', h: 0.9 },
+  // white lines: spin-orbit split L₃ and L₂ (so, eV) on a 2:1 double-step continuum. wl: educational peaks;
+  // wlReal: crystal-field split (t₂g / e_g) in octahedral Ti⁴⁺. Integrated L₃/L₂ ≈ 1 for Ti⁴⁺ (the anomalous
+  // ratio of early transition metals), ≈ 5 for Fe³⁺, ≈ 3 for metallic Co and Ni.
+  { key: 'Ti', el: 'Ti', name: 'Ti L₃,₂', E: 456, kind: 'white', h: 0.9, so: 5.6, wl: [[458.6, 1.4, 1.7], [464.2, 1.6, 1.4]], wlReal: [[457.9, 0.7, 1.0], [460.2, 0.9, 1.2], [463.1, 0.8, 0.9], [465.5, 1.0, 1.1]] },
+  { key: 'Ti3', el: 'Ti', name: 'Ti L₃,₂ (Ti³⁺)', E: 455, kind: 'white', h: 0.9, so: 5.5, wl: [[457.4, 1.6, 1.7], [463.0, 1.8, 1.4]], wlReal: [[456.8, 1.1, 1.0], [458.5, 1.3, 1.0], [462.2, 1.2, 0.9], [464.1, 1.4, 0.9]] },
   { key: 'Sr', el: 'Sr', name: 'Sr M₄,₅', E: 133, kind: 'delayed', h: 1.1, delay: 22 },
   { key: 'Sr', el: 'Sr', name: 'Sr L₃', E: 1940, kind: 'sharp', h: 0.09 },
   { key: 'Au', el: 'Au', name: 'Au N₆,₇', E: 84, kind: 'delayed', h: 0.85, delay: 9 },
@@ -1462,13 +1480,14 @@ export const EDGES = [
   { key: 'N', el: 'N', name: 'N K', E: 401, kind: 'sharp', h: 0.85, elnes: [[401.5, 1.2, 0.6], [407, 4, 0.4]] },
   { key: 'P', el: 'P', name: 'P L₂,₃', E: 132, kind: 'delayed', h: 1.8, delay: 6 },
   { key: 'S', el: 'S', name: 'S L₂,₃', E: 165, kind: 'delayed', h: 1.6, delay: 7 },
-  { key: 'Fe', el: 'Fe', name: 'Fe L₃,₂', E: 708, kind: 'sharp', h: 0.45, elnes: [[709.5, 1.2, 1.6], [722.5, 1.4, 0.8]] },
-  { key: 'Co', el: 'Co', name: 'Co L₃,₂', E: 779, kind: 'sharp', h: 0.42, elnes: [[779.5, 1.3, 1.5], [794.5, 1.5, 0.75]] },
-  { key: 'Ni', el: 'Ni', name: 'Ni L₃,₂', E: 855, kind: 'sharp', h: 0.4, elnes: [[853.5, 1.2, 1.3], [871, 1.4, 0.6]] },
+  // Fe³⁺ (ferrihydrite in the ferritin core): L₃ with a crystal-field shoulder, weak L₂
+  { key: 'Fe', el: 'Fe', name: 'Fe L₃,₂', E: 707, kind: 'white', h: 0.45, so: 13, wl: [[709.6, 1.3, 1.75], [722.8, 1.6, 0.3]], wlReal: [[708.0, 0.8, 0.5], [709.6, 1.0, 1.6], [721.6, 1.1, 0.15], [723.0, 1.4, 0.18]] },
+  { key: 'Co', el: 'Co', name: 'Co L₃,₂', E: 778, kind: 'white', h: 0.42, so: 15, wl: [[779.5, 1.3, 1.5], [794.5, 1.5, 0.42]] },
+  { key: 'Ni', el: 'Ni', name: 'Ni L₃,₂', E: 854, kind: 'white', h: 0.4, so: 17.3, wl: [[855.3, 1.2, 1.3], [872.6, 1.4, 0.37]] },
   { key: 'Cu', el: 'Cu', name: 'Cu L₃,₂', E: 931, kind: 'delayed', h: 0.45, delay: 8 }, // metallic Cu: filled 3d, no white lines
   { key: 'Ag', el: 'Ag', name: 'Ag M₄,₅', E: 367, kind: 'delayed', h: 0.9, delay: 30 },
   { key: 'Br', el: 'Br', name: 'Br M₄,₅', E: 69, kind: 'delayed', h: 0.9, delay: 12 },
-  { key: 'Cs', el: 'Cs', name: 'Cs M₅,₄', E: 726, kind: 'sharp', h: 0.4, elnes: [[727.5, 1.6, 1.4], [741.5, 1.7, 1.0]] },
+  { key: 'Cs', el: 'Cs', name: 'Cs M₅,₄', E: 725, kind: 'white', h: 0.4, so: 14, wl: [[727.5, 1.6, 1.4], [741.5, 1.7, 1.0]] },
   { key: 'Br', el: 'Br', name: 'Br L₃', E: 1550, kind: 'delayed', h: 0.1, delay: 25 },
   { key: 'Pb', el: 'Pb', name: 'Pb M₅,₄', E: 2484, kind: 'delayed', h: 0.1, delay: 60 },
 ];
@@ -1479,22 +1498,24 @@ const erf = (x) => {
 };
 const gpk = (E, c, w) => Math.exp(-0.5 * ((E - c) / w) ** 2);
 
-// Per-atom edge signal (arbitrary units) at energy loss E.
-export function edgeSignal(edge, E, res, realistic) {
+// Per-atom edge signal (arbitrary units) at energy loss E. res broadens the onset and the peaks (pass 0 for
+// the intrinsic shape, when the spectrum is convolved with the zero-loss peak afterwards); peaks overrides
+// the edge's ELNES (a specimen's own fine structure).
+export function edgeSignal(edge, E, res, realistic, peaks = edge.elnes) {
   const d = E - edge.E;
   if (d < -4 * res - 3) return 0;
-  const step = 0.5 * (1 + erf(d / (res * 0.85 + 0.3)));
+  const sw = res * 0.85 + 0.3;
+  const step = 0.5 * (1 + erf(d / sw));
   const tail = Math.pow(edge.E / Math.max(E, edge.E * 0.9), 3);
   const base = edge.h * Math.pow(100 / edge.E, 1.5);
   let s;
   if (edge.kind === 'delayed') s = step * (1 - Math.exp(-Math.max(d, 0) / edge.delay)) * tail * 1.6;
   else if (edge.kind === 'white') {
-    const pk = realistic
-      ? [[457.9, 0.7, 1.0], [460.2, 0.9, 1.2], [463.1, 0.8, 0.9], [465.5, 1.0, 1.1]]
-      : [[458.6, 1.4, 1.7], [464.2, 1.6, 1.4]];
-    s = step * tail * 0.35;
-    for (const [c, w, a] of pk) s += a * gpk(E, c, Math.hypot(w, res * 0.42));
+    // 2:1 continuum steps at L₃ and L₂ (the 2j+1 occupancy of the 2p₃/₂ and 2p₁/₂ levels)
+    const step2 = 0.5 * (1 + erf((d - (edge.so ?? 0)) / sw));
+    s = (tail * 0.35 * (2 * step + step2)) / 3;
+    for (const [c, w, a] of (realistic && edge.wlReal) || edge.wl || []) s += a * gpk(E, c, Math.hypot(w, res * 0.42));
   } else s = step * tail;
-  if (edge.elnes) for (const [c, w, a] of edge.elnes) s += a * step * gpk(E, c, Math.hypot(w, res * 0.42));
+  if (peaks) for (const [c, w, a] of peaks) s += a * step * gpk(E, c, Math.hypot(w, res * 0.42));
   return base * s;
 }

@@ -5,6 +5,7 @@ import { Ronch, CBED } from './techniques.js';
 import { OffAxis, FocalSeries } from './holography.js';
 import { Lorentz } from './lorentz.js';
 import { focalSpread } from './profile.js';
+import * as EELS from './eels.js';
 import { HOLDERS, specimenT, u2Ratio, thermalStrain, radiolysisFactor, iceSublimation, DEVITRIFY_K } from './holder.js';
 
 const SP = P.SPECIMENS;
@@ -152,6 +153,7 @@ export class Sim {
     const map = {
       objAp: ['tem'], alpha: ['stem', 'fd', 'vimg', 'si', 'eels', 'probe'], det: ['stem'],
       sa: ['diff'], camL: ['diff'], beamStop: [], camera: [], vdet: ['vimg'], eelsWin: ['eels'], eelsRange: ['eels'], eelsDisp: ['eels'], eelsOffset: ['eels'], eelsExp: ['eels'], eelsExpLow: ['eels'], eelsCurrent: ['eels'], dualEels: ['eels'], bgsub: ['eels'],
+      eelsSource: ['eels'], eelsBeta: ['eels'], eelsDet: ['eels'], eelsPx: ['eels'], eelsYScale: [], eelsFit: [], eelsPre: [], eelsDeconv: [], eelsLine: [],
       dose: ['si'], edsSel: [], mode: [],
       // progressive beam damage: refresh images and patterns in place, but don't restart 4D scans or spectrum accumulation
       damage: ['tem', 'stem', 'diff', 'probe'],
@@ -159,7 +161,7 @@ export class Sim {
       // temperature: the projected specimen changes (vibrations, expansion), so everything is recomputed
     };
     for (const k of map[key] ?? all) this.stale[k] = 1;
-    const view = ['mode', 'edsSel', 'camera', 'beamStop', 'vdet', 'bgsub', 'eelsWin', 'eelsRange', 'eelsDisp', 'eelsOffset', 'eelsExp', 'eelsExpLow', 'eelsCurrent', 'dualEels', 'holoView', 'ilhView'];
+    const view = ['mode', 'edsSel', 'camera', 'beamStop', 'vdet', 'bgsub', 'eelsWin', 'eelsRange', 'eelsDisp', 'eelsOffset', 'eelsExp', 'eelsExpLow', 'eelsCurrent', 'dualEels', 'eelsSource', 'eelsBeta', 'eelsDet', 'eelsPx', 'eelsYScale', 'eelsFit', 'eelsPre', 'eelsDeconv', 'eelsLine', 'holoView', 'ilhView'];
     if (!view.includes(key)) { this.ronch.stale = true; this.cbed.stale = true; this.oah.stale = true; }
     // a focal series takes a while to record, so only restart it when the physics changes
     if (!view.includes(key) && !['damage', 'drift', 'speed', 'biprism', 'sbR', 'numCorr'].includes(key)) this.ilh.stale = true;
@@ -818,69 +820,63 @@ export class Sim {
   }
   // where the zero-loss peak actually lands: the high voltage and the prism drift slowly (realistic mode)
   zlpShift() { return this.S.clarity === 'real' ? (this.zlpDrift || 0) : 0; }
-  // gun energy spread from the instrument profile, broadened by the spectrometer (≈0.15 eV)
-  eelsRes() { return Math.hypot(this.S.profile.dE, 0.15); }
-
-  // Model single-scattering + plural plasmon EELS at energy loss E (per eV, ZLP area = 1 at τ=0)
-  eelsModel(E, tau, comp, parts = null) {
-    const spec = this.spec, res = this.eelsRes(), real = this.S.clarity === 'real';
-    const s = res / 2.355;
-    const P0 = Math.exp(-tau);
-    const zlp = (P0 * Math.exp(-0.5 * (E / s) ** 2)) / (s * 2.5066);
-    let pl = 0, fac = 1;
-    for (let k = 1; k <= 4; k++) {
-      fac *= k;
-      const Pk = (P0 * Math.pow(tau, k)) / fac;
-      for (const p of spec.plasmon) {
-        const Ep = p.Ep * k, G = p.G * Math.sqrt(k);
-        if (E <= 0) continue;
-        const v = (E * G * Ep * Ep) / ((E * E - Ep * Ep) ** 2 + (E * G) ** 2);
-        pl += Pk * p.frac * v * (2 / Math.PI) / Ep;
-      }
-    }
-    if (spec.extraLoss && E > 0) pl += P0 * tau * spec.extraLoss(E, res);
-    const bg = E > 20 ? 0.012 * tau * Math.pow(E / 30, -3.1) * Math.min(1, (E - 20) / 12) : 0;
-    let core = 0;
-    const edgesOut = parts ? {} : null;
-    for (const ed of P.EDGES) {
-      const c = comp[ed.key];
-      if (!c) continue;
-      const v = 0.00035 * tau * c * P.edgeSignal(ed, E, res, real);
-      core += v;
-      if (edgesOut) edgesOut[ed.key] = (edgesOut[ed.key] || 0) + v;
-    }
-    if (parts) { parts.zlp = zlp; parts.pl = pl; parts.bg = bg; parts.core = core; parts.edges = edgesOut; }
-    return zlp + pl + bg + core;
+  // zero-loss width: the source (instrument profile, or a source preset) with the spectrometer (eels.js)
+  zlp() { return EELS.zlpParams(this.S.eelsSource, this.S.profile.dE); }
+  eelsRes() { return this.zlp().fwhm; }
+  eelsDet() { return EELS.detector(this.S.eelsDet); }
+  // where the spectrum is taken: the probe at one spectrum-image pixel (S.eelsPx = [i, j]), or the whole field
+  eelsSite(px = this.S.eelsPx) {
+    const si = this.si;
+    if (!px || !si) return { tau: si.tauMean, comp: si.comp, px: null };
+    const n = si.n, i = Math.max(0, Math.min(n - 1, px[0] | 0)), j = Math.max(0, Math.min(n - 1, px[1] | 0)), k = j * n + i, comp = {};
+    let tot = 0;
+    for (const e of si.els) { comp[e.key] = (comp[e.key] || 0) + e.map[k]; tot += e.map[k]; }
+    for (const key in comp) comp[key] /= tot || 1;
+    return { tau: si.tau[k], comp, px: [i, j] };
   }
+  // the single-scattering model for a site: specimen plasmons, the β- and kV-dependent cross-sections, the
+  // specimen's own ELNES (with its damage state), plus extra layers from addInelasticComponents (in situ)
+  eelsModel(site) {
+    const S = this.S, spec = this.spec, zeff = spec.zeff ?? 10, tau = site.tau * EELS.tauBetaFactor(S.kV, zeff, S.eelsBeta), ctx = { q: spec.dmg ?? 0, T: this.temp() };
+    const edges = [];
+    for (const ed of P.EDGES) { const c = site.comp[ed.key]; if (c) edges.push({ edge: ed, w: tau * c, peaks: spec.elnes?.[ed.key]?.(ctx) }); }
+    const m = { tau, plasmons: spec.plasmon, edges, extraLoss: spec.extraLoss ? (E, r) => spec.extraLoss(E, r) : null, kV: S.kV, beta: S.eelsBeta, zlp: this.zlp(), realistic: S.clarity === 'real', bg: { amp: 0.012, s: 3.1 } };
+    return EELS.addInelasticComponents(m, this.inelastic ?? []);
+  }
+  // In situ hook (M13–M15): extra inelastic layers in the beam path, e.g. windows, water, gas:
+  // [{ label, tau, plasmons: [{Ep, G, frac}], edges: [{ key, frac, name? }] }]
+  addInelasticComponents(list = []) { this.inelastic = list; this.stale.eels = 1; }
 
-  // One recorded spectrum on the 2048-channel detector, starting at E0 (eV), with the zero loss shifted by sh.
-  // Each channel integrates the spectrum over its width (4 samples), so a peak narrower than a channel is not
-  // lost; then the detector point-spread (σ = EELS_PSF channels) smears it. Values are per eV of spectrum.
-  channelSpectrum(E0, sh) {
-    const si = this.si, nb = EELS_CHANNELS, dE = this.S.eelsDisp, OS = 4;
-    const raw = new Float32Array(nb), bgr = new Float32Array(nb), edgeRaw = {}, parts = {};
-    for (let b = 0; b < nb; b++) {
-      let v = 0, g = 0;
-      const eg = {};
-      for (let o = 0; o < OS; o++) {
-        const E = E0 + (b + (o + 0.5) / OS) * dE - sh;
-        v += this.eelsModel(E, si.tauMean, si.comp, parts);
-        g += parts.bg + parts.pl + parts.zlp;
-        for (const k in parts.edges) eg[k] = (eg[k] || 0) + parts.edges[k];
-      }
-      raw[b] = v / OS; bgr[b] = g / OS;
-      for (const k in eg) (edgeRaw[k] ||= new Float32Array(nb))[b] = eg[k] / OS;
+
+  // One recorded spectrum on the 2048-channel detector, starting at E0 (eV), with the zero loss shifted by sh:
+  // the Fourier-log plural-scattering spectrum (eels.js), integrated over each channel, then the detector's
+  // point spread. Values are per eV of spectrum (per incident electron).
+  channelSpectrum(E0, sh, site = this.eelsSite()) {
+    const r = EELS.buildSpectrum(this.eelsModel(site), { E0, nb: EELS_CHANNELS, dE: this.S.eelsDisp, shift: sh });
+    const det = this.eelsDet(), edgeCurves = {};
+    for (const k in r.edgeCurves) edgeCurves[k] = EELS.applyPSF(r.edgeCurves[k], det);
+    return { spec: EELS.applyPSF(r.spec, det), bgc: EELS.applyPSF(r.bgc, det), edgeCurves, E0, E1: r.E1, dE: r.dE, nb: r.nb };
+  }
+  // Line scan: spectra at `n` probe positions across the spectrum image, along the probe's row (or the middle),
+  // over the energy range [Ea, Eb] at m channels: what a line-scan acquisition records, for the preview strip
+  eelsLineScan(Ea, Eb, n = 24, m = 192) {
+    const si = this.si;
+    if (!si) return null;
+    const j = this.S.eelsPx?.[1] ?? (si.n / 2) | 0, key = [this.eelsBuild, Ea.toFixed(2), Eb.toFixed(2), j, n, m].join('|');
+    if (this._line?.key === key) return this._line;
+    const rows = [], det = this.eelsDet(), sh = this.zlpShift();
+    for (let q = 0; q < n; q++) {
+      const i = Math.round(((q + 0.5) / n) * (si.n - 1)), r = EELS.buildSpectrum(this.eelsModel(this.eelsSite([i, j])), { E0: Ea, nb: m, dE: (Eb - Ea) / m, shift: sh });
+      rows.push(EELS.applyPSF(r.spec, { ...det, psf: det.psf * (m / EELS_CHANNELS) + 0.3 }));
     }
-    const psf = (a) => { const out = new Float32Array(nb), R = 3, w = []; let sw = 0; for (let i = -R; i <= R; i++) { const x = Math.exp(-0.5 * (i / EELS_PSF) ** 2); w.push(x); sw += x; } for (let b = 0; b < nb; b++) { let v = 0; for (let i = -R; i <= R; i++) v += a[Math.min(nb - 1, Math.max(0, b + i))] * w[i + R]; out[b] = v / sw; } return out; };
-    const spec = psf(raw), bgc = psf(bgr), edgeCurves = {};
-    for (const k in edgeRaw) edgeCurves[k] = psf(edgeRaw[k]);
-    return { spec, bgc, edgeCurves, E0, E1: E0 + nb * dE, dE, nb };
+    return (this._line = { key, rows, n, m, Ea, Eb, j, x: rows.map((_, q) => ((q + 0.5) / n) * si.n * si.dx) });
   }
   // electrons per channel in one readout: fraction per channel × beam current × exposure
   readout(spec, t) {
     const k = this.S.eelsDisp * this.S.eelsCurrent * 1e-12 / 1.602e-19 * t, ro = new Float32Array(spec.length);
+    const det = this.eelsDet(), g = (this._gain?.det === det && this._gain.g.length === spec.length) ? this._gain.g : (this._gain = { det, g: EELS.gainPattern(spec.length, det) }).g;
     let sat = 0, peak = 0;
-    for (let b = 0; b < spec.length; b++) { ro[b] = spec[b] * k; if (ro[b] > EELS_FULL_WELL) sat++; if (ro[b] > peak) peak = ro[b]; }
+    for (let b = 0; b < spec.length; b++) { ro[b] = spec[b] * k * g[b]; if (ro[b] > det.fullWell) sat++; if (ro[b] > peak) peak = ro[b]; }
     return { ro, sat, peak };
   }
 
@@ -903,7 +899,7 @@ export class Sim {
       zW += (Math.exp(-0.5 * (E / s) ** 2) / (s * 2.5066)) * h;
       for (const p of this.spec.plasmon) if (E > 0) pW += p.frac * ((E * p.G * p.Ep * p.Ep) / ((E * E - p.Ep * p.Ep) ** 2 + (E * p.G) ** 2)) * (2 / Math.PI) / p.Ep * h;
       bW += (E > 20 ? 0.012 * Math.pow(E / 30, -3.1) * Math.min(1, (E - 20) / 12) : 0) * h;
-      for (const ed of P.EDGES) edgeW[ed.key] = (edgeW[ed.key] || 0) + 0.00035 * P.edgeSignal(ed, E, res, real) * h;
+      for (const ed of P.EDGES) edgeW[ed.key] = (edgeW[ed.key] || 0) + EELS.EDGE_SCALE * P.edgeSignal(ed, E, res, real, this.spec.elnes?.[ed.key]?.({ q: this.spec.dmg ?? 0 })) * EELS.crossFactor(E, S.kV, S.eelsBeta) * h;
     }
     const lowLoss = w1 < 50;
     const sub = S.bgsub && !lowLoss;
@@ -921,6 +917,7 @@ export class Sim {
     let tot = 0;
     for (let b = 0; b < nb; b++) tot += spec[b];
     const ro = this.readout(spec, S.eelsExp), roLow = low ? this.readout(low.spec, S.eelsExpLow) : null;
+    this.eelsBuild = (this.eelsBuild || 0) + 1;
     this.eels = {
       spec, bgc, edgeCurves, nb, dE, E0, E1, map, sub, lowLoss, tot, edgeW, shift: sh, zlp: zlpStats(spec, E0, dE), ro,
       low: low ? { ...low, ro: roLow, zlp: zlpStats(low.spec, low.E0, dE), tau: lowTau(low.spec, low.E0, dE) } : null,
@@ -959,8 +956,10 @@ export class Sim {
         if (!m) return;
         a[key] -= m * t;
         a[nKey] += m;
+        const det = this.eelsDet();
         for (let b = 0; b < e.nb; b++) {
-          const c = P.poisson(Math.min(ro[b], EELS_FULL_WELL) * m) + EELS_READ_NOISE * Math.sqrt(m) * P.gauss();
+          const lam = Math.min(ro[b], det.fullWell) * m, pz = P.poisson(lam);
+          const c = lam + (pz - lam) * det.excess + det.read * Math.sqrt(m) * P.gauss(); // shot noise (× the scintillator's excess factor) and read noise
           acc[b] += c; a.total += Math.max(0, c);
         }
       };

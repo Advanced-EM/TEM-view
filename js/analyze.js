@@ -11,6 +11,7 @@
 // calibrate.js, and also returns the simulator's true settings, so a measurement can be checked against the truth.
 // Runs in browsers and in Node (temview-mcp).
 import * as P from './physics.js';
+import { edgeStats } from './eels.js';
 import { collectData } from './export.js';
 import { fitCTF, fitZLP, fitEDS, fitHologram } from './calibrate.js';
 
@@ -108,6 +109,22 @@ export const ANALYSES = {
       const present = [...new Set(sim.spec.elements.map((e) => P.EL[e].sym))];
       return { summary: found.length ? `Edges: ${found.map((f) => `${f.edge} (${f.onset_eV} eV, ×${f.jump_ratio})`).join(', ')}` : `No edges in ${r(c.energy_start_eV, 0)}–${r(c.energy_start_eV + n * c.energy_eV_per_channel, 0)} eV (checked ${checked.join(', ') || 'none in range'})`,
         result: { edges: found, window_eV: [r(c.energy_start_eV, 1), r(c.energy_start_eV + n * c.energy_eV_per_channel, 1)] }, truth: { elements: present } };
+    },
+  },
+  // power-law background before an edge, net signal in a window after it: r, S/B and S/N (Egerton's h)
+  fit_edge: {
+    skill: null, registry: false, label: 'EELS edge: background, S/B, S/N', modes: ['eels'],
+    run(sim, S, data, opts = {}) {
+      const sp = data.arrays.spectrum, c = data.meta.calibration, n = sp.shape[0], I = Float64Array.from(sp.data);
+      const E = Float64Array.from({ length: n }, (_, i) => c.energy_start_eV + (i + 0.5) * c.energy_eV_per_channel);
+      const w0 = S.eelsWin - S.eelsWidth / 2, w1 = S.eelsWin + S.eelsWidth / 2, win = opts.window ?? [w0, w1];
+      const pre = opts.pre ?? S.eelsPre ?? [Math.max(E[0] + 1, win[0] - Math.max(1, 0.1 * (win[1] - win[0])) - Math.max(15, 1.5 * (win[1] - win[0]))), win[0] - Math.max(1, 0.1 * (win[1] - win[0]))];
+      const frames = Math.max(1, c.readouts || 1), st = edgeStats(E, Float64Array.from(I, (v) => v * frames), pre, win);
+      if (!st) throw new Error('not enough background before the window: move the energy window onto an edge with ~20 eV of spectrum below it');
+      const edge = P.EDGES.filter((ed) => sim.si?.comp[ed.key] && ed.E >= pre[1] - 5 && ed.E <= win[1]).map((ed) => ed.name);
+      return { summary: `Background A·E^−r with r = ${r(st.r, 3)}; net ${Math.round(st.S)} counts over ${Math.round(st.B)} background in ${r(win[0], 1)}–${r(win[1], 1)} eV: S/B ${r(st.SB, 3)}, S/N ${r(st.SN, 3)} (h ${r(st.h, 2)})${edge.length ? `; edge ${edge.join(', ')}` : ''}`,
+        result: { r: r(st.r, 4), signal_counts: Math.round(st.S), background_counts: Math.round(st.B), S_over_B: r(st.SB, 4), S_over_N: r(st.SN, 4), h: r(st.h, 3), pre_eV: pre.map((v) => r(v, 2)), window_eV: win.map((v) => r(v, 2)), collection_mrad: S.eelsBeta, readouts: frames },
+        truth: { edges: edge } };
     },
   },
   fit_eds: {

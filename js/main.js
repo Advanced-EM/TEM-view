@@ -11,6 +11,7 @@ import { defaultState, SESSION_KEYS, CORR_RANGE } from './state.js';
 import { toSession, readSession, isSession } from './session.js';
 import { footprintFor, fmtBytes, fmtTime, PLAN_FIELDS, PLAN_KINDS } from './footprint.js';
 import { createSpecimenUI } from './specui.js';
+import { ZLP_SOURCES, toMSA } from './eels.js';
 import { PRESETS, newProfile, sanitizeProfile } from './profile.js';
 import { HOLDERS } from './holder.js';
 import { Panel } from './panel.js';
@@ -255,6 +256,9 @@ const CONTROLS = [
   { slider: 'eelsOffset', label: 'Energy offset (drift tube)', min: -50, max: 3000, step: 0.5, fmt: (v) => `${v} eV`, modes: 'eels', ends: ['zero loss', '', 'high loss'] },
   { pFn: () => { const [a, b] = sim.eelsRangeBounds(), z = sim.eels?.zlp; return `2048 channels: ${a.toFixed(1)} to ${b.toFixed(1)} eV. Energy resolution ${sim.eelsRes().toFixed(2)} eV (gun ${S.profile.dE} eV + spectrometer), sampled by ${(sim.eelsRes() / S.eelsDisp).toFixed(1)} channels${sim.eelsRes() / S.eelsDisp < 3 ? ' (too coarse: the zero loss and edge fine structure are blurred by the channels)' : ''}.${z ? ` Zero loss measured: ${z.fwhm.toFixed(2)} eV wide at ${z.center >= 0 ? '+' : ''}${z.center.toFixed(2)} eV.` : ' The zero-loss peak is outside this range.'}`; }, modes: 'eels' },
   { buttons: [['alignZLP', 'Align zero loss']], modes: 'eels' },
+  { chips: 'eelsSource', label: 'Source (zero-loss width)', small: true, modes: 'eels', opts: Object.entries(ZLP_SOURCES).map(([k, v]) => [k, v.label.replace(/ \(.*\)/, '')]) },
+  { slider: 'eelsBeta', label: 'Collection semi-angle β', min: 1, max: 100, log: true, fmt: (v) => `${v < 10 ? (+v).toFixed(1) : Math.round(v)} mrad`, modes: 'eels', ends: ['small: steep background', '', 'large'] },
+  { chips: 'eelsDet', label: 'Detector', small: true, modes: 'eels', opts: [['ccd', 'Scintillator CCD'], ['direct', 'Direct electron']] },
   { slider: 'eelsCurrent', label: 'Probe current', min: 5, max: 2000, log: true, fmt: (v) => `${Math.round(v)} pA`, modes: 'eels' },
   { slider: 'eelsExp', label: 'Exposure per readout', dyn: () => ({ label: S.dualEels ? 'Core-loss exposure' : 'Exposure per readout' }), min: 1e-4, max: 10, log: true, fmt: fmtS, modes: 'eels', ends: ['short', '', 'long'] },
   { toggles: [['dualEels', 'Dual EELS: low loss + core loss together']], modes: 'eels' },
@@ -267,6 +271,11 @@ const CONTROLS = [
   { slider: 'eelsWin', inv: 'eelsWin', label: 'Energy window center', dyn: () => { const [a, b] = sim.eelsRangeBounds(); return { min: Math.max(0, a), max: b, step: b - a > 500 ? 1 : b - a > 50 ? 0.5 : 0.05 }; }, fmt: (v) => `${v < 20 ? v.toFixed(2) : v.toFixed(0)} eV`, modes: 'eels' },
   { slider: 'eelsWidth', inv: 'eelsWin', label: 'Window width', min: 0.5, max: 80, step: 0.5, fmt: (v) => `${v} eV`, modes: 'eels' },
   { toggles: [['bgsub', 'Subtract background']], modes: 'eels' },
+  { chips: 'eelsYScale', label: 'Spectrum y axis', small: true, modes: 'eels', opts: [['log', 'Log₁₀'], ['lin', 'Linear'], ['split', 'Split gain']] },
+  { toggles: [['eelsFit', 'Fit the background (A·E⁻ʳ)'], ['eelsLine', 'Line-scan preview']], modes: 'eels', grid: true },
+  { toggles: [['eelsDeconv', 'Fourier-ratio deconvolution']], modes: 'eels', show: () => S.dualEels && S.eelsFit },
+  { pFn: () => (S.eelsFit ? `Drag the orange pre-edge window (or its handles) to fit the background; the blue window is the integration window.${R2.layout.eelsStats ? ` r = ${R2.layout.eelsStats.r.toFixed(2)}, S/B = ${R2.layout.eelsStats.SB.toPrecision(2)}, S/N = ${R2.layout.eelsStats.SN.toPrecision(3)}.` : ' Place the windows on an edge with some background before it.'}` : ''), show: () => S.eelsFit, modes: 'eels' },
+  { buttons: [['eelsWhole', 'Whole field'], ['eelsMSA', 'Export spectrum (.msa)']], modes: 'eels' },
 
   { sec: 'Time' },
   { slider: 'speed', inv: 'none', label: 'Simulation speed', min: 0.1, max: 3, step: 0.05, fmt: (v) => `${v.toFixed(2)}×` },
@@ -559,6 +568,8 @@ function action(id, el) {
     S.lorChir = Math.random() < 0.5 ? -1 : 1; S.lorPol = Math.random() < 0.5 ? -1 : 1;
     sim.invalidate('magnet'); explainChange('lorReset');
   }
+  if (id === 'eelsWhole') { S.eelsPx = null; sim.invalidate('eelsPx'); return; }
+  if (id === 'eelsMSA') return exportMSA();
   if (id === 'loadXYZ') specimenUI().pickFile(); // preview first: check, orient and load from the structure card
   if (id.startsWith('lib')) {
     const [i, j] = ML.nearest(S.cx / 1e4, S.cy / 1e4) ?? [0, 0], n = ML.LIB.n;
@@ -994,6 +1005,20 @@ function loadSessionFile(text) {
   refreshControls();
   explainChange('loaded');
 }
+// the recorded EELS spectrum (and the low-loss one with Dual EELS) as EMSA/MSA, readable by HyperSpy and DM
+function exportMSA() {
+  const e = sim.eels, a = sim.accE;
+  if (!e) return;
+  const realMode = S.clarity === 'real', k = (t) => e.dE * S.eelsCurrent * 1e-12 / 1.602e-19 * t;
+  const one = (sp, acc, fr, t, tag) => {
+    const y = realMode && fr ? Float32Array.from(acc, (v) => v / fr) : Float32Array.from(sp.ro?.ro ?? sp.spec.map((v) => v * k(t)));
+    const txt = toMSA(y, { title: `TEM-view ${sim.spec.short ?? S.spec} EELS ${tag}`, offset: +(sp.E0 + e.dE / 2).toFixed(4), dispersion: e.dE, kV: S.kV, alpha_mrad: S.alpha, beta_mrad: S.eelsBeta, exposure_s: t, yunits: realMode ? 'counts per readout (mean)' : 'counts per readout (expected)', comment: `${sim.eelsDet().label}; source ${S.eelsSource}; ${realMode ? `${fr} readouts` : 'noise-free'}` });
+    download(new Blob([txt], { type: 'text/plain' }), `tem-view-eels-${S.spec}-${tag}-${stamp()}.msa`);
+  };
+  one(e, a?.spec, a?.frames, S.eelsExp, e.low ? 'core-loss' : 'spectrum');
+  if (e.low) one(e.low, a?.low, a?.framesLow, S.eelsExpLow, 'low-loss');
+  explainChange('exported');
+}
 function exportData() {
   const data = collectData(sim, S);
   if (!Object.keys(data.arrays).length) return;
@@ -1218,7 +1243,20 @@ function wire() {
       set('edsSel', best ?? 'all', 'edsSel');
       return;
     }
-    if (S.mode === 'eels') { sdrag = { mode: 'eels' }; secCv.setPointerCapture(e.pointerId); moveSec(x, y); return; }
+    if (S.mode === 'eels') {
+      const L = R2.layout.eels;
+      if (!L) return;
+      // a click on an edge label puts that edge in the middle of the detector
+      const hit = L.labels?.find((b) => x >= b.x0 && x <= b.x1 && y >= b.y0 && y <= b.y1);
+      if (hit) { const span = 2048 * S.eelsDisp; set('eelsOffset', +clamp(hit.E - span / 2, -50, 3000).toFixed(1), 'eelsOffset'); R2.eelsUI.zoom = null; refreshControls(); return; }
+      const XE = (E) => L.x0 + ((E - L.Va) / (L.Vb - L.Va)) * L.w, Ex = L.Va + ((x - L.x0) / L.w) * (L.Vb - L.Va);
+      if (S.eelsFit && L.pre) {
+        const near = [0, 1].find((i) => Math.abs(x - XE(L.pre[i])) < 7);
+        if (near !== undefined) { sdrag = { mode: 'eelsPre', which: near }; secCv.setPointerCapture(e.pointerId); return; }
+        if (Ex > L.pre[0] && Ex < L.pre[1]) { sdrag = { mode: 'eelsPre', which: 'move', E: Ex, pre: [...L.pre] }; secCv.setPointerCapture(e.pointerId); return; }
+      }
+      sdrag = { mode: 'eels' }; secCv.setPointerCapture(e.pointerId); moveSec(x, y); return;
+    }
     if (S.mode === '4d' && R2.layout.cbed) {
       const L = R2.layout.cbed;
       if (x > L.sz) return;
@@ -1230,9 +1268,17 @@ function wire() {
     }
   });
   function moveSec(x, y) {
+    if (sdrag.mode === 'eelsPre') {
+      const L = R2.layout.eels, E = L.Va + ((x - L.x0) / L.w) * (L.Vb - L.Va), pre = [...(L.pre ?? R2.eelsPreWindow(S, L.E0))];
+      if (sdrag.which === 'move') { const d = E - sdrag.E; pre[0] = sdrag.pre[0] + d; pre[1] = sdrag.pre[1] + d; }
+      else pre[sdrag.which] = E;
+      if (pre[1] - pre[0] < 2) return;
+      S.eelsPre = [+Math.max(L.E0, pre[0]).toFixed(2), +Math.min(L.E1, pre[1]).toFixed(2)]; redraw = true;
+      return;
+    }
     if (sdrag.mode === 'eels') {
       const L = R2.layout.eels;
-      const E = L.E0 + ((x - L.x0) / L.w) * (L.E1 - L.E0);
+      const E = L.Va + ((x - L.x0) / L.w) * (L.Vb - L.Va);
       set('eelsWin', +clamp(E, Math.max(0, L.E0), L.E1).toFixed(1), 'eelsWin');
       return;
     }
@@ -1244,8 +1290,29 @@ function wire() {
     else S.vdOut = clamp(r, S.vdIn + 1, 32 * L.mradPx);
     sim.invalidate('vdet');
   }
-  secCv.addEventListener('pointermove', (e) => { if (sdrag) { const [x, y] = rel(e, secCv); moveSec(x, y); } });
-  secCv.addEventListener('pointerup', () => { if (sdrag?.mode === '4d') explainChange('vdet'); sdrag = null; });
+  secCv.addEventListener('pointermove', (e) => {
+    const [x, y] = rel(e, secCv);
+    if (sdrag) moveSec(x, y);
+    else if (S.mode === 'eels') { R2.eelsUI.hover = { x, y }; redraw = true; }
+  });
+  secCv.addEventListener('pointerleave', () => { if (R2.eelsUI.hover) { R2.eelsUI.hover = null; redraw = true; } });
+  // the spectrum: wheel zooms the energy axis about the pointer, double-click shows the whole detector again
+  secCv.addEventListener('wheel', (e) => {
+    if (S.mode !== 'eels' || !R2.layout.eels) return;
+    e.preventDefault();
+    const L = R2.layout.eels, [x] = rel(e, secCv), Ex = L.Va + clamp((x - L.x0) / L.w, 0, 1) * (L.Vb - L.Va), f = e.deltaY > 0 ? 1.25 : 0.8;
+    let a = Ex - (Ex - L.Va) * f, b = Ex + (L.Vb - Ex) * f;
+    if (b - a >= L.E1 - L.E0) { R2.eelsUI.zoom = null; } else { if (a < L.E0) { b += L.E0 - a; a = L.E0; } if (b > L.E1) { a -= b - L.E1; b = L.E1; } R2.eelsUI.zoom = [a, Math.max(b, a + 20 * S.eelsDisp)]; }
+    redraw = true;
+  }, { passive: false });
+  secCv.addEventListener('dblclick', () => { if (S.mode === 'eels') { R2.eelsUI.zoom = null; redraw = true; } });
+  // the map: double-click places the probe there (the spectrum then comes from that pixel)
+  mainCv.addEventListener('dblclick', (e) => {
+    if (S.mode !== 'eels' || !sim.si) return;
+    const [x, y] = rel(e, mainCv), r = mainCv.getBoundingClientRect(), n = sim.si.n;
+    S.eelsPx = [Math.floor((x / r.width) * n), Math.floor((y / r.height) * n)]; sim.invalidate('eelsPx'); refreshControls();
+  });
+  secCv.addEventListener('pointerup', () => { if (sdrag?.mode === '4d') explainChange('vdet'); if (sdrag?.mode === 'eelsPre') refreshControls(); sdrag = null; });
 
   window.addEventListener('keydown', (e) => {
     if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
