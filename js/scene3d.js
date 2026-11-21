@@ -1,4 +1,5 @@
 // The 3D cutaway microscope column, electron beam and flying electrons.
+import { isParallel } from './registry.js';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -743,7 +744,7 @@ export class Scene3D {
       this.beamGroups[slot].visible = w > 0.01;
     });
     // mechanical parts
-    const stemLike = !['tem', 'diff', 'oah', 'ilh', 'ltem'].includes(m);
+    const stemLike = !isParallel(m);
     const ded = ['4d', 'ronch', 'cbed', 'oah', 'ilh', 'ltem'].includes(m) || (!stemLike && S.camera === 'ded');
     A.screenLift = lerp(A.screenLift, stemLike || ded ? 1 : 0, k);
     this.screenPivot.rotation.x = -A.screenLift * 1.35;

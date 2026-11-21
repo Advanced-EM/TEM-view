@@ -6,7 +6,7 @@
 //
 // parseCommand() is pure and runs in Node too, so the grammar is tested without a browser.
 
-const MODES = [
+export const VOICE_MODES = [
   ['lstem', /\b(lorentz\s*-?\s*stem|magnetic\s*(dpc|stem)|induction\s*map)\b/],
   ['ltem', /\b(lorentz(\s*-?\s*tem)?|magnetic\s*(domains?|imaging)|fresnel\s*(mode|imaging)?|foucault|skyrmions?)\b/],
   ['4d', /\b(4\s*-?\s*d|four\s*-?\s*d(imensional)?)(\s*-?\s*stem)?\b/],
@@ -101,7 +101,7 @@ export function parseCommand(raw, ctx = {}) {
   if (specHit && has(/\b(load|insert|put in|switch to|change to|use|specimen|sample|show me|go to)\b/)) ops.push({ op: 'spec', v: specHit[0] });
 
   // mode: "switch to STEM", "go to the Ronchigram", "EELS mode", or just the mode name
-  const modeHit = MODES.find(([, re]) => re.test(t));
+  const modeHit = VOICE_MODES.find(([, re]) => re.test(t));
   if (modeHit && !specHit && (has(/\b(switch|go|change|move|show|open|mode|take me|let's do|use)\b/) || t.split(' ').length <= 3)) ops.push({ op: 'mode', v: modeHit[0] });
 
   // focus

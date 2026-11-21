@@ -1,6 +1,7 @@
 // Instrument operations on the state alone (no DOM): load a specimen, switch mode, change a setting, pick a
 // preset. The exhibit calls these and then refreshes its controls; the headless scripting driver
 // (tools/temview-py) calls them directly, so a Python script sees the same instrument either way.
+import { MODE_IDS, family } from './registry.js';
 import * as P from './physics.js';
 import { MAGSPECS } from './lorentz.js';
 import { CORR_RANGE } from './state.js';
@@ -9,8 +10,9 @@ import { analyze } from './analyze.js';
 import * as ML from './megalibrary.js';
 
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-export const MODES = ['tem', 'stem', '4d', 'diff', 'cbed', 'eds', 'eels', 'ronch', 'oah', 'ilh', 'ltem', 'lstem'];
-export const fam = (m) => (['tem', 'diff', 'oah', 'ilh', 'ltem'].includes(m) ? 'tem' : 'probe');
+// the technique list and beam families come from the registry (one list for every interface)
+export const MODES = MODE_IDS;
+export const fam = family;
 // Lorentz holders tilt far (domains with out-of-plane magnetization, in-plane fields); atomic work stays near the zone
 // axis, except on specimens built atom by atom in 3D (an XYZ structure, the megalibrary), which really rotate
 // widest field of view, nm: 120 for the atomic-scale specimens; the megalibrary zooms out to the whole chip

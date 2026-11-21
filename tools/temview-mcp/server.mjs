@@ -17,6 +17,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { WebSocketServer } from 'ws';
 import { z } from 'zod';
 import { Sim } from '../../js/sim.js';
+import { MODE_IDS, family } from '../../js/registry.js';
 import { defaultState } from '../../js/state.js';
 import * as P from '../../js/physics.js';
 import { collectData, toNpz } from '../../js/export.js';
@@ -68,7 +69,7 @@ const fail = (e) => ({ isError: true, content: [{ type: 'text', text: e.message 
 const safe = (fn) => async (args) => { try { return await fn(args); } catch (e) { return fail(e); } };
 
 // ------------------------------------------------------------------ settings → exhibit operations (same ops as voice commands)
-const MODES = ['tem', 'stem', '4d', 'diff', 'cbed', 'eds', 'eels', 'ronch', 'oah', 'ilh', 'ltem', 'lstem'];
+const MODES = MODE_IDS; // from the technique registry
 const SPECS = ['au', 'si', 'sto', 'gr', 'mof', 'bio', 'lib'];
 const settings = {
   mode: z.enum(MODES).optional().describe('tem, stem, 4d (4D-STEM), diff (SAED), cbed, eds, eels, ronch (Ronchigram), oah (off-axis holography), ilh (in-line holography), ltem (Lorentz TEM: magnetic domains), lstem (Lorentz STEM: DPC induction maps)'),
@@ -117,7 +118,7 @@ function simulate(a) {
   if (a.xyz_file) { const r = P.loadXYZ(readFileSync(a.xyz_file, 'utf8'), basename(a.xyz_file)); S.spec = 'xyz'; S.fov = a.fov_nm ?? r.fov_nm; S.cx = 0; S.cy = 0; S.thick = a.thickness_nm ?? 3; }
   if (a.particle) { const p = libParticle(...a.particle); S.spec = 'lib'; S.cx = p.x_um * 1e4; S.cy = p.y_um * 1e4; if (!a.specimen) { S.fov = P.SPECIMENS.lib.fov; S.thick = 10; } }
   if (a.mode) S.mode = a.mode;
-  const fam = ['tem', 'diff', 'oah', 'ilh', 'ltem'].includes(S.mode) ? 'tem' : 'probe';
+  const fam = family(S.mode);
   if (a.kV) S.kV = a.kV;
   if (a.corrector !== undefined) S.corrector = a.corrector;
   S.df = a.defocus_nm ?? S.dfFam[fam];

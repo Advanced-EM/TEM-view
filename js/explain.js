@@ -1,4 +1,5 @@
 // Plain-English explanations of what each mode shows and what each control physically changes.
+import { isParallel } from './registry.js';
 import * as ML from './megalibrary.js';
 import * as P from './physics.js';
 import { MAGSPECS, fegeState, deflection } from './lorentz.js';
@@ -187,7 +188,7 @@ export function changeText(key, S, sim) {
   lastKey = key;
   const o = optics(S, sim), spec = sim.spec;
   const probe = sim.probe?.fwhm;
-  const stemLike = !['tem', 'diff', 'oah', 'ilh', 'ltem'].includes(S.mode);
+  const stemLike = !isParallel(S.mode);
   const a = (S.mode === '4d' ? S.alpha4d : S.alpha) * 1e-3;
   switch (key) {
     case 'kV': return ['Accelerating voltage', `At <b>${S.kV} kV</b> each electron travels at <b>${f2(o.beta)} c</b> and weighs ${o.gam.toFixed(2)}× its rest mass. Its wavelength is <b>${f2(o.lam * 100)} pm</b>. A shorter wavelength means smaller Bragg angles (watch the diffraction spots pull inward) and deeper penetration. The cost: above ~86 kV a head-on hit can knock a carbon atom clean out of graphene, so fragile materials are imaged at 60–80 kV. ${S.kV > 86 ? `<span class="warn">You are above the knock-on threshold for carbon.${spec.twoD ? ' Watch the graphene: in TEM or STEM, atoms are being sputtered and holes grow.' : ''}${spec.beamSensitive ? ` For ${spec.short} the danger is radiolysis, not knock-on: the critical dose is now ${sim.critDose().toFixed(1)} e⁻/Å², and it drops at lower voltage because slower electrons ionize more strongly.` : ''}</span>` : `<span class="ok">Below the knock-on threshold for carbon.${spec.twoD && S.kV > 55 ? ' Only weakly bonded edge atoms can still be displaced.' : ''}</span>${spec.beamSensitive ? ` <span class="warn">But for ${spec.short} lower voltage is worse: radiolysis grows as 1/β², so the critical dose falls to ${sim.critDose().toFixed(1)} e⁻/Å².</span>` : ''}`}`];

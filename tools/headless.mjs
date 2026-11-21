@@ -7,6 +7,7 @@
 // Load the result with numpy.load(); metadata.json inside the archive holds calibrations and state.
 import { readFileSync, writeFileSync } from 'node:fs';
 import { Sim } from '../js/sim.js';
+import { MODE_IDS, isMode, family } from '../js/registry.js';
 import { defaultState, SESSION_KEYS } from '../js/state.js';
 import { sanitizeProfile } from '../js/profile.js';
 import * as P from '../js/physics.js';
@@ -23,7 +24,8 @@ if (opt.session) {
 if (opt.spec) { if (!P.SPECIMENS[opt.spec]) throw new Error(`unknown specimen ${opt.spec}`); const sp = P.SPECIMENS[opt.spec]; S.spec = opt.spec; S.fov = sp.fov; [S.cx, S.cy] = sp.center; }
 for (const k of ['kV', 'dose', 'thick', 'fov']) if (opt[k] !== undefined) S[k] = +opt[k];
 if (opt.mode) S.mode = opt.mode;
-const fam = ['tem', 'diff', 'oah', 'ilh', 'ltem'].includes(S.mode) ? 'tem' : 'probe';
+if (!isMode(S.mode)) throw new Error(`unknown mode ${S.mode}: one of ${MODE_IDS.join(', ')}`);
+const fam = family(S.mode);
 S.df = opt.df !== undefined ? +opt.df : S.dfFam[fam];
 if (opt.cryo) { S.holder = 'ln2'; S.tempSet = 90; }
 if (opt.holder) S.holder = opt.holder;

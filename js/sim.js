@@ -1,4 +1,5 @@
 // Simulation engine: turns the instrument state into detector signals.
+import { needsProbe } from './registry.js';
 import * as P from './physics.js';
 import { Ronch, CBED } from './techniques.js';
 import { OffAxis, FocalSeries } from './holography.js';
@@ -1176,7 +1177,7 @@ export class Sim {
     this.thermalStep(dt);
     this.zlpStep(dt);
     const S = this.S, m = S.mode;
-    if (this.stale.probe && !['tem', 'diff', 'oah', 'ilh', 'ltem', 'lstem'].includes(m)) { this.computeProbe(); this.stale.probe = 0; }
+    if (this.stale.probe && needsProbe(m)) { this.computeProbe(); this.stale.probe = 0; }
     if (m === 'tem' && this.stale.tem) { this.computeTEM(); this.stale.tem = 0; this.version++; }
     if (m === 'stem' && this.stale.stem) {
       const soft = this._soft; // beam damage: keep scanning, like a live instrument

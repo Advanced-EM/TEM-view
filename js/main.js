@@ -6,6 +6,7 @@ import { VR } from './vr.js';
 import { modeInfo, changeText, dataRows } from './explain.js';
 import { renderComponent } from './components.js';
 import * as N from './narration.js';
+import { DISPLAY, KEYS, family } from './registry.js';
 import { defaultState, SESSION_KEYS, CORR_RANGE } from './state.js';
 import { PRESETS, newProfile, sanitizeProfile } from './profile.js';
 import { HOLDERS } from './holder.js';
@@ -37,7 +38,7 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const S = defaultState();
 // anonymous usage metrics (usage.js, privacy.html): time in each mode and specimen while visible, and what is used
 const usage = startUsage({ page: 'tem-view', dims: () => ({ mode: S.mode, specimen: S.spec, clarity: S.clarity }) });
-const fam = (m) => (['tem', 'diff', 'oah', 'ilh', 'ltem'].includes(m) ? 'tem' : 'probe');
+const fam = family;
 const stigXY = () => [S.ab.A1 * Math.cos((S.ab.A1a * Math.PI) / 90), S.ab.A1 * Math.sin((S.ab.A1a * Math.PI) / 90)];
 const fmtS = (t) => (t < 1e-3 ? `${+(t * 1e6).toPrecision(3)} µs` : t < 1 ? `${+(t * 1e3).toPrecision(3)} ms` : `${+t.toPrecision(3)} s`);
 const fmtT = (K) => `${K < 20 ? K.toFixed(1) : Math.round(K)} K (${Math.round(K - 273.15)} °C)`;
@@ -49,14 +50,8 @@ const scene = new Scene3D($('#gl'), $('#labels'));
 const mainCv = $('#detMain'), secCv = $('#detSec');
 
 // ------------------------------------------------------------------ controls definition
-const MODES = [
-  ['tem', 'TEM', 'parallel-beam imaging', 'Imaging'], ['stem', 'STEM', 'scanned probe', 'Imaging'], ['4d', '4D-STEM', 'pattern per pixel', 'Imaging'],
-  ['diff', 'SAED', 'selected-area diffraction', 'Diffraction'], ['cbed', 'CBED', 'convergent beam', 'Diffraction'],
-  ['eds', 'EDS', 'X-ray spectra', 'Spectroscopy'], ['eels', 'EELS', 'energy loss', 'Spectroscopy'],
-  ['ronch', 'Ronchigram', 'corrector tuning', 'Alignment'],
-  ['oah', 'Off-axis', 'biprism holography', 'Holography'], ['ilh', 'In-line', 'focal-series exit wave', 'Holography'],
-  ['ltem', 'Lorentz TEM', 'magnetic domains', 'Magnetism'], ['lstem', 'Lorentz STEM', 'DPC induction maps', 'Magnetism'],
-];
+// [id, name, subtitle, group] in display order, from the technique registry (js/registry.js)
+const MODES = DISPLAY.map((t) => [t.id, t.name, t.sub, t.group]);
 // optional VR view: the button only appears where the browser can start an immersive session
 let vrNote = null, xrLoop = false; // xrLoop: the page's own frame loop paused while a headset session drives the frames
 const vr = new VR(scene, {
@@ -124,7 +119,7 @@ VR.supported().then((ok) => {
   if (b && !ok) b.title = 'VR preview: look at the VR scene on screen (no headset needed). Drag to orbit, click the floating menu, Esc to leave';
 });
 // keyboard shortcuts (Ronchigram keeps 8; the holography modes were added later as 9 and 0)
-const KEYS = { tem: '1', stem: '2', '4d': '3', diff: '4', cbed: '5', eds: '6', eels: '7', ronch: '8', oah: '9', ilh: '0', ltem: '-', lstem: '=' };
+// keyboard shortcuts: from the registry (the original twelve keep their keys)
 const logMap = (min, max) => ({ to: (v) => (Math.log(v / min) / Math.log(max / min)) * 1000, from: (t) => min * Math.pow(max / min, t / 1000) });
 
 const NOT_RONCH = 'tem stem 4d diff eds eels cbed oah ilh';
