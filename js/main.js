@@ -131,9 +131,9 @@ const NOT_LOR = 'tem stem 4d diff cbed eds eels ronch oah ilh';
 const LOR = 'ltem lstem';
 // acquisition plan (footprint.js): the current technique's plan, and the chip options for one field
 const curPlan = () => { try { return footprintFor(S, sim).plan; } catch { return {}; } };
-const PLAN_LABEL = { scan: 'Scan (pixels per side)', det: 'Detector / camera (pixels per side)', bits: 'Bit depth', dwell_us: 'Dwell per position', exposure_s: 'Exposure per frame', frames: 'Frames', format: 'Recording', analysis: 'Analysis' };
+const PLAN_LABEL = { scan: 'Scan (pixels per side)', det: 'Detector / camera (pixels per side)', bits: 'Bit depth', dwell_us: 'Dwell per position', exposure_s: 'Exposure per frame', frames: 'Frames', format: 'Recording', analysis: 'Analysis', current_pA: 'Probe current' };
 function planOpts(k) {
-  const fmt = { dwell_us: (v) => (v >= 1000 ? `${v / 1000} ms` : `${v} µs`), exposure_s: (v) => `${v} s`, bits: (v) => `${v}-bit`, format: (v) => ({ frames: 'Frames', events: 'Event counting' })[v], analysis: (v) => ({ virtual: 'Virtual detectors', ptycho: 'Ptychography' })[v] }[k] ?? ((v) => `${v}`);
+  const fmt = { current_pA: (v) => `${v} pA`, dwell_us: (v) => (v >= 1000 ? `${v / 1000} ms` : `${v} µs`), exposure_s: (v) => `${v} s`, bits: (v) => `${v}-bit`, format: (v) => ({ frames: 'Frames', events: 'Event counting' })[v], analysis: (v) => ({ virtual: 'Virtual detectors', ptycho: 'Ptychography' })[v] }[k] ?? ((v) => `${v}`);
   if (k === 'det' && PLAN_KINDS[S.mode] === 'camera') return [1024, 2048, 4096].map((v) => [v, `${v}`]);
   if (k === 'dwell_us' && S.mode === '4d') return [10, 100, 1000, 10000].map((v) => [v, fmt(v)]);
   if (k === 'dwell_us' && S.mode === 'eels') return [1000, 10000, 100000].map((v) => [v, fmt(v)]);
@@ -286,7 +286,7 @@ const CONTROLS = [
   { buttons: [['ide', 'Open the Python IDE']] },
   { sec: 'Data, dose and compute' },
   { p: 'What this acquisition would be on a real instrument: data size, time, dose, the memory its analysis needs, and where that analysis can run. Choose the scan, detector and timing; the estimate updates with every setting and is written into exported data.' },
-  ...['scan', 'det', 'bits', 'dwell_us', 'exposure_s', 'frames', 'format', 'analysis'].map((k) => ({ chips: `plan.${k}`, label: PLAN_LABEL[k], small: true, get: () => curPlan()[k], dynOpts: () => planOpts(k), show: () => k in curPlan() && planOpts(k).length > 1 })),
+  ...['scan', 'det', 'bits', 'dwell_us', 'current_pA', 'exposure_s', 'frames', 'format', 'analysis'].map((k) => ({ chips: `plan.${k}`, label: PLAN_LABEL[k], small: true, get: () => curPlan()[k], dynOpts: () => planOpts(k), show: () => k in curPlan() && planOpts(k).length > 1 })),
   { footprint: true },
   { sec: 'Digital twin' },
   { p: 'The instrument profile holds what belongs to one particular microscope (energy spread, Cc, Cs, illumination). Calibrate it from your own data, save the whole session, and export what the detectors record.' },
@@ -1016,7 +1016,7 @@ function updateFootprint() {
     ['Data', `${fmtBytes(f.raw.bytes)} · ${f.shape.join(' × ')} ${f.raw.dtype}`],
     ['Compressed (lossless)', `${fmtBytes(f.compressed.bytes[0])} – ${fmtBytes(f.compressed.bytes[1])} (${f.compressed.ratio[0]}–${f.compressed.ratio[1]}×, ${f.compressed.sparse ? 'sparse counts' : 'dense'})`],
     ['Acquisition time', fmtTime(f.time.acquire_s)],
-    ['Dose', `${sig(f.dose.total)} e⁻/Å² at ${sig(f.dose.rate)} e⁻/Å²/s · pixel ${sig(f.dose.pixel_A)} Å`],
+    ['Dose', `${sig(f.dose.total)} e⁻/Å² at ${sig(f.dose.rate)} e⁻/Å²/s · pixel ${sig(f.dose.pixel_A)} Å${!f.dose_from ? '' : f.dose_from.startsWith('dose') ? ' · low dose: the current is solved for the set dose' : ` · from the ${f.dose_from}`}`],
   ];
   if (f.dose.current_pA !== undefined) rows.push(['Probe current', f.dose.current_pA < 1 ? `${sig(f.dose.current_pA * 1000)} fA` : `${sig(f.dose.current_pA)} pA`]);
   if (f.dose.Dc) rows.push(['Critical dose', `${sig(f.dose.Dc)} e⁻/Å² (${f.dose.ratio > 1 ? '<b class="warn">' : ''}${sig(f.dose.ratio)}× used${f.dose.ratio > 1 ? '</b>' : ''})`]);

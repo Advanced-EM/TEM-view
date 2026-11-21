@@ -172,7 +172,7 @@ server.registerTool('footprint', {
     plan: z.object({ scan: z.number().int().positive().optional(), det: z.number().int().positive().optional(), bits: z.union([z.literal(8), z.literal(16), z.literal(32)]).optional(),
       dwell_us: z.number().positive().optional(), exposure_s: z.number().positive().optional(), frames: z.number().int().positive().optional(), channels: z.number().int().positive().optional(),
       format: z.enum(['frames', 'events']).optional(), analysis: z.enum(['virtual', 'ptycho']).optional(), iters: z.number().int().positive().optional(),
-      detectors: z.number().int().positive().optional(), flyback_us: z.number().nonnegative().optional() }).optional().describe('acquisition plan overrides; fields a technique does not use are rejected'),
+      detectors: z.number().int().positive().optional(), current_pA: z.number().positive().optional().describe('probe current; default from the plan, solved from the dose for beam-sensitive specimens'), flyback_us: z.number().nonnegative().optional() }).optional().describe('acquisition plan overrides; fields a technique does not use are rejected'),
     vram_GB: z.number().positive().optional().describe('memory of the GPU worker that would run the analysis (default: assume 24 GB)') },
   annotations: { readOnlyHint: true, openWorldHint: false },
 }, safe(async (a) => {

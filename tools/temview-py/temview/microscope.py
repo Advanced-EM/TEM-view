@@ -110,7 +110,7 @@ class Microscope:
     def footprint(self, technique: str | None = None, apply: bool = False, **plan) -> dict:
         """Data, dose and compute estimate for the current technique (or `technique`): raw and compressed size,
         working memory, acquisition and processing time, dose and probe current, and where the analysis can run
-        (tier: browser, gpu or hpc, with the reason). Plan overrides as keywords: scan, det, bits, dwell_us,
+        (tier: browser, gpu or hpc, with the reason). Plan overrides as keywords: scan, det, bits, dwell_us, current_pA,
         exposure_s, frames, channels, format ("frames"/"events"), analysis ("virtual"/"ptycho"), iters.
         apply=True keeps them for the technique. Example: footprint(scan=512, det=128, analysis="ptycho")."""
         args: dict = {"plan": plan, "apply": bool(apply)}

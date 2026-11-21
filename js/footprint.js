@@ -12,8 +12,9 @@
 //   raw, events       N_e·b_evt, N_e = I·t/e, b_evt = 6 bytes
 //   raw, camera       frames·N²·B
 //   time, scanned     Nx·Ny·τ + Ny·flyback
-//   dose, scanned     D = I·τ/(e·Δx²), Δx = field/Nx  (the probe current is solved for the dose set in the exhibit,
-//                     except EELS, which has its own beam-current setting)
+//   dose, scanned     D = I·τ/(e·Δx²), Δx = field/Nx, from the plan's probe current (pA range: 4D-STEM 20 pA,
+//                     STEM 50 pA); EELS uses its own beam-current setting; beam-sensitive specimens are dose-limited,
+//                     so I is solved for the dose set in the exhibit unless a current is chosen
 //   dose, camera      D per image as set; rate = D/t
 //   ePIE working set  3·8·(N_obj² + N_p²) + the diffraction stack as float32, N_obj = field/dx + N_p, dx = λ/(4α)
 //   compression       sparse counting data (< 1 e⁻ per pixel per frame) 3–10×, dense data 1.2–2×
@@ -31,17 +32,17 @@ const EVENT_BYTES = 6;
 // default plan by technique; `kind` picks the model
 const DEFAULTS = {
   tem: { kind: 'camera', det: 4096, bits: 16, exposure_s: 1, frames: 1 },
-  stem: { kind: 'scan', scan: 1024, bits: 16, dwell_us: 10, flyback_us: 100, detectors: 1 },
-  '4d': { kind: '4d', scan: 256, det: 256, bits: 16, dwell_us: 1000, flyback_us: 0, format: 'frames', analysis: 'virtual', iters: 20 },
+  stem: { kind: 'scan', scan: 1024, bits: 16, dwell_us: 10, flyback_us: 100, detectors: 1, current_pA: 50 },
+  '4d': { kind: '4d', scan: 256, det: 256, bits: 16, dwell_us: 1000, flyback_us: 0, format: 'frames', analysis: 'virtual', iters: 20, current_pA: 20 },
   diff: { kind: 'camera', det: 2048, bits: 16, exposure_s: 1, frames: 1 },
   cbed: { kind: 'camera', det: 2048, bits: 16, exposure_s: 0.5, frames: 1 },
-  eds: { kind: 'si', scan: 128, channels: 2048, bits: 16, dwell_us: 50, flyback_us: 100, frames: 1 },
+  eds: { kind: 'si', scan: 128, channels: 2048, bits: 16, dwell_us: 50, flyback_us: 100, frames: 1, current_pA: 200 },
   eels: { kind: 'si', scan: 128, channels: 2048, bits: 32, dwell_us: 10000, flyback_us: 100, frames: 1 },
   ronch: { kind: 'camera', det: 1024, bits: 16, exposure_s: 0.1, frames: 1 },
   oah: { kind: 'camera', det: 4096, bits: 16, exposure_s: 4, frames: 1 },
   ilh: { kind: 'camera', det: 4096, bits: 16, exposure_s: 1, frames: 10 },
   ltem: { kind: 'camera', det: 4096, bits: 16, exposure_s: 1, frames: 1 },
-  lstem: { kind: 'scan', scan: 256, bits: 32, dwell_us: 20, flyback_us: 100, detectors: 4 },
+  lstem: { kind: 'scan', scan: 256, bits: 32, dwell_us: 20, flyback_us: 100, detectors: 4, current_pA: 5 },
 };
 export const PLAN_KINDS = Object.fromEntries(Object.entries(DEFAULTS).map(([k, v]) => [k, v.kind]));
 // editable plan fields and their allowed values (UI chips, Python validation)
@@ -56,6 +57,7 @@ export const PLAN_FIELDS = {
   format: ['frames', 'events'],
   analysis: ['virtual', 'ptycho'],
   iters: [5, 10, 20, 50, 100],
+  current_pA: [1, 5, 20, 50, 100, 200, 500],
 };
 
 // the plan for a technique: defaults, then the saved overrides that are valid
@@ -111,7 +113,11 @@ export function footprint(technique, plan, ctx) {
   } else {
     const N = p.scan, pos = N * N, dx = field / N, tau = p.dwell_us * 1e-6;
     const tScan = pos * tau + N * p.flyback_us * 1e-6;
-    const I = technique === 'eels' && ctx.current_pA ? ctx.current_pA * 1e-12 : (D * E_CHARGE * dx * dx) / tau; // A
+    // probe current: EELS uses its own beam-current setting; beam-sensitive specimens are dose-limited (the
+    // current is solved for the dose set in the exhibit) unless a current is chosen; otherwise the plan's current
+    const doseLimited = technique !== 'eels' && !!ctx.Dc && !(plan && 'current_pA' in plan);
+    const I = technique === 'eels' && ctx.current_pA ? ctx.current_pA * 1e-12 : doseLimited || !p.current_pA ? (D * E_CHARGE * dx * dx) / tau : p.current_pA * 1e-12; // A
+    f.dose_from = technique === 'eels' ? 'beam current' : doseLimited || !p.current_pA ? 'dose (low-dose)' : 'probe current';
     const Dpix = (I * tau) / (E_CHARGE * dx * dx), ePerPos = (I * tau) / E_CHARGE;
     f.time = { acquire_s: tScan * (p.frames ?? 1) };
     f.dose = { total: Dpix * (p.frames ?? 1), per_image: Dpix, rate: I / (E_CHARGE * field * field), current_pA: I * 1e12, pixel_A: dx, electrons_per_position: ePerPos };
@@ -203,6 +209,7 @@ export function summary(f) {
     dose_e_per_A2: r(f.dose.total), dose_rate_e_per_A2_s: r(f.dose.rate), pixel_A: r(f.dose.pixel_A),
     ...(f.dose.current_pA !== undefined ? { probe_current_pA: r(f.dose.current_pA) } : {}),
     ...(f.dose.Dc ? { critical_dose_e_per_A2: r(f.dose.Dc), dose_over_critical: r(f.dose.ratio, 3) } : {}),
+    ...(f.dose_from ? { dose_from: f.dose_from } : {}),
     tier: f.badge.tier, tier_reason: f.badge.reason, notes: f.notes,
   };
 }
