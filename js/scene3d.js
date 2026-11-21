@@ -246,12 +246,13 @@ export class Scene3D {
   buildColumn() {
     const M = this.M, S = this.scene, col = (this.column = new THREE.Group());
     S.add(col);
-    // HV tank with ceramic insulator stack
+    // HV tank: the high-voltage cable enters from the top and a single solid ceramic feedthrough (no electrodes)
+    // carries the gun potential down to the tip. Nothing above the tip accelerates: the electrons are emitted
+    // downwards and the accelerator stack sits below the gun.
     col.add(halfSolid([[0.3, 5.75], [1.05, 5.75], [1.05, 6.9], [0.3, 6.9]], M.iron, M.cut));
-    for (let i = 0; i < 7; i++) {
-      const y = 5.85 + i * 0.14;
-      col.add(halfSolid([[0.18, y], [0.36, y], [0.36, y + 0.09], [0.18, y + 0.09]], M.ceramic, M.ceramic, 40));
-    }
+    col.add(halfSolid([[0.06, 5.68], [0.3, 5.72], [0.24, 6.55], [0.12, 6.9], [0.06, 6.9]], M.ceramic, M.ceramic, 40));
+    col.add(halfSolid(rectPts(0, 0.03, 5.6, 7.15), M.copper, M.cut, 24)); // HV conductor to the gun
+    col.add(halfSolid(rectPts(0.03, 0.09, 6.9, 7.15), M.dark, M.cut, 24)); // cable sheath
     // Wehnelt + tip
     col.add(halfSolid([[0.08, 5.3], [0.36, 5.3], [0.36, 5.65], [0.3, 5.65], [0.3, 5.36], [0.08, 5.36]], M.plat, M.cut));
     this.tipMat = new THREE.MeshBasicMaterial({ color: 0xc8ffd6 });
