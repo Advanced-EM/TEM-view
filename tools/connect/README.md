@@ -66,7 +66,7 @@ A connector exposes the subset it supports. For each control it declares whether
 
 The numpy engine uses the same discretisation as the browser (`js/tomo.js`), so results agree to ~10⁻⁷
 (`node tools/remote-check.mjs`). ASTRA is used for SIRT when installed, after its angle convention is checked against
-the numpy projector. In the exhibit, **Status** (bottom left) lists the connectors it finds on this computer and can
+the numpy projector. In the exhibit, **Status** (the last section of the controls) lists the connectors it finds on this computer and can
 send the tomography reconstructions to one. From Python: `Client(url).reconstruct_tomo(series, angles, "sirt")`.
 
 ## Safety when an instrument is driven

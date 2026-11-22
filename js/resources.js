@@ -1,4 +1,4 @@
-// Local resources (M11, the Status button): what this computer offers the simulations, and the limits that follow.
+// Local resources (M11, the Status section at the bottom of the controls): what this computer offers the simulations, and the limits that follow.
 //
 //   const r = await evaluate({ gpuLabel, urls })   cores, memory, WebGPU and its buffer limits, storage, a quick FFT
 //                                                  benchmark, compute connectors found (Tier 2) → r.profile, r.limits

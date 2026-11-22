@@ -63,7 +63,7 @@ const sim = new Sim(S);
 sim.setCompute(defaultBackend(new URL(`./compute-worker.js${new URL(import.meta.url).search}`, import.meta.url)));
 sim.compute.onGpu = () => refreshControls(); // the worker reports whether it has WebGPU (gpu.js) a moment after start
 // ------------------------------------------------------------------ Status: local resources and the limits they set
-// The Status button (bottom left) measures this computer (resources.js): cores, memory, WebGPU, storage, an FFT
+// The Status section (the last of the controls) measures this computer (resources.js): cores, memory, WebGPU, storage, an FFT
 // benchmark, and, when the panel opens, the compute connectors on this machine (Tier 2). The profile sets limits on
 // the heaviest simulations, which visitors can switch off. A lab computer can take the tomography reconstructions.
 let RES = null;
@@ -81,14 +81,16 @@ function applyLimits() {
   if (!RES || !limitsOn()) return;
   const lowered = [];
   for (const [k, c] of Object.entries(RES.limits)) if (S[k] > c) { setState(S, sim, k, c, k); lowered.push(`${LIMIT_TEXT[k][0]} ${LIMIT_TEXT[k][1](c)}`); }
-  if (lowered.length) voice.flash(`<b>Set for this computer</b><p>${lowered.join(' · ')}. See Status (bottom left).</p>`, 4500);
+  if (lowered.length) voice.flash(`<b>Set for this computer</b><p>${lowered.join(' · ')}. See Status at the bottom of the controls.</p>`, 4500);
 }
-function statusButton() {
-  let b = $('#statusBtn');
-  if (!b) { b = document.createElement('button'); b.id = 'statusBtn'; b.className = 'statusbtn'; b.title = 'This computer: resources, limits and lab computers'; b.addEventListener('click', openStatus); document.body.appendChild(b); }
-  const p = RES?.profile;
-  b.innerHTML = `<span class="dot ${p ?? 'unknown'}"></span>Status${p ? ` · ${PROFILES[p].label}` : ''}${sim.remote ? ' · lab' : ''}`;
+// the one-line summary at the bottom of the controls (the section opens the full panel)
+function statusLine() {
+  if (!RES) return 'Measuring this computer…';
+  const r = RES, parts = [`${PROFILES[r.profile].label}: ${r.cores ?? '?'} cores`, r.webgpu ? `WebGPU (${r.webgpu.label})` : 'no WebGPU', `FFT ${r.bench.ms.toFixed(0)} ms`];
+  if (sim.remote) parts.push(`reconstructions on ${sim.remote.desc.name ?? 'a lab computer'}`);
+  return `${parts.join(' · ')}. Heavy simulations ${limitsOn() ? 'are limited to what it handles' : 'are not limited'}.`;
 }
+function statusButton() { refreshControls(); }
 function openStatus() {
   let m = $('#statusModal');
   if (!m) {
@@ -543,6 +545,10 @@ const CONTROLS = [
   { buttons: [['abtem', 'Simulate with abTEM…'], ['connect', 'Connections…']] },
   { sec: 'Instrument readout' },
   { table: true },
+  // last, at the bottom of the controls: this computer's resources and the limits they set (resources.js)
+  { sec: 'Status of this computer' },
+  { pFn: () => statusLine() },
+  { buttons: [['status', 'Resources, limits and lab computers…']] },
 ];
 
 const ICONS = {
@@ -740,7 +746,7 @@ function refreshControls() {
 function set(key, v, inv = key) {
   // the Status limits (resources.js): heavy settings stay within what this computer handles
   const c = limitCap(key);
-  if (typeof v === 'number' && v > c) { v = c; voice.flash(`<b>Limited to ${LIMIT_TEXT[key][1](c)}</b><p>The most this computer handles comfortably (Status, bottom left). Switch the limits off there.</p>`, 3500); }
+  if (typeof v === 'number' && v > c) { v = c; voice.flash(`<b>Limited to ${LIMIT_TEXT[key][1](c)}</b><p>The most this computer handles comfortably (Status, at the bottom of the controls). Switch the limits off there.</p>`, 3500); }
   inv = setState(S, sim, key, v, inv);
   if (inv === null) return;
   refreshControls();
@@ -818,6 +824,7 @@ function action(id, el) {
   if (id === 'exportData') exportData();
   if (id === 'abtem') openAbTEM({ S, sim, mainCv, download });
   if (id === 'connect') openConnect({ S, sim, download });
+  if (id === 'status') return openStatus();
   if (id === 'exportProfile') download(new Blob([JSON.stringify(S.profile, null, 1)], { type: 'application/json' }), `instrument-profile-${S.profile.preset}.json`);
   if (id === 'restore') { sim.restoreSpecimen(); explainChange('restore'); }
   if (id === 'lorReset') {
