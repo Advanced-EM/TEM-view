@@ -111,6 +111,34 @@ export const ANALYSES = {
         result: { edges: found, window_eV: [r(c.energy_start_eV, 1), r(c.energy_start_eV + n * c.energy_eV_per_channel, 1)] }, truth: { elements: present } };
     },
   },
+  // orientation and phase mapping (ACOM) of a 4D-STEM / SPED scan: grains (orientation clusters), phase fractions
+  map_orientation: {
+    skill: null, registry: false, label: '4D-STEM orientation and phase map', modes: ['4d'],
+    run(sim, S) {
+      const f = sim.fd;
+      if (!f || f.done < f.N * f.N) throw new Error('the 4D scan is not complete yet: acquire first');
+      sim.computeOrientation();
+      if (f.oriNone) throw new Error(`no crystal template for ${sim.spec.name}`);
+      const n = f.N * f.N, per = f.oriPeriod, bins = new Map();
+      let nc = 0, na = 0, nv = 0, rel = 0;
+      for (let i = 0; i < n; i++) {
+        if (f.phase[i] === 2) { nc++; rel += f.oriR[i]; const b = Math.round(f.ori[i] / 2) * 2 % per; bins.set(b, (bins.get(b) ?? 0) + 1); }
+        else if (f.phase[i] === 1) na++; else nv++;
+      }
+      // grains: orientation clusters (±4°) holding at least 5 % of the crystalline pixels
+      const grains = [], used = new Set();
+      for (const [b] of [...bins].sort((a, c) => c[1] - a[1])) {
+        if (used.has(b)) continue;
+        let cnt = 0, sum = 0;
+        for (const [b2, c2] of bins) { const d = Math.min(Math.abs(b2 - b), per - Math.abs(b2 - b)); if (d <= 4 && !used.has(b2)) { cnt += c2; sum += c2 * (b + (((b2 - b + per / 2) % per + per) % per - per / 2)); used.add(b2); } }
+        if (cnt >= 0.05 * nc) grains.push({ omega_deg: r(((sum / cnt) % per + per) % per, 1), fraction: r(cnt / n, 3) });
+      }
+      const truth = sim.spec.grainRot?.map((g) => r((((g * 180) / Math.PI) % per + per) % per, 2));
+      return { summary: `${grains.length} grain orientation${grains.length === 1 ? '' : 's'}: ${grains.map((g) => `ω ${g.omega_deg}° (${Math.round(100 * g.fraction)} %)`).join(', ')}; crystal ${Math.round((100 * nc) / n)} %, amorphous ${Math.round((100 * na) / n)} %, vacuum ${Math.round((100 * nv) / n)} %${f.ped ? ` (precessed, φ ${f.ped.phi} mrad)` : ' (no precession)'}`,
+        result: { grains, phase_fraction: { crystal: r(nc / n, 3), amorphous: r(na / n, 3), vacuum: r(nv / n, 3) }, mean_reliability: nc ? r(rel / nc, 3) : 0, period_deg: per, precession_mrad: f.ped?.phi ?? 0 },
+        truth: { grain_rotations_deg: truth } };
+    },
+  },
   // power-law background before an edge, net signal in a window after it: r, S/B and S/N (Egerton's h)
   fit_edge: {
     skill: null, registry: false, label: 'EELS edge: background, S/B, S/N', modes: ['eels'],

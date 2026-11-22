@@ -111,7 +111,13 @@ export class ScriptCore {
   settle(steps) {
     const S = this.S, n = steps ?? (S.mode === '4d' ? 400 : S.mode === 'ilh' ? 600 : 12);
     if (S.mode === '4d') { this.sim.update(0); this.sim.syncCompute?.(); } // a worker scan is finished on this thread
-    for (let i = 0; i < n; i++) { this.sim.update(0.05); if (S.mode === 'ilh' && this.sim.ilh.st?.it >= this.sim.ilh.st.maxIt) break; }
+    // 4D-STEM: until the scan is complete (a precessed scan takes ~12× longer), unless steps are given
+    const full = S.mode === '4d' && steps == null, N = full ? 20000 : n;
+    for (let i = 0; i < N; i++) {
+      this.sim.update(0.05);
+      if (S.mode === 'ilh' && this.sim.ilh.st?.it >= this.sim.ilh.st.maxIt) break;
+      if (full && i >= n && this.sim.fd && this.sim.fd.done >= this.sim.fd.N * this.sim.fd.N) break;
+    }
   }
 
   // ---------------------------------------------------------------- calls (each takes one object of arguments)

@@ -501,6 +501,44 @@ function draw4D(sim, S, m, s, hover) {
       paint(ctx, f.vimg, N, N, dst, { lo: 0, hi: 1, rows, rowsFill: 0 });
       label(ctx, 'waiting for the full 4D dataset…', 10 * dpr, 36 * dpr, dpr, { color: C.muted, size: 9 });
     }
+  } else if (S.vdet === 'orient' || S.vdet === 'phase') {
+    // orientation and phase maps (ACOM): template matching of every pattern (sim.computeOrientation)
+    if (f.oriNone || !f.ori) {
+      paint(ctx, f.vimg, N, N, dst, { lo: 0, hi: 1, rows, rowsFill: 0 });
+      label(ctx, f.oriNone ? 'no crystal template for this specimen (amorphous or a library of structures)' : 'matching patterns…', 10 * dpr, 36 * dpr, dpr, { color: C.warm, size: 9 });
+    } else {
+      const { c, ctx: oc, id } = off(N, N), per = f.oriPeriod, pc = [[40, 44, 52], [150, 128, 96], [90, 190, 255]];
+      for (let i = 0; i < N * N; i++) {
+        const p = i * 4;
+        if (i >= f.oriDone) { id.data[p] = id.data[p + 1] = id.data[p + 2] = 0; id.data[p + 3] = 255; continue; }
+        let r, g, b;
+        if (S.vdet === 'orient') {
+          if (f.phase[i] === 2) [r, g, b] = hsv(f.ori[i] / per, 0.8, 0.45 + 0.55 * Math.min(1, f.oriR[i] * 4));
+          else r = g = b = f.phase[i] === 1 ? 70 : 20;
+        } else { const k = Math.min(1, 0.55 + f.oriQ[i] * 0.5); [r, g, b] = pc[f.phase[i]].map((v) => v * k); }
+        id.data[p] = r; id.data[p + 1] = g; id.data[p + 2] = b; id.data[p + 3] = 255;
+      }
+      oc.putImageData(id, 0, 0);
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(c, 0, 0, N, N, 0, 0, W, H);
+      ctx.imageSmoothingEnabled = true;
+      const pedTxt = f.ped ? `precessed φ ${f.ped.phi} mrad (${f.ped.steps} azimuths)` : 'no precession: dynamical intensities can mislead the matching';
+      if (S.vdet === 'orient') {
+        // colour wheel over one symmetry period of the zone pattern
+        const R = 16 * dpr, lx = W - R - 10 * dpr, ly = R + 10 * dpr;
+        for (let a = 0; a < 360; a += 6) { const [r, g, b] = hsv(a / 360, 0.8, 1); ctx.fillStyle = `rgb(${r},${g},${b})`; ctx.beginPath(); ctx.moveTo(lx, ly); ctx.arc(lx, ly, R, (a * Math.PI) / 180, ((a + 7) * Math.PI) / 180); ctx.fill(); }
+        label(ctx, `0–${per}°`, lx, ly + R + 9 * dpr, dpr, { color: C.muted, size: 8, align: 'center' });
+        label(ctx, `in-plane orientation ω · ${pedTxt}`, 10 * dpr, 34 * dpr, dpr, { color: C.accent, size: 9 });
+        label(ctx, 'brightness: reliability · grey: amorphous · black: vacuum', 10 * dpr, H - 14 * dpr, dpr, { color: C.muted, size: 9 });
+      } else {
+        const n = [0, 1, 2].map((k) => { let c = 0; for (let i = 0; i < f.oriDone; i++) if (f.phase[i] === k) c++; return c; }), tot = Math.max(1, f.oriDone);
+        label(ctx, `phase map · ${pedTxt}`, 10 * dpr, 34 * dpr, dpr, { color: C.accent, size: 9 });
+        ['vacuum', 'amorphous', `crystal (${(sim.orientationTemplate()?.name ?? '').replace(/[<>&]/g, '')})`].forEach((t, k) => {
+          const y = H - (14 + 14 * (2 - k)) * dpr; ctx.fillStyle = `rgb(${pc[k].join(',')})`; ctx.fillRect(10 * dpr, y - 5 * dpr, 9 * dpr, 9 * dpr);
+          label(ctx, `${t} ${Math.round((100 * n[k]) / tot)} %`, 24 * dpr, y, dpr, { color: C.text, size: 9 });
+        });
+      }
+    }
   } else if (S.vdet === 'com' || S.vdet === 'dpc') {
     const { c, ctx: oc, id } = off(N, N);
     let mx = 0;

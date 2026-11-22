@@ -233,3 +233,12 @@ def test_eels_msa_opens_in_hyperspy(tem, tmp_path):
     assert tem_md.beam_energy == 200 and abs(tem_md.Detector.EELS.collection_angle - 30) < 1e-9
     a = tem.analyze("fit_edge")
     assert 2 < a["result"]["r"] < 5 and a["result"]["S_over_N"] > 0
+
+
+def test_orientation_map_finds_the_sto_grains(tem):
+    tem.set(specimen="sto", mode="4d", convergence_mrad=3, precession_mrad=0)
+    tem.acquire()
+    a = tem.analyze("map_orientation")
+    grains = sorted(g["omega_deg"] for g in a["result"]["grains"])
+    assert len(grains) == 2 and abs(grains[0] - 18.43) < 2 and abs(grains[1] - 71.57) < 2
+    assert a["result"]["phase_fraction"]["crystal"] > 0.9

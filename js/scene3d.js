@@ -518,8 +518,8 @@ export class Scene3D {
       ['EDS X-ray detector', [-1.3, Y.spec + 0.9, -0.8], ['eds'], 'left'],
       ['Objective aperture', [-0.5, Y.bfp, 0], (S) => S.mode === 'tem' && S.objAp !== 'zpp', 'left'],
       ['Zernike phase plate', [-0.5, Y.bfp, 0], (S) => S.mode === 'tem' && S.objAp === 'zpp', 'left'],
-      ['Precession cone', [0.75, Y.spec + 0.55, 0], (S) => ['diff', 'cbed'].includes(S.mode) && S.pedOn, 'left'],
-      ['Descan coils', [0.75, Y.spec - 0.45, 0], (S) => ['diff', 'cbed'].includes(S.mode) && S.pedOn, 'left'],
+      ['Precession cone', [0.75, Y.spec + 0.55, 0], (S) => ['diff', 'cbed', '4d'].includes(S.mode) && S.pedOn, 'left'],
+      ['Descan coils', [0.75, Y.spec - 0.45, 0], (S) => ['diff', 'cbed', '4d'].includes(S.mode) && S.pedOn, 'left'],
       ['Cryo holder', [3.9, Y.spec + 0.75, 0], (S) => S.holder === 'ln2' || S.holder === 'lhe'],
       ['Heating holder', [3.1, Y.spec + 0.35, 0], (S) => S.holder === 'heat'],
       ['Back focal plane', [-0.5, Y.bfp, 0], ['diff', 'stem', '4d', 'eds', 'eels', 'ronch', 'cbed', 'oah', 'ilh', 'ltem', 'lstem'], 'left'],
@@ -739,7 +739,7 @@ export class Scene3D {
     this.time += dt;
     // precession: the cone's half-angle follows φ (×7, so 20 mrad reads as ~8°), the beam goes round it
     {
-      const on = ['diff', 'cbed'].includes(S.mode) && !!S.pedOn;
+      const on = ['diff', 'cbed', '4d'].includes(S.mode) && !!S.pedOn;
       this.pedG.visible = on;
       if (on) {
         const h = this.pedH, r = h * Math.tan(Math.min(0.5, S.pedPhi * 1e-3 * 7)), th = (this.pedTh = (this.pedTh ?? 0) + (S.paused ? 0 : dt * S.speed * 2 * Math.PI * 0.6));

@@ -22,6 +22,12 @@ export function collectData(sim, S) {
     arrays.virtual_image = A(f.vimg, [f.N, f.N], `virtual ${S.vdet}`);
     arrays.com_x = A(f.comX, [f.N, f.N], 'mrad'); arrays.com_y = A(f.comY, [f.N, f.N], 'mrad');
     Object.assign(cal, { scan_step_A: f.step, detector_mrad_per_px: f.mradPx, detector_mrad_per_px_nominal: f.mradPx * S.profile.camLCal, positions_recorded: f.done });
+    if (f.ped) Object.assign(cal, { precession_mrad: f.ped.phi, precession_azimuths: f.ped.steps, descan_error_pct: f.ped.descan });
+    if (f.ori && f.oriDone) { // orientation and phase maps (template matching)
+      arrays.orientation_deg = A(f.ori, [f.N, f.N], `in-plane ω, 0–${f.oriPeriod}°`); arrays.correlation_index = A(f.oriQ, [f.N, f.N], 'Q');
+      arrays.reliability = A(f.oriR, [f.N, f.N], '1 − Q2/Q1'); arrays.phase = A(Float32Array.from(f.phase), [f.N, f.N], '0 vacuum, 1 amorphous, 2 crystal');
+      Object.assign(cal, { orientation_period_deg: f.oriPeriod, orientation_template: sim.orientationTemplate()?.name ?? null });
+    }
   } else if (m === 'diff' && sim.diffDisp) {
     arrays.pattern = A(sim.diffDisp.arr, [sim.diffDisp.W, sim.diffDisp.W], 'intensity');
     Object.assign(cal, { k_per_px_invA: sim.diffDisp.kPerPx, camera_length_mm_nominal: S.camL, camera_length_mm_true: sim.camLTrue(), ellipticity: S.profile.ellip, ellipticity_axis_deg: S.profile.ellipAng });

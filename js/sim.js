@@ -19,6 +19,9 @@ export const AP_MRAD = { none: Infinity, 40: 12, 20: 6, 10: 3, df: 2.5, zpp: Inf
 export const EELS_CHANNELS = 2048;
 // Detector point-spread function, in channels (σ): even a perfect spectrum is smeared over ~2 channels.
 export const EELS_PSF = 0.85;
+// orientation mapping: a pattern is crystalline when its spots beat its own azimuthal average by this much
+// (measured: crystals ≥ 0.57, amorphous SiO₂ ≤ 0.35 at the 90th percentile)
+export const CRYSTAL_EXCESS = 0.45;
 // Integrating (CCD/CMOS) spectrometer camera: a 16-bit converter at ~4 counts per electron fills at
 // ~16,400 electrons per channel per readout; read noise ~3 electrons rms per channel.
 export const EELS_FULL_WELL = 65535 / 4, EELS_READ_NOISE = 3;
@@ -156,7 +159,7 @@ export class Sim {
     const map = {
       objAp: ['tem'], alpha: ['stem', 'fd', 'vimg', 'si', 'eels', 'probe'], det: ['stem'],
       sa: ['diff'], camL: ['diff'], beamStop: [], camera: [], vdet: ['vimg'], eelsWin: ['eels'], eelsRange: ['eels'], eelsDisp: ['eels'], eelsOffset: ['eels'], eelsExp: ['eels'], eelsExpLow: ['eels'], eelsCurrent: ['eels'], dualEels: ['eels'], bgsub: ['eels'],
-      pedOn: ['diff'], pedPhi: ['diff'], pedSteps: ['diff'], pedDescan: ['diff'],
+      pedOn: ['diff', 'fd', 'vimg'], pedPhi: ['diff', 'fd', 'vimg'], pedSteps: ['diff', 'fd', 'vimg'], pedDescan: ['diff', 'fd', 'vimg'],
       eelsSource: ['eels'], eelsBeta: ['eels'], eelsDet: ['eels'], eelsPx: ['eels'], eelsYScale: [], eelsFit: [], eelsPre: [], eelsDeconv: [], eelsLine: [],
       dose: ['si'], edsSel: [], mode: [],
       // progressive beam damage: refresh images and patterns in place, but don't restart 4D scans or spectrum accumulation
@@ -421,7 +424,7 @@ export class Sim {
   // the precession modifier (registry MODIFIERS: ped) in effect for the current technique, or null
   pedParams() {
     const S = this.S;
-    if (!S.pedOn || !['diff', 'cbed'].includes(S.mode)) return null;
+    if (!S.pedOn || !['diff', 'cbed', '4d'].includes(S.mode)) return null;
     return { phi: S.pedPhi, steps: Math.max(4, S.pedSteps | 0), descan: S.pedDescan };
   }
   // Precession electron diffraction (Vincent & Midgley 1994): the beam is tilted by φ and rotated on a hollow
@@ -560,7 +563,22 @@ export class Sim {
     // the scan runs on the compute backend (compute.js): inline, or in a worker in the exhibit
     for (const t of [this.fdTask, this.ptyTask, this.msTask]) t?.cancel();
     this.pty = this.mpty = null;
-    this.fdTask = this.compute.run({ kind: 'fd-scan', geom: this.fd.geom, slices, prop, pr: sr, pi: si }, { data: this.fd.data });
+    // SPED: the probe tilted onto the precession cone at each azimuth, and the descan shift that brings it back
+    const ped = S.mode === '4d' ? this.pedParams() : null;
+    let pedJob = null;
+    if (ped) {
+      const M = Math.min(ped.steps, 12), kt = (ped.phi * 1e-3) / lam, dkp = 1 / (n4 * dx), ramps = [], back = [];
+      for (let q = 0; q < M; q++) {
+        // each tilt on the k-space grid of the 64-pixel window: a tilt between grid points makes the phase ramp
+        // non-periodic over the window and leaks the bright central disk into streaks (the cone becomes a fine polygon)
+        const th = (2 * Math.PI * (q + 0.5)) / M, kx = Math.round((kt * Math.cos(th)) / dkp) * dkp, ky = Math.round((kt * Math.sin(th)) / dkp) * dkp, re = new Float64Array(n4 * n4), im = new Float64Array(n4 * n4);
+        for (let y = 0; y < n4; y++) for (let x = 0; x < n4; x++) { const a = 2 * Math.PI * (kx * x * dx + ky * y * dx); re[y * n4 + x] = Math.cos(a); im[y * n4 + x] = Math.sin(a); }
+        ramps.push({ re, im }); back.push([-(1 - ped.descan / 100) * kx / dkp, -(1 - ped.descan / 100) * ky / dkp]);
+      }
+      pedJob = { ramps, back, phi: ped.phi, steps: M, descan: ped.descan };
+      this.fd.ped = pedJob;
+    }
+    this.fdTask = this.compute.run({ kind: 'fd-scan', geom: this.fd.geom, slices, prop, pr: sr, pi: si, ...(pedJob ? { ped: { ramps: pedJob.ramps, back: pedJob.back } } : {}) }, { data: this.fd.data });
     this.stale.vimg = 1;
   }
   // Scripts step the simulation in a synchronous loop, in which worker results cannot arrive: take what the worker
@@ -628,6 +646,48 @@ export class Sim {
       f.dpcX[idx] = (Q[0] - Q[2]) / qt; f.dpcY[idx] = (Q[1] - Q[3]) / qt;
     }
     f.vDone = f.done;
+  }
+
+  // ------------------------------------------------------------ orientation and phase maps (ACOM on 4D-STEM / SPED)
+  // The template: the crystal's zero-order zone (CBED reflection list, structure-factor weights) out to the
+  // detector edge; its in-plane rotational symmetry sets the ω range that is searched.
+  orientationTemplate() {
+    const spec = this.spec, f = this.fd;
+    if (!f || spec.poly && !P.CRYST[spec.id] || !P.CRYST[spec.id]) return null;
+    const key = [spec.id, this.S.kV, f.dk.toFixed(5), f.ped?.phi ?? 0, this.S.alpha4d].join('|');
+    if (this._tpl?.key === key) return this._tpl;
+    // reflections the simulated patterns can hold: inside the propagator's band limit (⅔ Nyquist) less the
+    // precession tilt and the probe's disk radius, and inside the detector
+    const kt = f.ped ? (f.ped.phi * 1e-3) / f.lam : 0, ka = (this.S.alpha4d * 1e-3) / f.lam;
+    const edge = Math.min((f.n4 / 2 - 2) * f.dk, (2 / 3) * (1 / (2 * f.dx)) - kt - 0.5 * ka), L = this.cbed.lists();
+    const spots = L.zolz.filter((z) => z.g > 0.05 && z.g < Math.min(2.2, edge)).map((z) => ({ gx: z.gx, gy: z.gy, w: z.F })); // F: the strong low-order spots decide
+    if (spots.length < 4) return null;
+    const maps = (deg) => { const c = Math.cos((deg * Math.PI) / 180), s = Math.sin((deg * Math.PI) / 180); return spots.every((a) => spots.some((b) => Math.hypot(a.gx * c - a.gy * s - b.gx, a.gx * s + a.gy * c - b.gy) < 0.02)); };
+    const period = [60, 90, 120, 180].find(maps) ?? 360;
+    return (this._tpl = { key, spots, period, step: 1, name: P.CRYST[spec.id].name });
+  }
+  computeOrientation() {
+    const f = this.fd, tpl = this.orientationTemplate();
+    if (!f) return;
+    if (!tpl) { f.oriNone = true; return; }
+    if (!f.ori || f.oriKey !== tpl.key) { const n = f.N * f.N; Object.assign(f, { ori: new Float32Array(n), oriQ: new Float32Array(n), oriR: new Float32Array(n), oriX: new Float32Array(n), phase: new Uint8Array(n), diffuse: new Float32Array(n), oriDone: 0, oriKey: tpl.key, oriPeriod: tpl.period, oriNone: false }); }
+    const n4 = f.n4, n2 = n4 * n4, rD = (this.S.alpha4d * 1.15e-3) / f.lam / f.dk + 1.5; // the bright-field disk radius in pixels (+ the descan interpolation)
+    const diffuseOf = (pat) => { let tot = 0, out = 0; for (let p = 0; p < n2; p++) { const x = (p % n4) - n4 / 2, y = ((p / n4) | 0) - n4 / 2; tot += pat[p]; if (Math.hypot(x, y) > rD) out += pat[p]; } return tot ? out / tot : 0; };
+    if (f.vacDiffuse === undefined) { // the bare probe through empty slices, with the same precession: the vacuum level
+      const G = f.gridN, one = { re: new Float64Array(G * G).fill(1), im: new Float64Array(G * G) };
+      f.vacDiffuse = diffuseOf(KR.fdPatternOnce({ geom: f.geom, slices: Array(f.K).fill(one), prop: f.prop, pr: f.pr, pi: f.pi, ped: f.ped ? { ramps: f.ped.ramps, back: f.ped.back } : undefined }, f.N >> 1, f.N >> 1));
+    }
+    for (let idx = f.oriDone; idx < f.done; idx++) {
+      const pat = f.data.subarray(idx * n2, (idx + 1) * n2), m = KR.matchOrientation(pat, n4, f.dk, tpl);
+      f.ori[idx] = m.omega; f.oriQ[idx] = m.Q; f.oriR[idx] = m.reliability; f.oriX[idx] = m.excess; f.diffuse[idx] = diffuseOf(pat);
+      // phase: crystal where the template matches well and uniquely, else amorphous (scattering outside the
+      // bright-field disk) or vacuum
+      // (crystal also needs some scattering: a probe in a hole still sees faint, clean spots from its tails;
+      // a graphene monolayer scatters ~1.5·10⁻⁴ outside the disk, vacuum ~2·10⁻⁶)
+      const scat = f.diffuse[idx] - f.vacDiffuse;
+      f.phase[idx] = scat > 2e-5 && (m.excess > CRYSTAL_EXCESS || (m.excess > 0.35 && m.reliability > 0.15)) ? 2 : scat > 0.004 ? 1 : 0;
+    }
+    f.oriDone = f.done;
   }
 
   // Fresnel propagator over dz (Å), band-limited to 2/3 of Nyquist to avoid aliasing
@@ -1178,6 +1238,7 @@ export class Sim {
       if (this.step4D(S.paused ? 0 : 7 * Math.min(2, Math.max(0.25, S.speed)))) this.version++;
       if (this.stale.vimg) { this.computeVirtual(0); this.stale.vimg = 0; this.version++; }
       else if (this.fd.done !== prev) this.computeVirtual(this.fd.vDone);
+      if ((S.vdet === 'orient' || S.vdet === 'phase') && this.fd.oriDone !== this.fd.done) { this.computeOrientation(); this.version++; }
       if (S.vdet === 'mptycho' && this.fd.done === this.fd.N * this.fd.N) {
         if (!this.mpty || this.mpty.fd !== this.fd) this.startMSPtycho();
         if (this.stepMSPtycho(S.paused ? 0 : 11 * Math.min(2, Math.max(0.3, S.speed)))) this.version++;

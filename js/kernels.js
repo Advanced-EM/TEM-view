@@ -78,10 +78,41 @@ const corner = (g, i) => Math.round(g.gridN / 2 + (-g.scan / 2 + (i + 0.5) * g.s
 // st: { geom, slices: [{re, im}] (K), prop: {re, im}, pr, pi (probe), data (Float32, N²·n4²), done, wr, wi }
 export function fdInit(job, data) {
   const n2 = job.geom.n4 * job.geom.n4;
-  return { geom: job.geom, slices: job.slices, prop: job.prop, pr: job.pr, pi: job.pi, data, done: job.done ?? 0, wr: new Float64Array(n2), wi: new Float64Array(n2) };
+  return { geom: job.geom, slices: job.slices, prop: job.prop, pr: job.pr, pi: job.pi, data, done: job.done ?? 0, wr: new Float64Array(n2), wi: new Float64Array(n2),
+    ped: job.ped ?? null, acc: job.ped ? new Float64Array(n2) : null };
+}
+// one probe position: multislice through the K slices and the far field, as intensities into out (n4², centred)
+function fdPattern(st, i, j, rr, ri, out, back) {
+  const g = st.geom, { n4, gridN } = g, { pr, pi, wr, wi } = st, h = n4 / 2, left = corner(g, i), top = corner(g, j);
+  if (rr) for (let p = 0; p < n4 * n4; p++) { wr[p] = pr[p] * rr[p] - pi[p] * ri[p]; wi[p] = pr[p] * ri[p] + pi[p] * rr[p]; } // tilted probe
+  else { wr.set(pr); wi.set(pi); }
+  for (let k = 0; k < g.K; k++) {
+    const s = st.slices[k];
+    for (let y = 0; y < n4; y++) {
+      const go = (top + y) * gridN + left, po = y * n4;
+      for (let x = 0; x < n4; x++) {
+        const gg = go + x, p = po + x, a = wr[p], b = wi[p];
+        wr[p] = s.re[gg] * a - s.im[gg] * b;
+        wi[p] = s.re[gg] * b + s.im[gg] * a;
+      }
+    }
+    if (k < g.K - 1) propagate(wr, wi, n4, st.prop, false);
+  }
+  fft2(wr, wi, n4);
+  if (!back) { for (let y = 0; y < n4; y++) for (let x = 0; x < n4; x++) { const p = y * n4 + x; out[((y + h) % n4) * n4 + ((x + h) % n4)] = wr[p] * wr[p] + wi[p] * wi[p]; } return; }
+  // descan: move the pattern back by `back` pixels (bilinear), adding into out
+  const [bx, by] = back;
+  for (let y = 0; y < n4; y++) for (let x = 0; x < n4; x++) {
+    const p = y * n4 + x, v = wr[p] * wr[p] + wi[p] * wi[p];
+    const fx = ((x + h) % n4) + bx, fy = ((y + h) % n4) + by, x0 = Math.floor(fx), y0 = Math.floor(fy);
+    if (x0 < 0 || y0 < 0 || x0 >= n4 - 1 || y0 >= n4 - 1) continue;
+    const ax = fx - x0, ay = fy - y0, b = y0 * n4 + x0;
+    out[b] += v * (1 - ax) * (1 - ay); out[b + 1] += v * ax * (1 - ay); out[b + n4] += v * (1 - ax) * ay; out[b + n4 + 1] += v * ax * ay;
+  }
 }
 // returns the number of positions computed
 export function fdStep(st, budget, now) {
+  if (st.ped) return fdStepPED(st, budget, now);
   const g = st.geom, { N, n4, gridN } = g, { pr, pi, wr, wi, data } = st, h = n4 / 2, t0 = now(), from = st.done;
   while (st.done < N * N && now() - t0 < budget) {
     const idx = st.done, i = idx % N, j = (idx / N) | 0, left = corner(g, i), top = corner(g, j);
@@ -108,6 +139,79 @@ export function fdStep(st, budget, now) {
     st.done++;
   }
   return st.done - from;
+}
+
+// one pattern at scan position (i, j) for a job (with its precession, if any): e.g. the bare probe through
+// empty slices, the vacuum reference for phase classification
+export function fdPatternOnce(job, i, j) {
+  const st = fdInit(job, null), n2 = job.geom.n4 * job.geom.n4, out = new Float64Array(n2);
+  if (!job.ped) { fdPattern(st, i, j, null, null, out, null); return out; }
+  for (let q = 0; q < job.ped.ramps.length; q++) fdPattern(st, i, j, job.ped.ramps[q].re, job.ped.ramps[q].im, out, job.ped.back[q]);
+  for (let p = 0; p < n2; p++) out[p] /= job.ped.ramps.length;
+  return out;
+}
+
+// Scanning precession electron diffraction (SPED): at every probe position the beam is tilted onto a cone
+// (ped.ramps: exp(2πi k_t·r) per azimuth), propagated and descanned (ped.back: the pattern shift that brings it
+// back, −(1 − δ)·k_t in pixels), and the patterns of all azimuths are averaged.
+function fdStepPED(st, budget, now) {
+  const g = st.geom, { N, n4 } = g, { data, acc, ped } = st, n2 = n4 * n4, t0 = now(), from = st.done, M = ped.ramps.length;
+  while (st.done < N * N && now() - t0 < budget) {
+    const idx = st.done, i = idx % N, j = (idx / N) | 0;
+    acc.fill(0);
+    for (let q = 0; q < M; q++) fdPattern(st, i, j, ped.ramps[q].re, ped.ramps[q].im, acc, ped.back[q]);
+    const o = idx * n2;
+    for (let p = 0; p < n2; p++) data[o + p] = acc[p] / M;
+    st.done++;
+  }
+  return st.done - from;
+}
+
+// ---------------------------------------------------------------- orientation and phase mapping (ACOM)
+// Template matching of each pattern against the crystal's zone-axis spot pattern rotated in-plane by ω, after the
+// correlation index of Rauch & Dupuy (2005), with v = √(I/I_max) sampled at the rotated template spots g_ω:
+//   Q(ω) = Σ v(g_ω)·w_g / √(Σ w_g² · M · ⟨v²⟩_annulus)
+// normalized by the pattern's mean energy over the annulus the template covers (not by the sampled values, which
+// would make any uniformly faint sampling score 1): Q rewards template spots that land on bright features.
+// Returns the best ω, Q₁, the reliability 1 − Q₂/Q₁ (Q₂: the best other local maximum of Q(ω)), and the spot
+// excess Q₁/Q_ring − 1 against the pattern's own azimuthal average (rings, i.e. amorphous, give ≈ 0).
+// tpl: { spots: [{gx, gy, w}] (Å⁻¹, zone frame), period (deg), step (deg) }; pattern: n4² centred, dk Å⁻¹/px
+export function matchOrientation(pattern, n4, dk, tpl) {
+  const h = n4 / 2, scores = [], step = tpl.step, period = tpl.period, M = tpl.spots.length;
+  let pmax = 0; for (let p = 0; p < n4 * n4; p++) if (pattern[p] > pmax) pmax = pattern[p];
+  const val = (x, y) => Math.max(0, pattern[y * n4 + x]) / (pmax || 1);
+  const at = (kx, ky) => {
+    const fx = kx / dk + h, fy = ky / dk + h, x0 = Math.floor(fx), y0 = Math.floor(fy);
+    if (x0 < 0 || y0 < 0 || x0 >= n4 - 1 || y0 >= n4 - 1) return 0;
+    const ax = fx - x0, ay = fy - y0;
+    return Math.sqrt((val(x0, y0) * (1 - ax) + val(x0 + 1, y0) * ax) * (1 - ay) + (val(x0, y0 + 1) * (1 - ax) + val(x0 + 1, y0 + 1) * ax) * ay);
+  };
+  // the annulus the template spans, and the azimuthal average there
+  let rmin = Infinity, rmax = 0, t2 = 0;
+  for (const sp of tpl.spots) { const r = Math.hypot(sp.gx, sp.gy) / dk; rmin = Math.min(rmin, r); rmax = Math.max(rmax, r); t2 += sp.w * sp.w; }
+  const nb = h + 2, prof = new Float64Array(nb), cnt = new Float64Array(nb);
+  let aSum = 0, aN = 0;
+  for (let y = 0; y < n4; y++) for (let x = 0; x < n4; x++) {
+    const r = Math.hypot(x - h, y - h), v = val(x, y), ri = Math.round(r);
+    if (ri < nb) { prof[ri] += v; cnt[ri]++; }
+    if (r >= rmin - 1.5 && r <= rmax + 1.5) { aSum += v; aN++; }
+  }
+  const norm = Math.sqrt(t2 * M * (aN ? aSum / aN : 0)) || 1;
+  for (let r = 0; r < nb; r++) prof[r] = cnt[r] ? Math.sqrt(prof[r] / cnt[r]) : 0;
+  for (let w = 0; w < period; w += step) {
+    const c = Math.cos((w * Math.PI) / 180), s = Math.sin((w * Math.PI) / 180);
+    let pt = 0;
+    for (const sp of tpl.spots) pt += at(sp.gx * c - sp.gy * s, sp.gx * s + sp.gy * c) * sp.w;
+    scores.push(pt / norm);
+  }
+  let b1 = 0; for (let k = 1; k < scores.length; k++) if (scores[k] > scores[b1]) b1 = k;
+  const L = scores.length, at2 = (k) => scores[(k + L) % L];
+  let q2 = 0;
+  for (let k = 0; k < L; k++) if (k !== b1 && at2(k) >= at2(k - 1) && at2(k) >= at2(k + 1) && Math.min(Math.abs(k - b1), L - Math.abs(k - b1)) * step >= 3) q2 = Math.max(q2, scores[k]);
+  let rt = 0;
+  for (const sp of tpl.spots) { const r = Math.hypot(sp.gx, sp.gy) / dk, r0 = Math.floor(r); rt += (r0 + 1 < nb ? prof[r0] * (r0 + 1 - r) + prof[r0 + 1] * (r - r0) : 0) * sp.w; }
+  const q1 = scores[b1], qRing = rt / norm;
+  return { omega: b1 * step, Q: q1, reliability: q1 > 0 ? 1 - q2 / q1 : 0, qRing, excess: qRing > 0 ? q1 / qRing - 1 : 0 };
 }
 
 // ---------------------------------------------------------------- ePIE with a known probe
