@@ -1,6 +1,6 @@
 // ComputeBackend: one interface for the heavy loops, whatever runs them.
 //
-//   const task = backend.run(job, sink)   job: { kind: 'fd-scan' | 'epie' | 'msepie' | 'tomo', ... }; sink: where results go
+//   const task = backend.run(job, sink)   job: { kind: 'fd-scan' | 'epie' | 'msepie' | 'tomo' | 'spa', ... }; sink: where results go
 //   task.pump(budgetMs)                   called once per frame by Sim.update: computes (inline) or applies
 //                                         what the worker has sent (worker); budget 0 pauses
 //   task.done / task.finished             progress
@@ -16,6 +16,7 @@
 // Tier 2/3 backends (a lab GPU worker, an HPC bundle) will implement the same run(job) (M11, M12).
 import * as K from './kernels.js';
 import * as TOMO from './tomo.js';
+import * as SPA from './spa.js';
 
 const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
@@ -27,6 +28,7 @@ class InlineTask {
     else if (job.kind === 'epie') K.epieInit(sink.out, job.geom, job.pr, job.pi, job.seed);
     else if (job.kind === 'msepie') K.msInit(sink.out, job.geom, job.seed);
     else if (job.kind === 'tomo') tomoInit(this, job, sink.out);
+    else if (job.kind === 'spa') { this.st = SPA.spaInit(job.params); Object.assign(sink.out, SPA.spaResult(this.st)); }
     else throw new Error(`unknown job kind ${job.kind}`);
   }
   pump(budget) {
@@ -34,6 +36,7 @@ class InlineTask {
     const j = this.job, s = this.sink;
     if (j.kind === 'fd-scan') { const n = K.fdStep(this.st, budget, now); this.done = this.st.done; this.finished = this.done >= j.geom.N * j.geom.N; return n; }
     if (j.kind === 'tomo') { this.finished = !tomoStep(this, j, s.out, budget); return 1; }
+    if (j.kind === 'spa') { const before = this.st.stage; this.finished = !SPA.spaStep(this.st, budget, now); Object.assign(s.out, SPA.spaResult(this.st, { light: this.st.stage === before && !this.finished })); return 1; }
     const more = j.kind === 'epie' ? K.epieStep(s.out, j.geom, j.pr, j.pi, s.data, budget, now) : K.msStep(s.out, j.geom, j.pr, j.pi, j.prop, s.data, budget, now);
     this.finished = s.out.iter >= s.out.maxIter || !more;
     return 1;
@@ -66,8 +69,9 @@ class WorkerTask {
     if (job.kind === 'epie') K.epieInit(sink.out, job.geom, job.pr, job.pi, job.seed); // the display sees a start state at once
     if (job.kind === 'msepie') K.msInit(sink.out, job.geom, job.seed);
     if (job.kind === 'tomo') Object.assign(sink.out, { method: job.method, iter: 0, iterations: job.method === 'sirt' ? job.iterations : 1, resid: [], x: null });
+    if (job.kind === 'spa') Object.assign(sink.out, { stage: 'setup', progress: 0, made: 0 });
     const msg = { op: 'run', id: this.id, job: { ...job } };
-    if (job.kind !== 'fd-scan' && job.kind !== 'tomo') { msg.job.dataset = job.dataset; if (!backend.has(job.dataset)) msg.job.data = sink.data; } // the data are in the worker already
+    if (job.kind !== 'fd-scan' && job.kind !== 'tomo' && job.kind !== 'spa') { msg.job.dataset = job.dataset; if (!backend.has(job.dataset)) msg.job.data = sink.data; } // the data are in the worker already
     backend.post(msg);
     backend.tasks.set(this.id, this);
   }
@@ -82,6 +86,7 @@ class WorkerTask {
       else if (m.type === 'epie') { const T = this.sink.out; T.re.set(m.re); T.im.set(m.im); Object.assign(T, { iter: m.iter, k: m.k, errHist: m.errHist, err: m.err }); n++; }
       else if (m.type === 'msepie') { const T = this.sink.out; m.O.forEach((o, k) => { T.O[k].re.set(o.re); T.O[k].im.set(o.im); }); Object.assign(T, { iter: m.iter, k: m.k, errHist: m.errHist }); n++; }
       else if (m.type === 'tomo') { Object.assign(this.sink.out, { x: m.x, iter: m.iter, resid: m.resid, device: m.device }); n++; }
+      else if (m.type === 'spa') { Object.assign(this.sink.out, m.snap); n++; }
       else if (m.type === 'gpu-error') { this.gpuError = m.message; console.warn(`GPU: ${m.message}; continuing in JS`); }
       else if (m.type === 'error') { this.error = m.message; this.finished = true; }
       if (m.final) { this.finished = true; this.b.tasks.delete(this.id); }

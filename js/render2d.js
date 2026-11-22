@@ -181,7 +181,7 @@ export function draw(sim, S, mainCv, secCv, hover) {
   const m = fit(mainCv), s = fit(secCv);
   m.ctx.fillStyle = C.bg; m.ctx.fillRect(0, 0, m.W, m.H);
   s.ctx.fillStyle = C.bg; s.ctx.fillRect(0, 0, s.W, s.H);
-  const fn = { tomo: drawTomo, ed3d: drawED3D, tem: drawTEM, stem: drawSTEM, diff: drawDiff, '4d': draw4D, eds: drawEDS, eels: drawEELS, ronch: drawRonch, cbed: drawCBED, oah: drawOAH, ilh: drawILH, ltem: drawLTEM, lstem: drawLSTEM }[S.mode];
+  const fn = { spa: drawSPA, tomo: drawTomo, ed3d: drawED3D, tem: drawTEM, stem: drawSTEM, diff: drawDiff, '4d': draw4D, eds: drawEDS, eels: drawEELS, ronch: drawRonch, cbed: drawCBED, oah: drawOAH, ilh: drawILH, ltem: drawLTEM, lstem: drawLSTEM }[S.mode];
   fn(sim, S, m, s, performance.now() / 1000);
   cryoLabel(m.ctx, sim, S, m.W, m.H, m.dpr);
   if (sim.single?.hits && sim.single.count && !['4d', 'eds', 'eels', 'ilh', 'ltem', 'lstem'].includes(S.mode)) {
@@ -416,6 +416,121 @@ function drawED3D(sim, S, m, s) {
 
 // electron tomography: the tilt series or a slice of the reconstruction (main); across the beam, the phantom
 // beside the reconstruction and the Fourier plane each tilt fills (secondary)
+// single-particle cryo-EM: the micrograph with picks, the CTF fit, 2D classes or the 3D map; the FSC and the
+// angular distribution below
+function drawSPA(sim, S, m, s) {
+  const A = sim.spa, o = A?.out, { ctx, W, H, dpr } = m;
+  if (!o?.mic) { label(ctx, 'preparing the grid…', W / 2, H / 2, dpr, { color: C.muted, align: 'center' }); return; }
+  const mic = o.mic, N = o.N, side = Math.min(W, H), x0 = (W - side) / 2, y0 = (H - side) / 2;
+  let what = '';
+  if (S.spaView === 'ctf' && mic.ps) {
+    // left: the measured power spectrum (log, centred); right: the fitted |T|² model; the radial profile below
+    // the radial background (as CTF programs show it) is removed, so the Thon rings stand out
+    const n = N, h = n / 2, img = new Float32Array(n * n), fitm = mic.fit, lg = new Float64Array(h + 1), cnt = new Float64Array(h + 1);
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) { const r = Math.round(Math.hypot(x - h, y - h)); if (r <= h) { lg[r] += Math.log(mic.ps[((x + h) % n) + n * ((y + h) % n)] + 1e-30); cnt[r]++; } }
+    const bg = Array.from(lg, (v, r) => (cnt[r] ? v / cnt[r] : 0) - (fitm?.profile[r] ?? 0));
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) { const r = Math.min(h, Math.round(Math.hypot(x - h, y - h))); img[x + n * y] = x < h ? Math.log(mic.ps[((x + h) % n) + n * ((y + h) % n)] + 1e-30) - bg[r] : 0; }
+    const [plo, phi] = range(img.filter((_, i) => i % n < h), 0.05, 0.98);
+    for (let y = 0; y < n; y++) for (let x = h; x < n; x++) { const r = Math.round(Math.hypot(x - h, y - h)); img[x + n * y] = fitm && r < h && r > 1 ? plo + (phi - plo) * (fitm.model[r] / 4) : plo; }
+    paint(ctx, img, n, n, [x0, y0, side, side], { lo: plo, hi: phi, lut: real(S) ? LUT.gray : LUT.ice });
+    ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.beginPath(); ctx.moveTo(x0 + side / 2, y0); ctx.lineTo(x0 + side / 2, y0 + side); ctx.stroke();
+    label(ctx, 'measured', x0 + 8 * dpr, y0 + side - 12 * dpr, dpr, { color: C.muted, size: 8 });
+    label(ctx, 'fit |T|²', x0 + side - 52 * dpr, y0 + side - 12 * dpr, dpr, { color: C.muted, size: 8 });
+    if (fitm) { // radial profile (background removed) and the model, over the fitted range
+      const gx = x0 + 10 * dpr, gw = side - 20 * dpr, gy = y0 + side * 0.66, gh = side * 0.18, [lo, hi] = fitm.range, pr = fitm.profile.slice(lo, hi + 1), pmax = Math.max(...pr.map(Math.abs)) || 1;
+      ctx.fillStyle = 'rgba(5,7,10,0.7)'; ctx.fillRect(gx, gy, gw, gh);
+      const X = (r) => gx + ((r - lo) / (hi - lo)) * gw;
+      ctx.strokeStyle = C.warm; ctx.lineWidth = 1.2 * dpr; ctx.beginPath(); for (let r = lo; r <= hi; r++) { const yv = gy + gh / 2 - (fitm.model[r] / 4 - 0.5) * gh * 0.8; r === lo ? ctx.moveTo(X(r), yv) : ctx.lineTo(X(r), yv); } ctx.stroke();
+      ctx.strokeStyle = C.accent; ctx.beginPath(); for (let r = lo; r <= hi; r++) { const yv = gy + gh / 2 - (fitm.profile[r] / pmax) * gh * 0.45; r === lo ? ctx.moveTo(X(r), yv) : ctx.lineTo(X(r), yv); } ctx.stroke();
+      label(ctx, `Thon rings · ${(N * o.px / lo).toFixed(0)}–${(N * o.px / hi).toFixed(0)} Å · fit score ${fitm.score.toFixed(2)}`, gx + 4 * dpr, gy + 10 * dpr, dpr, { color: C.muted, size: 8 });
+    }
+    what = `power spectrum · underfocus ${(-mic.dfTrue / 1e4).toFixed(2)} µm, fitted ${(-mic.dfEst / 1e4).toFixed(2)} µm`;
+  } else if (S.spaView === 'classes') {
+    const g = (o.gallery ?? []).map((c, k) => ({ ...c, k })).filter((c) => c.n).sort((a, b) => b.n - a.n), strip = o.strip ?? [];
+    const cols = 6, gap = 4 * dpr, tw = (side - (cols + 1) * gap) / cols;
+    strip.slice(0, cols).forEach((p, i) => { const [lo, hi] = range(p.img, 0.01, 0.99); paint(ctx, p.img, N, N, [x0 + gap + i * (tw + gap), y0 + gap, tw, tw], { lo, hi }); });
+    if (strip.length) label(ctx, 'raw particles', x0 + gap, y0 + gap + tw + 10 * dpr, dpr, { color: C.muted, size: 8 });
+    const top = y0 + 2 * gap + tw + 18 * dpr;
+    g.slice(0, cols * 3).forEach((c, i) => {
+      const cx = x0 + gap + (i % cols) * (tw + gap), cy = top + Math.floor(i / cols) * (tw + gap);
+      const [lo, hi] = range(c.img, 0.01, 0.995); paint(ctx, c.img, N, N, [cx, cy, tw, tw], { lo, hi });
+      label(ctx, `${c.n}`, cx + 3 * dpr, cy + 9 * dpr, dpr, { color: C.accent, size: 7 });
+    });
+    if (!g.length) label(ctx, A.full ? 'classifying…' : 'press Collect: classes come from the first particles', W / 2, top + 40 * dpr, dpr, { color: C.muted, align: 'center' });
+    what = g.length ? `${g.length} classes by viewing direction (phase-flipped, aligned) · particle count per class` : '2D classes';
+  } else if (S.spaView === 'map') {
+    const truth = o.map, vol = o.mapAvg ?? null, c = N >> 1, tile = (side - 12 * dpr) / 2;
+    const sl = (v) => { const os = TOMO.orthoslices(v, N, c, c, c); return [os.xy, os.xz]; };
+    const panes = [[vol, 'reconstruction'], [truth, 'the particle (truth)']];
+    panes.forEach(([v, name], r) => {
+      if (!v) { ctx.fillStyle = '#06080b'; ctx.fillRect(x0, y0 + r * (tile + 12 * dpr), side, tile); label(ctx, `${name}: press Collect`, x0 + 8 * dpr, y0 + r * (tile + 12 * dpr) + 14 * dpr, dpr, { color: C.muted, size: 8 }); return; }
+      sl(v).forEach((a, k) => { const [lo, hi] = range(a, 0.01, 0.998); paint(ctx, a, N, N, [x0 + k * (tile + 12 * dpr), y0 + r * (tile + 12 * dpr), tile, tile], { lo, hi, lut: real(S) ? LUT.gray : LUT.magma }); });
+      label(ctx, `${name} · XY`, x0 + 6 * dpr, y0 + r * (tile + 12 * dpr) + 12 * dpr, dpr, { color: C.muted, size: 8 });
+      label(ctx, 'XZ (z: the preferred axis)', x0 + tile + 18 * dpr, y0 + r * (tile + 12 * dpr) + 12 * dpr, dpr, { color: C.muted, size: 8 });
+    });
+    what = vol ? `central sections · map correlation with the particle ${o.mapCorr.toFixed(2)}` : 'central sections';
+  } else {
+    // the micrograph (dark protein at underfocus), picks: found (blue), false (orange), missed (dashed)
+    // educational view: smoothed over ~2 pixels so the particles stand out; realistic: the raw shot noise
+    const M = mic.M;
+    if (!real(S) && mic._blur?.src !== mic.img) {
+      const a = Float32Array.from(mic.img), b = new Float32Array(a.length), r = 2;
+      for (let pass = 0; pass < 2; pass++) for (let y = 0; y < M; y++) for (let x = 0; x < M; x++) { let sum = 0, n = 0; for (let d = -r; d <= r; d++) { const xx = pass ? x : x + d, yy = pass ? y + d : y; if (xx >= 0 && yy >= 0 && xx < M && yy < M) { sum += (pass ? b : a)[xx + M * yy]; n++; } } (pass ? a : b)[x + M * y] = sum / n; }
+      mic._blur = { src: mic.img, img: a };
+    }
+    const shown = real(S) ? mic.img : mic._blur.img, [lo, hi] = range(shown, 0.005, 0.995);
+    paint(ctx, shown, M, M, [x0, y0, side, side], { lo, hi });
+    const sc = side / M, R = ((A.o.sample === 'bgal' ? 85 : 60) / o.px) * sc;
+    const found = new Set((mic.picks ?? []).filter((q) => q.hit >= 0).map((q) => q.hit));
+    ctx.lineWidth = 1.2 * dpr;
+    if (mic.picks) {
+      mic.parts.forEach((q, i) => { if (found.has(i)) return; ctx.strokeStyle = 'rgba(200,210,220,0.45)'; ctx.setLineDash([3 * dpr, 3 * dpr]); ctx.beginPath(); ctx.arc(x0 + q.x * sc, y0 + q.y * sc, R, 0, 2 * Math.PI); ctx.stroke(); });
+      ctx.setLineDash([]);
+      for (const q of mic.picks) { ctx.strokeStyle = q.hit >= 0 ? C.accent : C.warm; ctx.beginPath(); ctx.arc(x0 + q.x * sc, y0 + q.y * sc, R, 0, 2 * Math.PI); ctx.stroke(); }
+    }
+    const nm = (M * o.px) / 10;
+    ctx.fillStyle = C.text; ctx.fillRect(x0 + side - 12 * dpr - (50 / nm) * side, y0 + side - 14 * dpr, (50 / nm) * side, 3 * dpr);
+    label(ctx, '50 nm', x0 + side - 12 * dpr - (50 / nm) * side, y0 + side - 28 * dpr, dpr, { color: C.text, size: 8 });
+    what = mic.picks ? `${mic.picks.length} picks · ${Math.round(100 * mic.precision)} % real · ${Math.round(100 * mic.recall)} % found · dashed: missed` : 'micrograph';
+  }
+  const p = A.o;
+  label(ctx, what, 10 * dpr, 16 * dpr, dpr, { color: C.accent, size: 9 });
+  label(ctx, `${p.sample === 'bgal' ? 'β-galactosidase' : 'apoferritin'} in ${(p.ice / 10).toFixed(0)} nm ice · ${p.kV} kV · ${p.dose} e⁻/Å² · ${p.zpp ? 'Zernike plate' : `${p.df.toFixed(2)} µm underfocus`} · ${o.px} Å/px`, 10 * dpr, 34 * dpr, dpr, { color: C.muted, size: 9 });
+  if (A.full && !A.done) label(ctx, `collecting ${o.made?.toLocaleString() ?? 0}/${o.count?.toLocaleString()} particles · ${o.stage}`, 10 * dpr, H - 14 * dpr, dpr, { color: C.warm, size: 9 });
+
+  // ---- secondary: FSC (global, along and across the preferred axis) and the angular distribution
+  // side by side in a wide panel; in a narrow one the FSC on top, the angular distribution and readouts below
+  const q = s.ctx, dq = s.dpr, gap = 12 * dq, top = 24 * dq, narrow = s.W < 1.3 * s.H;
+  const gw = narrow ? s.W - gap : s.W * 0.56, gh = narrow ? s.H * 0.5 : s.H - top - 46 * dq, gx = gap + 22 * dq;
+  q.fillStyle = '#06080b'; q.fillRect(gx, top, gw - gx, gh);
+  const kmax = 1 / (2 * o.px), X = (k) => gx + (k / kmax) * (gw - gx), Y = (v) => top + gh - Math.max(-0.1, Math.min(1, v)) * gh * 0.9 - gh * 0.05;
+  q.strokeStyle = C.grid; q.beginPath(); q.moveTo(gx, Y(0)); q.lineTo(gw, Y(0)); q.stroke();
+  q.strokeStyle = 'rgba(255,255,255,0.35)'; q.setLineDash([4 * dq, 4 * dq]); q.beginPath(); q.moveTo(gx, Y(0.143)); q.lineTo(gw, Y(0.143)); q.stroke(); q.setLineDash([]);
+  label(q, '0.143', gx + 2 * dq, Y(0.143) - 8 * dq, dq, { color: C.muted, size: 7 });
+  for (const [f, col, w] of [[o.fscXY, C.dim, 1], [o.fscZ, C.warm, 1], [o.fsc, C.accent, 1.8]]) {
+    if (!f) continue;
+    q.strokeStyle = col; q.lineWidth = w * dq; q.beginPath();
+    f.curve.forEach((c, i) => (i ? q.lineTo(X(c.k), Y(c.fsc)) : q.moveTo(X(c.k), Y(c.fsc)))); q.stroke();
+  }
+  q.lineWidth = 1 * dq;
+  for (const r of [20, 10, 6, 5].filter((r) => 1 / r < kmax)) label(q, `${r} Å`, X(1 / r) - 8 * dq, top + gh + 10 * dq, dq, { color: C.muted, size: 7, bg: 'rgba(0,0,0,0)' });
+  label(q, o.fsc ? `FSC · ${o.fsc.res.toFixed(1)} Å` : 'FSC (after Collect)', gx, top - 10 * dq, dq, { color: C.accent, size: 8 });
+  if (o.fsc) label(q, `along z ${o.fscZ.res.toFixed(1)} · across ${o.fscXY.res.toFixed(1)} Å`, narrow ? gw : gx + 96 * dq, narrow ? top + 8 * dq : top - 10 * dq, dq, { color: C.warm, size: 8, align: narrow ? 'right' : 'left' });
+  // angular distribution: azimuth φ (x) against cos θ (y; top views at the top and bottom)
+  const ax = narrow ? gx : gw + gap, ay = narrow ? top + gh + 34 * dq : top, aw = narrow ? (s.W - gx) * 0.5 : s.W - ax - gap, ah = Math.min(narrow ? s.H - ay - 10 * dq : gh, aw / 2), bins = [36, 18], hist = new Float32Array(bins[0] * bins[1]), v = o.views ?? [];
+  for (let i = 0; i + 2 < v.length; i += 3) { const ph = (Math.atan2(v[i + 1], v[i]) + Math.PI) / (2 * Math.PI), ct = (v[i + 2] + 1) / 2; hist[Math.min(bins[0] - 1, Math.floor(ph * bins[0])) + bins[0] * Math.min(bins[1] - 1, Math.floor((1 - ct) * bins[1]))]++; }
+  let hm = 0; for (const h of hist) hm = Math.max(hm, h);
+  paint(q, hist, bins[0], bins[1], [ax, ay, aw, ah], { lo: 0, hi: hm || 1, lut: LUT.magma });
+  label(q, `views · ${(v.length / 3).toLocaleString()}`, ax, ay - 10 * dq, dq, { color: C.muted, size: 8 });
+  label(q, 'top', ax + aw + 2 * dq, ay + 6 * dq, dq, { color: C.muted, size: 7, bg: 'rgba(0,0,0,0)' });
+  label(q, 'side', ax + aw + 2 * dq, ay + ah / 2, dq, { color: C.muted, size: 7, bg: 'rgba(0,0,0,0)' });
+  const lines = [];
+  if (o.fsc) lines.push([`${o.accepted.toLocaleString()} kept · ${o.rejected.junk + o.rejected.good} rejected`, C.text], [`map vs particle ${o.mapCorr.toFixed(2)}`, C.muted]);
+  if (o.ctfErr != null) lines.push([`defocus fits ±${o.ctfErr.toFixed(0)} Å rms (${o.micrographs} micrographs)`, C.muted]);
+  if (A.ms) lines.push([`processed in ${(A.ms / 1000).toFixed(1)} s`, C.muted]);
+  lines.forEach(([t, col], i) => label(q, t, narrow ? ax + aw + 34 * dq : ax, narrow ? ay + i * 14 * dq : ay + ah + 18 * dq + i * 14 * dq, dq, { color: col, size: 8 }));
+}
+
 function drawTomo(sim, S, m, s, t) {
   const T = sim.tomo, { ctx, W, H, dpr } = m;
   if (!T) return;

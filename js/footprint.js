@@ -20,6 +20,8 @@
 //   compression       sparse counting data (< 1 e⁻ per pixel per frame) 3–10×, dense data 1.2–2×
 //   tomography        a tilt series of scans: tilts·N²·B; volume N³ float32 (N = scan); WBP ≈ tilts·N³·4 flop,
 //                     SIRT ≈ iterations·tilts·N³·8 (a projection and a back-projection per iteration)
+//   SPA               movies: N_mic·frames·det²·B (N_mic = particles / per micrograph); stack N_part·box²·4; two half
+//                     volumes (2·box)³·8 for Fourier insertion; ~4 s per micrograph for exposure and stage moves
 //   badge (first match)  browser: working set ≤ 512 MB and processing ≤ 60 s (with WebGPU, ctx.webgpu: ≤ 1.5 GB at
 //                     the WebGPU rate); local GPU: ≤ the worker's memory and ≤ 2 h; HPC otherwise
 import { beamThickness } from './structure.js';
@@ -48,6 +50,7 @@ const DEFAULTS = {
   ilh: { kind: 'camera', det: 4096, bits: 16, exposure_s: 1, frames: 10 },
   ltem: { kind: 'camera', det: 4096, bits: 16, exposure_s: 1, frames: 1 },
   ed3d: { kind: 'camera', det: 512, bits: 16, exposure_s: 0.25, frames: 160 }, // a rotation series (frames from the 3D ED settings)
+  spa: { kind: 'spa', det: 4096, bits: 8, exposure_s: 4, frames: 40, particles: 2000, perMic: 40, box: 256 }, // dose-fractionated movies of a grid (particles from the SPA settings)
   tomo: { kind: 'tilt', scan: 1024, bits: 16, dwell_us: 10, flyback_us: 100, current_pA: 50, tilts: 71, recon: 'wbp', iters: 20 }, // a HAADF tilt series (tilts, method from the settings)
   lstem: { kind: 'scan', scan: 256, bits: 32, dwell_us: 20, flyback_us: 100, detectors: 4, current_pA: 5 },
 };
@@ -109,7 +112,17 @@ export function footprint(technique, plan, ctx) {
   let raw, eventsPerPixelFrame = Infinity, procFlops = 0, procBytes = 0;
   const parts = [];
 
-  if (p.kind === 'camera') {
+  if (p.kind === 'spa') {
+    const n = p.det, img = n * n, nMic = Math.ceil(p.particles / p.perMic), V = (2 * p.box) ** 3;
+    raw = nMic * p.frames * img * B;
+    f.shape = [nMic, p.frames, n, n];
+    f.time = { acquire_s: nMic * (p.exposure_s + 4) };
+    f.dose = { total: D, per_image: D / p.frames, rate: D / p.exposure_s, pixel_A: field / n };
+    eventsPerPixelFrame = (D / p.frames) * (field / n) ** 2;
+    parts.push(['one movie as float32', p.frames * img * 4], ['particle stack (float32)', p.particles * p.box * p.box * 4], ['two half volumes (complex, padded ×2)', 2 * V * 8]);
+    procFlops = nMic * p.frames * fftFlops(n) + p.particles * 4 * fftFlops(2 * p.box) + 2 * 5 * V * log2(V);
+    f.micrographs = nMic;
+  } else if (p.kind === 'camera') {
     const n = p.det, img = n * n;
     raw = p.frames * img * B;
     f.shape = p.frames > 1 ? [p.frames, n, n] : [n, n];
@@ -222,6 +235,10 @@ export function footprintFor(S, sim, extra = {}) {
   if (S.mode === 'ed3d') { // the series: frames, exposure per frame and the dose per frame from the 3D ED settings
     const p = sim.ed?.series?.plan;
     if (p) { Object.assign(plan, { frames: p.frames, exposure_s: +p.exposure.toFixed(4) }); return footprint('ed3d', plan, contextFor(S, sim, { dose: p.dosePerFrame, field_A: 2000, ...extra })); }
+  }
+  if (S.mode === 'spa') { // the particles and the dose per micrograph from the SPA settings
+    Object.assign(plan, { particles: S.spaN });
+    return footprint('spa', plan, contextFor(S, sim, { dose: S.spaDose, field_A: 4096 * 1.2, Dc: null, ...extra }));
   }
   if (S.mode === 'tomo') { // the series: number of tilts, method and dose per projection from the tomography settings
     const F = sim.tomo?.angles?.length ?? Math.floor(S.tomoMax / S.tomoStep) * 2 + 1;

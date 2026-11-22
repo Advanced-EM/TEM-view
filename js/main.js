@@ -12,6 +12,7 @@ import { toSession, readSession, isSession } from './session.js';
 import { footprintFor, fmtBytes, fmtTime, PLAN_FIELDS, PLAN_KINDS } from './footprint.js';
 import { createSpecimenUI } from './specui.js';
 import { defaultBackend } from './compute.js';
+import { SAMPLES } from './spa.js';
 import { STANDARD_ZONES, hasZones, asBuilt, zoneLabel } from './zone.js';
 import * as ED from './ed3d.js';
 import * as TOMO from './tomo.js';
@@ -58,6 +59,35 @@ const sim = new Sim(S);
 // same cache-busting stamp as this module. Without workers they run on the main thread as before.
 sim.setCompute(defaultBackend(new URL(`./compute-worker.js${new URL(import.meta.url).search}`, import.meta.url)));
 sim.compute.onGpu = () => refreshControls(); // the worker reports whether it has WebGPU (gpu.js) a moment after start
+// the SPA status and what the numbers mean
+function spaNote() {
+  const A = sim.spa, o = A?.out;
+  if (!o) return '';
+  const m = o.mic, parts = [];
+  const smp = SAMPLES[A.o.sample];
+  parts.push(`${smp.name} (${smp.kDa} kDa, ${smp.size}, ${smp.symmetry} symmetry): used for ${smp.use}. The thickness setting is its ice.`);
+  if (sim.temp() > 150) parts.push(`The grid is at ${Math.round(sim.temp())} K: proteins lose their fine detail about five times faster than at liquid-nitrogen temperature (and real ice would sublime). Choose the liquid-N₂ cryo holder.`);
+  if (m?.dfEst != null) parts.push(`Micrograph: underfocus ${(-m.dfTrue / 1e4).toFixed(2)} µm, fitted ${(-m.dfEst / 1e4).toFixed(2)} µm from the Thon rings; ${m.picks?.length ?? 0} picks, ${Math.round(100 * (m.precision ?? 0))} % real, ${Math.round(100 * (m.recall ?? 0))} % of the particles found.`);
+  if (A.full && !A.done) parts.push(`Collecting: ${o.made?.toLocaleString() ?? 0} of ${o.count?.toLocaleString()} particles (${o.micrographs ?? 0} micrographs)${o.accepted ? `, ${o.accepted.toLocaleString()} kept after 2D classification` : ''}…`);
+  if (o.fsc) parts.push(`${o.accepted.toLocaleString()} particles kept (${o.rejected.junk + o.rejected.good} rejected in 2D classification${o.junkMade ? `, ${o.rejected.junk} of ${o.junkMade} false picks` : ''}). Resolution ${o.fsc.res.toFixed(1)} Å (FSC = 0.143 between the half maps); along the preferred axis ${o.fscZ.res.toFixed(1)} Å, across it ${o.fscXY.res.toFixed(1)} Å.${S.spaPref > 0.3 ? ' With most particles lying flat the global FSC can look better while the map is stretched along the beam: the directional FSC shows it.' : ''}`);
+  else if (!A.full) parts.push('Press Collect to record the particles and reconstruct.');
+  parts.push('Orientations come from the simulation plus the alignment error (no projection-matching search).');
+  return parts.join(' ');
+}
+// the SPA result as MRC files (RELION, cryoSPARC, ChimeraX): the map, the two half maps, the class averages, the FSC
+function exportSPA() {
+  const o = sim.spa?.out;
+  if (!o?.maps) { $('#change').hidden = false; $('#change').innerHTML = '<small>Nothing to export</small><p>Collect and process the particles first.</p>'; return; }
+  const N = o.N, files = [];
+  files.push({ name: 'map.mrc', bytes: TOMO.mrc(o.mapAvg, N, N, N, o.px, { label: 'TEM-view SPA map' }) });
+  o.maps.forEach((m, i) => files.push({ name: `half${i + 1}.mrc`, bytes: TOMO.mrc(m, N, N, N, o.px, { label: `TEM-view SPA half map ${i + 1}` }) }));
+  if (o.gallery) { const g = o.gallery, st = new Float32Array(g.length * N * N); g.forEach((c, k) => st.set(c.img, k * N * N)); files.push({ name: 'class_averages.mrcs', bytes: TOMO.mrc(st, N, N, g.length, o.px, { stack: true, label: 'TEM-view 2D classes' }) }); }
+  const fscTxt = 'k_per_A\tresolution_A\tfsc\tfsc_along_z\tfsc_across_z\n' + o.fsc.curve.map((c, i) => `${c.k.toFixed(5)}\t${(1 / c.k).toFixed(2)}\t${c.fsc.toFixed(4)}\t${o.fscZ.curve[i].fsc.toFixed(4)}\t${o.fscXY.curve[i].fsc.toFixed(4)}`).join('\n') + '\n';
+  files.push({ name: 'fsc.txt', bytes: new TextEncoder().encode(fscTxt) });
+  const p = sim.spa.o, readme = `TEM-view simulated single-particle cryo-EM (${SAMPLES[p.sample].name}, ${SAMPLES[p.sample].kDa} kDa; no symmetry imposed)\n${o.accepted} particles kept of ${o.made} (+${o.junkMade} false picks), ${p.dose} e⁻/Å² per micrograph, underfocus ${p.df} µm${p.zpp ? ', Zernike phase plate' : ''}, ${p.kV} kV\nbox ${N} px of ${o.px} Å; preferred orientation ${Math.round(p.pref * 100)} %, alignment error ${p.angErr}° rms\nresolution ${o.fsc.res.toFixed(2)} Å at FSC 0.143 (masked); along z ${o.fscZ.res.toFixed(2)} Å, across ${o.fscXY.res.toFixed(2)} Å\nOrientations come from the simulation plus the alignment error. Simulated data for teaching and pipeline tests.\n`;
+  files.push({ name: 'README.txt', bytes: new TextEncoder().encode(readme) });
+  download(new Blob([zip(files)], { type: 'application/zip' }), `tem-view-spa-${stamp()}.zip`);
+}
 // where the heavy loops of this mode ran (M8: WebGPU where the browser has it, else the JS kernels in the worker)
 function computeNote(mode) {
   const g = sim.compute?.gpu;
@@ -151,7 +181,7 @@ const logMap = (min, max) => ({ to: (v) => (Math.log(v / min) / Math.log(max / m
 const NOT_RONCH = 'tem stem 4d diff eds eels cbed oah ilh';
 const TILTABLE = 'tem stem 4d diff eds eels cbed oah ilh ltem lstem';
 // the atomic-scale specimens and the objective lens: not in the Lorentz modes (objective off, magnetic specimens)
-const NOT_LOR = 'tem stem 4d diff cbed eds eels ronch oah ilh ed3d tomo';
+const NOT_LOR = 'tem stem 4d diff cbed eds eels ronch oah ilh ed3d tomo spa';
 const LOR = 'ltem lstem';
 // acquisition plan (footprint.js): the current technique's plan, and the chip options for one field
 const curPlan = () => { try { return footprintFor(S, sim).plan; } catch { return {}; } };
@@ -290,6 +320,18 @@ const CONTROLS = [
   { chips: 'edSlice', label: 'Reciprocal-space layer', small: true, modes: 'ed3d', opts: [['hk0', 'hk0'], ['h0l', 'h0l'], ['0kl', '0kl']] },
   { slider: 'edLayer', label: 'Layer index', min: -3, max: 3, step: 1, fmt: (v) => `${v}`, modes: 'ed3d' },
   { pFn: () => { const e = sim.ed; if (!e || e.none) return 'Choose a crystal (SrTiO₃, Au, Si or a perovskite), or load any structure as XYZ or CIF: its lattice is found from the atoms. Set the orientation with the zone axis, or with Align to zone in the structure preview.'; if (e.diffuse) return `${e.series.plan.frames} frames over ${e.series.plan.range}°. No lattice was found in this structure, so the frames show its diffuse scattering (a molecule or amorphous material): there are no reflections to index.`; if (e.lattice) return `Lattice found from the atoms: ${e.name.split('· ')[1]} (${e.lattice.basis.length} atoms per cell, ${e.refl.length} reflections to ${(1 / e.gMax).toFixed(2)} Å). Indices refer to this primitive cell; equivalents merged as Friedel pairs. ${e.series.plan.frames} frames of ${e.series.plan.wedge.toFixed(2)}°: ${(100 * e.full.completeness).toFixed(1)} % complete over ${e.series.plan.range}°.`; const p = e.series.plan, f = e.full; return `${p.frames} frames of ${p.wedge.toFixed(2)}° over ${p.range}°: ${p.time_s.toFixed(0)} s, ${p.totalDose.toPrecision(3)} e⁻/Å² in total${Number.isFinite(e.o.Dc) ? ` (critical dose ≈ ${e.o.Dc.toFixed(0)} e⁻/Å²)` : ''}. Detector edge ${(1 / e.gMax).toFixed(2)} Å. Full series: ${(100 * f.completeness).toFixed(1)} % complete${f.dLimit ? `, ⟨I/σ⟩ ≥ 2 to ${f.dLimit.toFixed(2)} Å` : ''}. With Friedel symmetry only, a range Φ covers Φ/180° of reciprocal space; more range, or a higher-symmetry crystal, fills the rest.`; }, modes: 'ed3d' },
+  { sec: 'Single-particle cryo-EM', modes: 'spa' },
+  { buttons: [['spaCollect', 'Collect and process'], ['spaExport', 'Export maps + classes (.mrc)']], modes: 'spa' },
+  { chips: 'spaSample', label: 'Particle', small: true, modes: 'spa', opts: [['apo', 'Apoferritin · 480 kDa, octahedral'], ['bgal', 'β-Galactosidase · 465 kDa, D2']] },
+  { chips: 'spaView', label: 'View', small: true, modes: 'spa', opts: [['mic', 'Micrograph + picks'], ['ctf', 'CTF fit'], ['classes', '2D classes'], ['map', '3D map']] },
+  { slider: 'spaN', label: 'Particles', min: 100, max: 20000, log: true, fmt: (v) => `${Math.round(v).toLocaleString()}`, modes: 'spa', ends: ['a first look', '', 'a high-resolution data set'] },
+  { slider: 'spaDose', label: 'Dose per micrograph', min: 2, max: 300, log: true, fmt: (v) => `${(+v).toFixed(0)} e⁻/Å²`, modes: 'spa', ends: ['too noisy', '', 'burnt'] },
+  { slider: 'spaDf', label: 'Underfocus (mean)', min: 0, max: 4, step: 0.05, fmt: (v) => `${(+v).toFixed(2)} µm`, modes: 'spa' },
+  { toggles: [['spaZpp', 'Zernike phase plate (use near focus)']], modes: 'spa' },
+  { slider: 'spaPref', label: 'Preferred orientation', min: 0, max: 0.95, step: 0.05, fmt: (v) => `${Math.round(v * 100)} % lie flat (top views)`, modes: 'spa', ends: ['random', '', 'air–water interface'] },
+  { slider: 'spaAngErr', label: 'Alignment error', min: 0, max: 10, step: 0.5, fmt: (v) => `${(+v).toFixed(1)}° rms`, modes: 'spa' },
+  { chips: 'spaBin', label: 'Pixel size', small: true, modes: 'spa', dynOpts: () => { const px = S.spaSample === 'bgal' ? 4 : 3.2; return [[1, `${px.toFixed(1)} Å`], [2, `${(2 * px).toFixed(1)} Å (binned ×2)`]]; } },
+  { pFn: () => spaNote(), modes: 'spa' },
   { sec: 'Tomography', modes: 'tomo' },
   { buttons: [['tomoCollect', 'Collect the tilt series'], ['tomoExport', 'Export volume + series (.mrc)']], modes: 'tomo' },
   { chips: 'tomoPhantom', label: 'Object', small: true, modes: 'tomo', opts: [['specimen', 'This specimen'], ['beads', 'Gold test beads']] },
@@ -657,6 +699,8 @@ function action(id, el) {
     sim.invalidate('magnet'); explainChange('lorReset');
   }
   if (id === 'edCollect') { sim.startED3D(); return; }
+  if (id === 'spaCollect') { sim.startSPA(); return; }
+  if (id === 'spaExport') return exportSPA();
   if (id === 'tomoCollect') { sim.startTomo(); return; }
   if (id === 'tomoExport') return exportMRC();
   if (id === 'edExport') return exportSMV();
@@ -798,6 +842,7 @@ function updateDetectorHeader() {
     eels: ['Energy-filtered map', 'Electron energy-loss spectrum'],
     ed3d: ['Diffraction frame · rotation series', 'Reciprocal space · completeness by shell'],
     tomo: [`${S.tomoSignal === 'bf' ? 'BF-TEM' : 'HAADF-STEM'} tilt series · tomogram`, 'Across the tilt axis · missing wedge'],
+    spa: [{ mic: 'Cryo-EM micrograph · picks', ctf: 'Power spectrum · CTF fit', classes: '2D class averages', map: '3D reconstruction' }[S.spaView] ?? 'Cryo-EM', 'FSC · angular distribution'],
     ronch: ['Ronchigram · direct electron detector', 'Aberration phase & budget'],
     oah: [`Off-axis hologram · ${({ holo: 'raw hologram', phase: 'reconstructed phase', amp: 'reconstructed amplitude', contour: 'phase contours' })[S.holoView]}`, 'Sideband selection & phase profile'],
     ilh: [`In-line holography · ${({ phase: 'exit-wave phase', amp: 'exit-wave amplitude', series: 'focal series' })[S.ilhView]}`, 'Focal series & convergence'],
@@ -1547,7 +1592,7 @@ function frame(now) {
       b.el.hidden = !vis;
       if (vis) b.el.textContent = b.c.pFn();
     }
-    if (['eds', '4d', 'eels', 'stem', 'ronch', 'cbed', 'oah', 'ilh', 'ltem', 'lstem', 'ed3d', 'tomo'].includes(S.mode)) renderInfo();
+    if (['eds', '4d', 'eels', 'stem', 'ronch', 'cbed', 'oah', 'ilh', 'ltem', 'lstem', 'ed3d', 'tomo', 'spa'].includes(S.mode)) renderInfo();
     $('#status').textContent = `· ${fps} fps`;
   }
   if (!scene.renderer.xr.isPresenting) requestAnimationFrame(frame); else xrLoop = true; // in a headset the XR session drives the frames

@@ -89,6 +89,15 @@ export function modeInfo(S, sim) {
         ],
       };
     }
+    case 'spa': {
+      const A = sim.spa, o = A?.out;
+      return {
+        title: `Thousands of noisy pictures, <em>one 3D ${A?.o?.sample === 'bgal' ? 'enzyme' : 'protein'}</em>`,
+        body: `A protein survives only a few tens of electrons per Å², so each image of it in <b>vitreous ice</b> is mostly noise. Single-particle analysis records thousands of copies lying in random orientations and averages them. First the <b>CTF</b> is fitted to the Thon rings of each micrograph's power spectrum (defocus turns phase into contrast but flips it at some frequencies); then particles are <b>picked</b>, sorted into <b>2D classes</b> by viewing direction (false picks do not match any class and are thrown out), and each image is put back into the particle's 3D Fourier transform as a central slice (<b>projection-slice theorem</b>), weighted by its CTF. Two independent half maps are compared shell by shell: the <b>Fourier shell correlation</b> falls to 0.143 at the resolution. More particles help; too much dose destroys the fine detail before it is recorded; particles that all lie flat leave a cone of Fourier space unmeasured, so the map is stretched along the beam even when the global FSC looks fine. Here the orientations come from the simulation plus an error, so there is no orientation search. <b>Apoferritin</b> (480 kDa, 24 copies with octahedral symmetry) is the usual first test of a microscope and pipeline: stable, compact and the same from many directions. <b>β-Galactosidase</b> (465 kDa, four copies, D2) is the classic mid-sized complex: elongated and less symmetric, so it is harder to pick and its views differ more. No symmetry is imposed here, so the map is the average of what was recorded.`,
+        stats: o?.fsc ? [['Resolution', `${o.fsc.res.toFixed(1)} Å`, 'FSC = 0.143, half maps'], ['Along / across', `${o.fscZ.res.toFixed(1)} / ${o.fscXY.res.toFixed(1)} Å`, 'directional FSC'], ['Particles', o.accepted.toLocaleString(), `${o.rejected.junk + o.rejected.good} rejected in 2D`], ['Dose', `${A.o.dose} e⁻/Å²`, 'per micrograph']]
+          : [['Micrograph', o?.mic?.dfEst != null ? `${(-o.mic.dfEst / 1e4).toFixed(2)} µm` : '—', 'fitted underfocus'], ['Picking', o?.mic?.picks ? `${Math.round(100 * o.mic.recall)} %` : '—', 'of the particles found'], ['Particles', `${S.spaN}`, 'press Collect'], ['Dose', `${S.spaDose} e⁻/Å²`, 'per micrograph']],
+      };
+    }
     case 'tomo': {
       const T = sim.tomo, st = T?.stats, F = T?.angles?.length ?? 0;
       return {

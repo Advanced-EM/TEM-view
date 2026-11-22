@@ -16,6 +16,13 @@ export function collectData(sim, S) {
     arrays.image = A(sim.stemImg.img, [sim.stemImg.c, sim.stemImg.c], `${sim.stemImg.type} signal (a.u.)`);
     cal.pixel_A = sim.stemImg.dx;
     if (sim.probe) { arrays.probe = A(sim.probe.I, [sim.probe.n, sim.probe.n], 'intensity'); cal.probe_pixel_A = sim.probe.dx; }
+  } else if (m === 'spa' && sim.spa?.out?.mic) {
+    // the first micrograph, the class averages and the half maps when processed
+    const o = sim.spa.out, N = o.N;
+    arrays.micrograph = A(o.mic.img, [o.mic.M, o.mic.M], 'contrast (1 = the beam); dark protein at underfocus');
+    if (o.gallery) { const st = new Float32Array(o.gallery.length * N * N); o.gallery.forEach((c, k) => st.set(c.img, k * N * N)); arrays.class_averages = A(st, [o.gallery.length, N, N], 'phase-flipped class averages'); }
+    if (o.maps) { arrays.half1 = A(o.maps[0], [N, N, N], 'half map 1 (V); axes z, y, x'); arrays.half2 = A(o.maps[1], [N, N, N], 'half map 2 (V)'); arrays.fsc = A(Float32Array.from(o.fsc.curve.flatMap((c) => [c.k, c.fsc])), [o.fsc.curve.length, 2], 'k (1/Å), FSC'); }
+    Object.assign(cal, { pixel_A: o.px, box_px: N, ...sim.spa.o, resolution_A: o.fsc?.res ?? null, kept: o.accepted ?? 0 });
   } else if (m === 'tomo' && sim.tomo) {
     // the reconstruction (z, y, x), the tilt series recorded so far (tilt, v, x) and its angles
     const T = sim.tomo, N = T.ph.N, n = T.ser.proj.length, stack = new Float32Array(N * N * n);

@@ -111,6 +111,20 @@ export const ANALYSES = {
         result: { edges: found, window_eV: [r(c.energy_start_eV, 1), r(c.energy_start_eV + n * c.energy_eV_per_channel, 1)] }, truth: { elements: present } };
     },
   },
+  // single-particle cryo-EM: resolution by half-map FSC (global and directional), particles kept, CTF and picking
+  spa_stats: {
+    skill: null, registry: false, label: 'Single-particle resolution (FSC) and data quality', modes: ['spa'],
+    run(sim, S) {
+      const A = sim.spa, o = A?.out;
+      if (!o?.fsc) throw new Error('collect and process the particles first (action collect)');
+      const m = o.mic;
+      return { summary: `${o.accepted} particles kept of ${o.made} (+${o.junkMade} false picks): ${o.fsc.res.toFixed(2)} Å at FSC 0.143 (along the preferred axis ${o.fscZ.res.toFixed(2)} Å, across ${o.fscXY.res.toFixed(2)} Å); map correlation with the particle ${o.mapCorr.toFixed(3)}`,
+        result: { sample: A.o.sample, particles: o.made, kept: o.accepted, false_picks: o.junkMade, rejected: o.rejected, resolution_A: r(o.fsc.res, 4), resolution_along_z_A: r(o.fscZ.res, 4), resolution_across_z_A: r(o.fscXY.res, 4), fsc_mean: r(o.fsc.mean, 4), fsc_20_8A: { global: r(o.fsc.band, 4), along_z: r(o.fscZ.band, 4), across_z: r(o.fscXY.band, 4) },
+          fsc: o.fsc.curve.map((c) => [r(c.k, 4), r(c.fsc, 4)]), pixel_A: o.px, box_px: o.N, dose: A.o.dose, underfocus_um: A.o.df, zernike: A.o.zpp, preferred_fraction: A.o.pref, alignment_error_deg: A.o.angErr,
+          ctf_rms_error_A: o.ctfErr != null ? r(o.ctfErr, 3) : null, picking: m ? { precision: r(m.precision, 3), recall: r(m.recall, 3) } : null },
+        truth: { map_correlation: r(o.mapCorr, 4) } };
+    },
+  },
   // tomography: the reconstruction against the phantom, and the missing-wedge elongation (measured on test beads)
   tomo_stats: {
     skill: null, registry: false, label: 'Tomogram quality and missing-wedge elongation', modes: ['tomo'],

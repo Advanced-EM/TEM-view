@@ -2,19 +2,20 @@
 // Messages in:  { op: 'run', id, job } · { op: 'pause', id, paused } · { op: 'cancel', id }
 // Messages out: { id, type: 'patterns', from, count, data } (4D scan, in chunks) · { id, type: 'epie' | 'msepie',
 //               iter, k, errHist, ... object } (snapshots) · { id, type: 'tomo', x, iter, resid } (a reconstruction,
-//               after every SIRT iteration) · { id, type: 'error', message } · final: true at the end
+//               after every SIRT iteration) · { id, type: 'spa', snap } (spa.spaResult) · { id, type: 'error', message }
+//               · final: true at the end
 //               · { type: 'gpu', label } once, when WebGPU is (or is not: label null) available here
 // The 4D data set of a scan stays here (the last two), so ptychography jobs reuse it without copying 26 MB.
 // Jobs with gpu: true (a 4D-STEM scan without precession, tomography) run on WebGPU (gpu.js) when this worker has
 // it; anything the GPU cannot take, or a GPU error, falls back to the same JS kernels.
 const V = self.location.search; // the page's cache-busting stamp, passed on to the kernels
-let K = null, TOMO = null, G = null;
+let K = null, TOMO = null, SPA = null, G = null;
 const pending = [], tasks = new Map(), datasets = new Map();
 const now = () => performance.now();
 self.onmessage = (e) => (K ? handle(e.data) : pending.push(e.data));
 const gpuReady = import(`./gpu.js${V}`).then((m) => m.createGPU()).catch(() => null);
-Promise.all([import(`./kernels.js${V}`), import(`./tomo.js${V}`), gpuReady]).then(([m, t, g]) => {
-  K = m; TOMO = t; G = g;
+Promise.all([import(`./kernels.js${V}`), import(`./tomo.js${V}`), import(`./spa.js${V}`), gpuReady]).then(([m, t, sp, g]) => {
+  K = m; TOMO = t; SPA = sp; G = g;
   self.postMessage({ type: 'gpu', label: g ? g.label : null });
   for (const d of pending.splice(0)) handle(d);
 });
@@ -31,6 +32,8 @@ function handle(m) {
       t.st = K.fdInit(job, t.data); t.sent = t.st.done;
       datasets.set(m.id, t.data);
       while (datasets.size > 2) { const k = datasets.keys().next().value; datasets.delete(k); self.postMessage({ type: 'dropped', id: k }); }
+    } else if (job.kind === 'spa') {
+      t.st = SPA.spaInit(job.params);
     } else if (job.kind !== 'tomo') {
       t.data = job.data ?? datasets.get(job.dataset);
       if (!t.data) throw new Error('the 4D data set is not in the worker any more: restart the scan');
@@ -105,6 +108,14 @@ function schedule(t) { if (!t.scheduled) { t.scheduled = true; setTimeout(() => 
 function work(t) {
   if (t.cancelled || t.paused) return;
   const j = t.job, g = j.geom;
+  if (j.kind === 'spa') {
+    // the SPA pipeline (spa.js) in ~25 ms slices; everything at each new stage, the counters every ~250 ms
+    const before = t.st.stage, more = SPA.spaStep(t.st, 25, now), changed = t.st.stage !== before || !more;
+    if (changed || now() - t.lastPost > 250) { self.postMessage({ id: t.id, type: 'spa', snap: SPA.spaResult(t.st, { light: !changed }), final: !more }); t.lastPost = now(); }
+    if (!more) { tasks.delete(t.id); return; }
+    schedule(t);
+    return;
+  }
   if (j.kind === 'tomo') {
     // WBP in one go; SIRT an iteration per slice of work (an iteration is the unit: ~0.1–2 s)
     const x = j.method === 'sirt' ? (TOMO.sirtStep(t.st, j.ser, 0, now), t.st.x) : TOMO.wbp(j.ser, { filter: j.filter });

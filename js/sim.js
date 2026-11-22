@@ -12,6 +12,7 @@ import * as ED from './ed3d.js';
 import * as LAT from './lattice.js';
 import { InlineBackend } from './compute.js';
 import * as TOMO from './tomo.js';
+import * as SPA from './spa.js';
 import { buildStructure } from './structure.js';
 import { HOLDERS, specimenT, u2Ratio, thermalStrain, radiolysisFactor, iceSublimation, DEVITRIFY_K } from './holder.js';
 
@@ -878,6 +879,51 @@ export class Sim {
   // the holder angle now: the tilt being recorded (0 outside a series)
   tomoPhi() { const T = this.tomo; return T?.running && T.ser.proj.length ? T.angles[T.ser.proj.length - 1] : 0; }
 
+  // ------------------------------------------------------------ single-particle cryo-EM (spa.js)
+  // The grid holds one of the test particles (spa.SAMPLES: apoferritin or β-galactosidase) in the ice of the thickness
+  // setting. A preview (the first micrograph, its CTF fit and
+  // picks) runs as soon as the settings change; Collect runs the whole pipeline on the compute backend: the stack,
+  // 2D classes and the two half maps with their FSC. The microscope enters through the voltage, Cs (the corrector),
+  // the focal spread and convergence, and the holder through the radiation damage (a warm grid loses detail faster).
+  // this.spa: { key, o, out (spa.spaResult snapshots), task, full, t0, ms }
+  spaParams() {
+    const S = this.S, bin = S.spaBin === 2 ? 2 : 1, cp = 4, sample = SPA.SAMPLES[S.spaSample] ? S.spaSample : 'apo';
+    const dmgScale = (P.betaOf(S.kV) / P.betaOf(300)) ** 2 * radiolysisFactor(this.temp(), cp) / radiolysisFactor(95, cp);
+    return { sample, count: Math.round(S.spaN), dose: S.spaDose, df: S.spaDf, zpp: !!S.spaZpp, pref: S.spaPref, angErr: S.spaAngErr, N: 64 / bin, px: SPA.SAMPLES[sample].px * bin, mic: 512 / bin,
+      kV: S.kV, Cs: this.CsA() / 1e7, focalSpread: this.focalSpread(), conv: this.convTEM(), ice: clamp(S.thick * 10, 130, 3000), dmgScale: +dmgScale.toPrecision(3) };
+  }
+  stepSPA() {
+    const S = this.S, o = this.spaParams(), key = this.spaKey(o);
+    let A = this.spa;
+    // the holder's temperature jitters: the damage scale starts things over only when it changes by > 10 %
+    if (!A || A.key !== key || Math.abs(Math.log(o.dmgScale / A.o.dmgScale)) > 0.1) { // new settings: a fresh preview (the first micrograph, its CTF fit and picks)
+      A?.task?.cancel();
+      A = this.spa = { key, o, out: {}, task: null, full: false, runs: A?.runs ?? 0 };
+      A.task = this.compute.run({ kind: 'spa', params: { ...o, count: 0, stopAfter: 'pick', seed: 11 } }, { out: A.out });
+      this.version++;
+    }
+    if (A.task && !A.done) {
+      const before = `${A.out.stage}|${A.out.made}|${A.out.accepted}`;
+      if (A.task.error) { console.warn('compute:', A.task.error, '(running on the main thread)'); A.task = new InlineBackend().run(A.task.job, { out: A.out }); }
+      A.task.pump(S.paused ? 0 : 12);
+      if (`${A.out.stage}|${A.out.made}|${A.out.accepted}` !== before) this.version++;
+      if (A.task.finished && !A.task.queue?.length) { A.done = true; if (A.full) A.ms = now() - A.t0; this.version++; }
+    }
+  }
+  spaKey(o = this.spaParams()) { const { dmgScale, ...rest } = o; return JSON.stringify(rest); }
+  // collect and process (instant: at once, for scripts, agents and tests)
+  startSPA({ instant = false } = {}) {
+    this.stepSPA();
+    const A = this.spa;
+    A.task?.cancel(); A.runs++;
+    Object.assign(A, { out: {}, full: true, done: false, t0: now(), ms: null });
+    const job = { kind: 'spa', params: { ...A.o, seed: 11 + A.runs } };
+    A.task = (instant ? new InlineBackend() : this.compute).run(job, { out: A.out });
+    if (instant) { while (!A.task.finished) A.task.pump(Infinity); A.done = true; A.ms = now() - A.t0; }
+    this.version++;
+  }
+  spaRunning() { const A = this.spa; return !!A?.full && !A.done; }
+
   // ------------------------------------------------------------ multislice ptychography (MS-ePIE / 3PIE)
   // The object is a stack of K slices; the wave is propagated between them in the forward model, and the
   // correction is back-propagated slice by slice, updating each slice's transmission and the wave entering it.
@@ -1429,6 +1475,7 @@ export class Sim {
     }
     if (m === 'ed3d') this.stepED3D(dt);
     if (m === 'tomo') this.stepTomo(dt);
+    if (m === 'spa') this.stepSPA();
     if (m === 'oah' && this.oah.stale) { this.oah.compute(); this.version++; }
     if (m === 'oah') this.main = this.oah.disp ? { arr: this.oah.disp.holo, w: this.oah.disp.c, h: this.oah.disp.c } : null;
     if (m === 'ilh') {

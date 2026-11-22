@@ -278,3 +278,15 @@ def test_tomography_series_and_reconstruction():
     assert r["projections"] == 61 and r["max_tilt_deg"] == 60
     assert abs(r["elongation_predicted"] - 1.552) < 0.01
     assert abs(r["elongation_measured"] / r["elongation_predicted"] - 1) < 0.15
+
+
+def test_single_particle_cryo_em():
+    tem = tv.connect("headless")
+    tem.set(mode="spa", specimen="bio", holder="ln2", spa_particles=300, spa_dose=40)
+    acq = tem.acquire()
+    assert acq["micrograph"].shape == (512, 512)
+    assert acq["half1"].shape == (64, 64, 64) and acq["half2"].shape == (64, 64, 64)
+    r = tem.analyze("spa_stats")["result"]
+    assert r["particles"] == 300 and r["kept"] > 250
+    assert 6 < r["resolution_A"] < 40
+    assert r["picking"]["recall"] > 0.5
