@@ -7,6 +7,7 @@ import { Lorentz } from './lorentz.js';
 import { focalSpread } from './profile.js';
 import * as EELS from './eels.js';
 import * as KR from './kernels.js';
+import { hasZones, zoneSpec } from './zone.js';
 import { InlineBackend } from './compute.js';
 import { HOLDERS, specimenT, u2Ratio, thermalStrain, radiolysisFactor, iceSublimation, DEVITRIFY_K } from './holder.js';
 
@@ -108,7 +109,15 @@ export class Sim {
     this.lor = new Lorentz(this);
   }
 
-  get spec() { return SP[this.S.spec]; }
+  // the specimen; a crystal viewed along another zone axis (S.zone = [u, v, w]) is a single-crystal slab built in
+  // 3D (zone.js), rebuilt when the zone or the thickness changes
+  get spec() {
+    const S = this.S;
+    if (!S.zone || !hasZones(S.spec)) return SP[S.spec];
+    const t = Math.round(S.thick * 10), key = `${S.spec}|${S.zone.join(',')}|${t}`;
+    if (this._zone?.key !== key) this._zone = { key, spec: zoneSpec(S.spec, S.zone, t, clamp(SP[S.spec].fov * 7, 40, 90)) };
+    return this._zone.spec;
+  }
   get lam() { return P.wavelength(this.S.kV); }
   // Cs, defocus and the axial aberrations act as knob setting + hidden misalignment (S.mis), as on a real
   // instrument where the readouts are lens settings, not the true aberrations (used by training scenarios).
@@ -183,7 +192,7 @@ export class Sim {
     const th = this.thermal(), ice = this.ice();
     // a specimen built around the stage position (the megalibrary) builds the particle under the beam first
     this.spec.locate?.(S.cx, S.cy, S.tiltX, S.tiltY);
-    const key = [S.spec, this.spec.ver ?? 0, th.u2r, th.eps, Math.round(ice.t), ice.cryst ? 1 : 0, this.spec.damageVer ?? 0, S.cx.toFixed(2), S.cy.toFixed(2), S.thick, S.tiltX, S.tiltY, opts.n, opts.dx.toFixed(4), !!opts.elements, !!opts.noTilt, opts.part ?? ''].join('|');
+    const key = [S.spec, this.spec.zoneKey ?? '', this.spec.ver ?? 0, th.u2r, th.eps, Math.round(ice.t), ice.cryst ? 1 : 0, this.spec.damageVer ?? 0, S.cx.toFixed(2), S.cy.toFixed(2), S.thick, S.tiltX, S.tiltY, opts.n, opts.dx.toFixed(4), !!opts.elements, !!opts.noTilt, opts.part ?? ''].join('|');
     let m = this.mapCache.get(key);
     if (!m) {
       const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
@@ -391,7 +400,9 @@ export class Sim {
       }
     P.fft2(re, im, n);
     const I = new Float32Array(n * n);
-    const tx = (S.tiltX * Math.PI) / 180, ty = (S.tiltY * Math.PI) / 180;
+    // a specimen that rotates its own atoms with the stage (zone-axis crystals) is already projected along the
+    // tilted beam: its FFT is the tilted reciprocal plane, so only the Ewald curvature remains in s
+    const tx = spec.ownTilt ? 0 : (S.tiltX * Math.PI) / 180, ty = spec.ownTilt ? 0 : (S.tiltY * Math.PI) / 180;
     const tEff = 30 + 0.25 * S.thick * 10;
     const dk = 1 / (n * dx);
     const ped = this.pedParams();
@@ -444,7 +455,7 @@ export class Sim {
     const c0 = (n / 2) * n + n / 2, W2 = A[c0] || 1;
     // crystal reflections: their extinction distance and FFT peak over each spot's footprint
     let xiMap = null, pkMap = null;
-    const crystal = !spec.poly && !spec.twoD && !!P.CRYST[spec.id];
+    const crystal = !spec.poly && !spec.twoD && !!(spec.cryst ?? P.CRYST[spec.id]);
     if (crystal) {
       const L = this.cbed.lists(), rp = Math.max(2, Math.ceil(2 / (S.sa * 10 * dk)));
       xiMap = new Float32Array(n * n); pkMap = new Float32Array(n * n);
@@ -653,8 +664,9 @@ export class Sim {
   // detector edge; its in-plane rotational symmetry sets the ω range that is searched.
   orientationTemplate() {
     const spec = this.spec, f = this.fd;
-    if (!f || spec.poly && !P.CRYST[spec.id] || !P.CRYST[spec.id]) return null;
-    const key = [spec.id, this.S.kV, f.dk.toFixed(5), f.ped?.phi ?? 0, this.S.alpha4d].join('|');
+    const cryst = spec.cryst ?? P.CRYST[spec.id];
+    if (!f || !cryst || cryst.twoD && false) return null;
+    const key = [spec.zoneKey ?? spec.id, this.S.kV, f.dk.toFixed(5), f.ped?.phi ?? 0, this.S.alpha4d].join('|');
     if (this._tpl?.key === key) return this._tpl;
     // reflections the simulated patterns can hold: inside the propagator's band limit (⅔ Nyquist) less the
     // precession tilt and the probe's disk radius, and inside the detector
@@ -664,7 +676,7 @@ export class Sim {
     if (spots.length < 4) return null;
     const maps = (deg) => { const c = Math.cos((deg * Math.PI) / 180), s = Math.sin((deg * Math.PI) / 180); return spots.every((a) => spots.some((b) => Math.hypot(a.gx * c - a.gy * s - b.gx, a.gx * s + a.gy * c - b.gy) < 0.02)); };
     const period = [60, 90, 120, 180].find(maps) ?? 360;
-    return (this._tpl = { key, spots, period, step: 1, name: P.CRYST[spec.id].name });
+    return (this._tpl = { key, spots, period, step: 1, name: `${cryst.name}${spec.cryst ? ` ${spec.zone}` : ''}` });
   }
   computeOrientation() {
     const f = this.fd, tpl = this.orientationTemplate();

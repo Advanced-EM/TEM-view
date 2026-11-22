@@ -17,7 +17,8 @@ export const fam = family;
 // axis, except on specimens built atom by atom in 3D (an XYZ structure, the megalibrary), which really rotate
 // widest field of view, nm: 120 for the atomic-scale specimens; the megalibrary zooms out to the whole chip
 export const fovMax = (S) => P.SPECIMENS[S.spec]?.fovMax ?? 120;
-export const tiltLimit = (S) => (S.mode === 'ltem' || S.mode === 'lstem' || P.SPECIMENS[S.spec]?.ownTilt ? 30 : 3);
+// ±30° where the specimen rotates its own 3D atoms (uploads, zone-axis crystals), ±3° for the projected crystals
+export const tiltLimit = (S) => (S.mode === 'ltem' || S.mode === 'lstem' || P.SPECIMENS[S.spec]?.ownTilt || (S.zone && P.CRYST[S.spec] && !P.CRYST[S.spec].twoD) ? 30 : 3);
 const coreEdge = (spec) => (spec === 'sto' ? 462 : spec === 'si' || spec === 'hesi' ? 102 : spec === 'cspb' ? 726 : spec === 'mapb' ? 401 : spec === 'gr' ? 287 : spec === 'mof' ? 200 : spec === 'bio' ? 405 : spec === 'lib' ? 855 : 100);
 
 export function resetVdet(S, sim) {
@@ -40,6 +41,7 @@ export function specState(S, sim, v) {
   S.spec = v;
   const sp = P.SPECIMENS[v];
   S.fov = sp.fov; S.cx = sp.center[0]; S.cy = sp.center[1]; S.tiltX = 0; S.tiltY = 0;
+  S.zone = null; // a new specimen starts as built
   S.edsSel = 'all';
   S.eelsRange = 'core';
   S.eelsDisp = 0.25; S.eelsOffset = Math.max(50, coreEdge(v) - 200);
@@ -95,6 +97,8 @@ export const LOR_CHOICES = { lorView: ['fresnel', 'foucault', 'tie', 'phase'], l
   pedOn: [true, false], dualEels: [true, false], eelsFit: [true, false], eelsDeconv: [true, false], eelsLine: [true, false], bgsub: [true, false] };
 // a Lorentz setting from a command, clamped; true if `op` was one
 export function lorSet(S, set, op) {
+  // zone axis [u, v, w] of a built-in crystal (null: as built); the field returns to the crystal's centre
+  if (op.k === 'zone') { const v = Array.isArray(op.v) && op.v.length === 3 && op.v.every((x) => Number.isInteger(+x) && Math.abs(x) <= 9) && op.v.some((x) => +x !== 0) ? op.v.map(Number) : null; S.cx = 0; S.cy = 0; S.tiltX = 0; S.tiltY = 0; set('zone', v, 'zone'); op.v = S.zone; return true; }
   // the EELS probe: a spectrum-image pixel [i, j], or null for the whole field
   if (op.k === 'eelsPx') { const v = Array.isArray(op.v) && op.v.length === 2 && op.v.every(Number.isFinite) ? op.v.map((x) => Math.max(0, Math.min(127, Math.round(x)))) : null; set('eelsPx', v, 'eelsPx'); op.v = S.eelsPx; return true; }
   const L = LOR_LIMITS[op.k];

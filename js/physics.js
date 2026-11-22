@@ -192,7 +192,7 @@ export function addElement(sym) {
 // ---------------------------------------------------------------- specimens
 // Positions are relative to an origin (ox, oy), so a specimen far from the stage origin (the megalibrary spans
 // a millimetre) keeps Å precision in Float32.
-class AtomList {
+export class AtomList {
   constructor(ox = 0, oy = 0) { this.x = []; this.y = []; this.e = []; this.L = []; this.g = []; this.ox = ox; this.oy = oy; }
   push(x, y, e, L, g) { this.x.push(x); this.y.push(y); this.e.push(e); this.L.push(L); this.g.push(g); }
   finalize(ext = 260, bin = 8) {
@@ -224,7 +224,7 @@ function rot(p, a) {
   const c = Math.cos(a), s = Math.sin(a);
   return [p[0] * c - p[1] * s, p[0] * s + p[1] * c];
 }
-function reciprocal(a1, a2) {
+export function reciprocal(a1, a2) {
   const det = a1[0] * a2[1] - a1[1] * a2[0];
   return [[a2[1] / det, -a2[0] / det], [-a1[1] / det, a1[0] / det]];
 }
@@ -790,6 +790,17 @@ export function parseXYZ(text) {
 
 export function loadXYZ(text, name = 'structure.xyz') {
   const { n, sym, P3 } = parseXYZ(text);
+  const spec = atomSpec(sym, P3, { name: `Your structure: ${name} (${n.toLocaleString('en')} atoms)`, short: name.replace(/\.xyz$/i, ''), label: name });
+  SPECIMENS.xyz = spec;
+  const els = [...new Set(sym)];
+  return { name: spec.name, atoms: n, elements: els, extent_nm: +((2 * spec.R) / 10).toFixed(2), fov_nm: spec.fov };
+}
+
+// A specimen made of explicit 3D atoms (symbols, Cartesian Å): centred, rotated with the stage tilt (±30°) and
+// projected, so any orientation can be explored. Uploaded structures (loadXYZ) and oriented crystals (zone.js)
+// are built this way; `o` overrides the defaults (an amorphous carbon support, no crystal tables).
+export function atomSpec(sym, P3, o = {}) {
+  const n = sym.length;
   const els = [...new Set(sym)], idx = Object.fromEntries(els.map((s) => [s, addElement(s)])), e = Uint8Array.from(sym, (s) => idx[s]);
   // centre on the centroid
   const c = [0, 0, 0];
@@ -799,12 +810,12 @@ export function loadXYZ(text, name = 'structure.xyz') {
   const zbar = sym.reduce((a, s) => a + SYMBOLS.indexOf(s) + 1, 0) / n;
   const grid = { bin: 4, map: new Map() }; // atoms per 4 Å column, for the inelastic thickness (EELS)
   const spec = {
-    id: 'xyz', name: `Your structure: ${name} (${n.toLocaleString('en')} atoms)`, short: name.replace(/\.xyz$/i, ''), xyz: true,
-    alpha: 1e-5, poly: true, noCBED: true, filmOnly: true, ownTilt: true, zExp: 1, period: 1, ver: 0, tk: null,
+    id: 'xyz', name: o.name ?? 'structure', short: o.short ?? 'structure', xyz: true,
+    alpha: 1e-5, poly: true, noCBED: true, filmOnly: true, ownTilt: true, zExp: 1, period: 1, ver: 0, tk: null, R,
     atoms: null, center: [0, 0], fov: +Math.min(120, Math.max(3, (2.4 * R) / 10)).toFixed(1), zone: '—', grainRot: [0],
     grains: [{ a1: [3, 0], a2: [0, 3], label: () => '—' }], rings: [],
     elements: [...els.map((s) => idx[s]), ...(els.includes('C') ? [] : [EI.C])],
-    labels: [{ x: 0, y: R + 25, text: name }],
+    labels: [{ x: 0, y: R + 25, text: o.label ?? o.name ?? '' }],
     grainAt() { return -1; },
     amorph() { return 'C'; },
     thicknessAt(x, y, t) { return t + 15 * (grid.map.get(`${Math.floor(x / grid.bin)},${Math.floor(y / grid.bin)}`) ?? 0) / (grid.bin * grid.bin); },
@@ -825,15 +836,15 @@ export function loadXYZ(text, name = 'structure.xyz') {
         grid.map.set(key, (grid.map.get(key) ?? 0) + 1);
       }
       A.finalize(Math.ceil(R + 10), Math.max(8, Math.ceil((2 * R) / 400)));
-      this.atoms = A; this.tk = tk; this.ver++;
+      this.atoms = A; this.tk = tk; this.tilt = [tiltX, tiltY]; this.ver++;
       return true;
     },
   };
+  Object.assign(spec, o.spec ?? {});
   spec.xyz3 = { sym, P3 }; // the centred 3D coordinates, for the structure viewer
   spec.locate(0, 0);
   for (const g of spec.grains) g.b = reciprocal(g.a1, g.a2);
-  SPECIMENS.xyz = spec;
-  return { name: spec.name, atoms: n, elements: els, extent_nm: +((2 * R) / 10).toFixed(2), fov_nm: spec.fov };
+  return spec;
 }
 
 // ---------------------------------------------------------------- specimens that change with temperature

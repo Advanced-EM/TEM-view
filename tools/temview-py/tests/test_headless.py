@@ -242,3 +242,15 @@ def test_orientation_map_finds_the_sto_grains(tem):
     grains = sorted(g["omega_deg"] for g in a["result"]["grains"])
     assert len(grains) == 2 and abs(grains[0] - 18.43) < 2 and abs(grains[1] - 71.57) < 2
     assert a["result"]["phase_fraction"]["crystal"] > 0.9
+
+
+def test_other_zone_axis(tem):
+    tem.set(specimen="sto", mode="diff", zone_axis=[0, 1, 1])
+    s = tem.structure()
+    assert "[011]" in s["name"] and s["kind"] == "atoms"
+    a = tem.analyze("fit_lattice")
+    d = [x["d_A"] for x in a["result"]["spacings"]]
+    # (11-1) at 2.25 Å lies in the [011] zone but not in the as-built [001] one
+    assert any(abs(v - 2.255) < 0.05 for v in d) and any(abs(v - 2.761) < 0.05 for v in d)
+    tem.set(zone_axis=None)
+    assert "[011]" not in tem.structure()["name"]

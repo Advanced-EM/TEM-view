@@ -12,6 +12,7 @@ import { toSession, readSession, isSession } from './session.js';
 import { footprintFor, fmtBytes, fmtTime, PLAN_FIELDS, PLAN_KINDS } from './footprint.js';
 import { createSpecimenUI } from './specui.js';
 import { defaultBackend } from './compute.js';
+import { STANDARD_ZONES, hasZones, asBuilt, zoneLabel } from './zone.js';
 import { ZLP_SOURCES, toMSA } from './eels.js';
 import { PRESETS, newProfile, sanitizeProfile } from './profile.js';
 import { HOLDERS } from './holder.js';
@@ -154,6 +155,9 @@ const CONTROLS = [
   { sec: 'The specimen' },
   { specView: true },
   { specGrid: true, modes: NOT_LOR },
+  { chips: 'zone', label: 'Zone axis (along the beam)', small: true, modes: NOT_LOR, show: () => hasZones(S.spec), get: () => (S.zone ? S.zone.join(',') : 'built'),
+    dynOpts: () => { const b = canonZone(asBuilt(S.spec)); return [['built', `As built ${zoneLabel(b)}`], ...STANDARD_ZONES.filter((z) => z.join() !== b.join()).map((z) => [z.join(','), zoneLabel(z)]), ['custom', S.zone && !STANDARD_ZONES.some((z) => z.join() === S.zone.join()) ? `Custom ${zoneLabel(S.zone)}` : 'Custom…']]; } },
+  { pFn: () => (S.zone ? `A single crystal cut from the unit cell with ${zoneLabel(S.zone)} along the beam (${sim.spec.slabT / 10} nm thick, the thickness setting). The as-built specimen's features (boundary, oxide, defects) are not in it. Tilt up to ±30°: the atoms rotate, so off-axis projections are real.` : ''), modes: NOT_LOR, show: () => !!S.zone && hasZones(S.spec) },
   { specInfo: true },
   { modes: NOT_LOR, pFn: () => sim.spec.status?.(sim.temp()) ?? '', show: () => !!sim.spec.status },
   { buttons: [['restore', 'Fresh as-implanted sample']], modes: NOT_LOR, show: () => !!sim.spec.reset },
@@ -521,8 +525,28 @@ function set(key, v, inv = key) {
   explainChange(inv === 'cs' ? 'cs' : ['tiltX', 'tiltY'].includes(key) ? 'tilt' : ['detIn', 'detOut'].includes(key) ? 'det' : ['alpha', 'alpha4d'].includes(key) ? 'alpha' : ['eelsWin', 'eelsWidth'].includes(key) ? 'eelsWin' : key);
 }
 
+// a zone written with its first non-zero index positive ([1̅1̅0] → [110])
+const canonZone = (z) => { const f = z.find((v) => v !== 0); return f < 0 ? z.map((v) => -v) : z; };
+function setZone(v) {
+  lorSet(S, set, { op: 'set', k: 'zone', v });
+  sim.invalidate('stage');
+  refreshControls();
+  explainChange('spec');
+}
 function chip(key, v) {
   if (key === 'spec') return setSpec(v);
+  if (key === 'zone') {
+    if (v === 'built') return setZone(null);
+    if (v === 'custom') {
+      const t = prompt('Zone axis [u v w] along the beam (three integers, e.g. 1 1 0 or 1 -1 2):', S.zone ? S.zone.join(' ') : '1 1 0');
+      if (t == null) return;
+      const z = t.trim().split(/[\s,]+/).map(Number);
+      if (z.length !== 3 || !z.every((x) => Number.isInteger(x) && Math.abs(x) <= 9) || !z.some((x) => x)) { $('#change').hidden = false; $('#change').innerHTML = '<small>Zone axis</small><p>Three integers from −9 to 9, not all zero, e.g. 1 1 0.</p>'; return; }
+      const g = z.reduce((a, b) => { a = Math.abs(a); b = Math.abs(b); while (b) [a, b] = [b, a % b]; return a; });
+      return setZone(canonZone(z.map((x) => x / g)));
+    }
+    return setZone(v.split(',').map(Number));
+  }
   if (key.startsWith('plan.')) { S.plan = { ...S.plan, [S.mode]: { ...(S.plan[S.mode] ?? {}), [key.slice(5)]: v } }; refreshControls(); return updateFootprint(); }
   if (key === 'profile') return setProfile(newProfile(v), 'profile');
   const why = chipState(S, sim, key, v);

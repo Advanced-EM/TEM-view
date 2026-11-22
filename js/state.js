@@ -31,6 +31,8 @@ export const defaultState = () => ({
   mods: {},
   // precession (modifier ped, on SAED and CBED): on/off, cone semi-angle φ (mrad), azimuth steps, descan error (% of φ)
   pedOn: false, pedPhi: 20, pedSteps: 32, pedDescan: 0,
+  // zone axis [u, v, w] of a built-in crystal along the beam (zone.js); null: the specimen as built
+  zone: null,
   // acquisition plan overrides by technique (footprint.js): scan size, detector pixels, bit depth, dwell, ...
   plan: {},
   // hidden misalignment added to the knob settings (training scenarios); never shown in the controls
@@ -43,7 +45,7 @@ export const SESSION_KEYS = [
   'objAp', 'alpha', 'alpha4d', 'detIn', 'detOut', 'detPreset', 'camL', 'sa', 'beamStop', 'camera', 'vdet', 'vdIn', 'vdOut', 'vdX', 'vdY', 'vdR',
   'edsSel', 'eelsRange', 'eelsWin', 'eelsWidth', 'bgsub', 'eelsDisp', 'eelsOffset', 'eelsExp', 'eelsExpLow', 'eelsCurrent', 'dualEels',
   'eelsSource', 'eelsBeta', 'eelsDet', 'eelsYScale', 'eelsFit', 'eelsPre', 'eelsDeconv', 'eelsPx', 'eelsLine',
-  'pedOn', 'pedPhi', 'pedSteps', 'pedDescan', 'ab', 'ronchAp', 'cbedKind', 'alphaCB', 'alphaLA', 'strain', 'holz',
+  'pedOn', 'pedPhi', 'pedSteps', 'pedDescan', 'zone', 'ab', 'ronchAp', 'cbedKind', 'alphaCB', 'alphaLA', 'strain', 'holz',
   'biprism', 'sbR', 'numCorr', 'holoView', 'nFocal', 'focalStep', 'ilhView', 'holder', 'tempSet', 'profile', 'mis',
   'magSpec', 'lorThick', 'lorFov', 'lorDf', 'lorDiv', 'lorView', 'lorFouc', 'lorApR', 'lorField', 'lorChir', 'lorPol', 'lstemView', 'lorAlpha',
 ];

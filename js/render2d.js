@@ -142,7 +142,7 @@ function specimenLabels(ctx, spec, S, dst, fovA, dpr) {
     if (u < 0.08 || u > 0.92 || v < 0.06 || v > 0.94) continue;
     label(ctx, l.text, dst[0] + u * dst[2], dst[1] + v * dst[3], dpr, { align: 'center', color: '#dff6ff' });
   }
-  if (spec.id === 'sto') {
+  if (spec.id === 'sto' && !spec.zoneKey) { // the Σ5 boundary of the as-built bicrystal
     const u = (0 - S.cx) / fovA + 0.5;
     if (u > 0 && u < 1) {
       ctx.setLineDash([4 * dpr, 5 * dpr]);
@@ -424,7 +424,7 @@ function drawDiff(sim, S, m, s) {
       }
     } else {
       const gr = spec.grains[0];
-      const refl = spec.id === 'sto' ? [[1, 0], [0, 1], [1, 1]] : spec.twoD ? [[1, 0], [0, 1], [1, 1]] : [[1, 1], [0, 2], [2, 0]];
+      const refl = spec.cryst || spec.id === 'sto' || spec.twoD ? [[1, 0], [0, 1], [1, 1]] : [[1, 1], [0, 2], [2, 0]]; // a zone-axis crystal: its in-plane basis
       for (const [a, b] of refl) {
         const gx = a * gr.b[0][0] + b * gr.b[1][0], gy = a * gr.b[0][1] + b * gr.b[1][1];
         const x = cx + gx * kPx, y = cy + gy * kPx;
@@ -433,8 +433,9 @@ function drawDiff(sim, S, m, s) {
         ctx.beginPath(); ctx.arc(x, y, 7 * dpr, 0, 7); ctx.stroke();
         label(ctx, gr.label(a, b), x + 10 * dpr, y - 10 * dpr, dpr, { color: '#ffe2b8', size: 9 });
       }
-      if ((spec.like ?? spec.id) === 'si') label(ctx, '002: "forbidden", appears by double diffraction', 10 * dpr, H - 16 * dpr, dpr, { color: C.muted, size: 9 });
-      if (spec.id === 'sto') label(ctx, 'two grains → two square nets, 36.9° apart', 10 * dpr, H - 16 * dpr, dpr, { color: C.muted, size: 9 });
+      if (spec.zoneKey) label(ctx, `single crystal along ${spec.zone} · tilt up to ±30° for off-axis projections`, 10 * dpr, H - 16 * dpr, dpr, { color: C.muted, size: 9 });
+      else if ((spec.like ?? spec.id) === 'si') label(ctx, '002: "forbidden", appears by double diffraction', 10 * dpr, H - 16 * dpr, dpr, { color: C.muted, size: 9 });
+      else if (spec.id === 'sto') label(ctx, 'two grains → two square nets, 36.9° apart', 10 * dpr, H - 16 * dpr, dpr, { color: C.muted, size: 9 });
       if (spec.twoD) label(ctx, '6-fold spots, no Kikuchi lines (one layer); the twisted layer adds a second hexagon 5° away', 10 * dpr, H - 16 * dpr, dpr, { color: C.muted, size: 9 });
     }
   }

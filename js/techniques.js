@@ -163,8 +163,9 @@ export class CBED {
   constructor(sim) { this.sim = sim; this.stale = true; }
   // Reflection lists are built once per crystal (unstrained); strain and voltage only rescale and re-filter them.
   base(spec) {
-    if (this._base?.id === spec.id) return this._base;
-    const cr = P.CRYST[spec.id], zolz = [], folz = [];
+    const bid = spec.zoneKey ?? spec.id; // a zone-axis crystal brings its own rotated table
+    if (this._base?.id === bid) return this._base;
+    const cr = spec.cryst ?? P.CRYST[spec.id], zolz = [], folz = [];
     if (cr.twoD) {
       // a single atomic layer: reflections are continuous rods along the beam, so there are no HOLZ layers
       for (let h = -9; h <= 9; h++) for (let k = -9; k <= 9; k++) {
@@ -173,7 +174,7 @@ export class CBED {
         const F = P.structF(cr, h, k, 0);
         if (F > 0.05) zolz.push({ h, k, l: 0, gx: g[0], gy: g[1], g: g2, F });
       }
-      return (this._base = { id: spec.id, cr, zolz, folz, H: Infinity });
+      return (this._base = { id: bid, cr, zolz, folz, H: Infinity });
     }
     let H = Infinity;
     for (let h = -4; h <= 4; h++) for (let k = -4; k <= 4; k++) for (let l = -4; l <= 4; l++) {
@@ -202,12 +203,12 @@ export class CBED {
         if (Math.abs(g[2] - H2) < 1e-6 && g2 > g0 && g2 < g1) half.push({ h, k, l: 0.5, gx: g[0], gy: g[1], g: g2, F: P.fElec(8, g2 / 2) });
       }
     }
-    return (this._base = { id: spec.id, cr, zolz, folz, H, half });
+    return (this._base = { id: bid, cr, zolz, folz, H, half });
   }
   lists() {
     // strain = the set strain plus thermal expansion; Debye–Waller: F·exp(−ΔB·s²), B = 8π²⟨u²⟩ relative to 293 K
     const sim = this.sim, S = sim.S, spec = sim.spec, th = sim.thermal(), sc = 1 + sim.strainPct() / 100, lam = sim.lam;
-    const sl = spec.phase?.sl ?? 0, key = [spec.id, sc, S.kV, th.u2r, sl].join('|');
+    const sl = spec.phase?.sl ?? 0, key = [spec.zoneKey ?? spec.id, sc, S.kV, th.u2r, sl].join('|');
     if (this._key === key) return this._lists;
     const dw = (g) => Math.exp(-0.4 * (th.u2r - 1) * (g / 2) ** 2);
     const B = this.base(spec), H = B.H / sc, GH = Math.sqrt((2 * H) / lam);
@@ -379,10 +380,10 @@ export function drawCBED(sim, S, m, s) {
   if (d.lac) {
     label(ctx, `LACBED · α = ${Math.round(d.a * 1000)} mrad · shadow image + Bragg/HOLZ lines`, 10 * dpr, 16 * dpr, dpr, { color: C.accent, size: 9 });
     if (d.ped) label(ctx, `precessed · φ ${S.pedPhi} mrad: HOLZ lines and fringes averaged over the cone`, 10 * dpr, 34 * dpr, dpr, { color: C.warm, size: 9 });
-    if (!real(S) && sim.spec.id === 'sto') label(ctx, 'lines break at the grain boundary', cx, H - 16 * dpr, dpr, { color: C.warm, size: 9, align: 'center' });
+    if (!real(S) && sim.spec.id === 'sto' && !sim.spec.zoneKey) label(ctx, 'lines break at the grain boundary', cx, H - 16 * dpr, dpr, { color: C.warm, size: 9, align: 'center' });
   } else {
     if (d.grainC < 0) label(ctx, 'probe on amorphous material: drag the stage onto a crystal', cx, 20 * dpr, dpr, { color: C.warm, size: 9, align: 'center' });
-    else label(ctx, `CBED · α = ${Math.round(d.a * 1000)} mrad · ${P.CRYST[sim.spec.id].name}`, 10 * dpr, 16 * dpr, dpr, { color: C.accent, size: 9 });
+    else label(ctx, `CBED · α = ${Math.round(d.a * 1000)} mrad · ${(sim.spec.cryst ?? P.CRYST[sim.spec.id]).name}${sim.spec.cryst ? ` along ${sim.spec.zone}` : ''}`, 10 * dpr, 16 * dpr, dpr, { color: C.accent, size: 9 });
     if (d.ped && d.grainC >= 0) label(ctx, `precessed · φ ${S.pedPhi} mrad${S.pedDescan ? ` · descan error ${S.pedDescan} %` : ''}`, 10 * dpr, 34 * dpr, dpr, { color: C.warm, size: 9 });
     if (!real(S) && d.grainC >= 0) {
       const R = cb.rot[d.grainC], lam = sim.lam;
@@ -457,5 +458,5 @@ function drawHOLZZoom(sim, S, s, d) {
     q.fillText(`${dd(G) >= 0 ? '+' : ''}${dd(G).toFixed(3)} mrad per 0.1 % strain`, 240 * s.dpr, y);
     y += 18 * s.dpr;
   }
-  label(q, `λ = ${(lam * 100).toFixed(3)} pm · strain ${sim.strainPct() >= 0 ? '+' : ''}${sim.strainPct().toFixed(2)} %${Math.abs(sim.thermal().eps) > 5e-5 ? ` (incl. thermal ${(sim.thermal().eps * 100).toFixed(2)} %)` : ''} · a = ${(P.CRYST[sim.spec.id].a * sc).toFixed(4)} Å`, 10 * s.dpr, s.H - 14 * s.dpr, s.dpr, { color: C.muted, size: 9 });
+  label(q, `λ = ${(lam * 100).toFixed(3)} pm · strain ${sim.strainPct() >= 0 ? '+' : ''}${sim.strainPct().toFixed(2)} %${Math.abs(sim.thermal().eps) > 5e-5 ? ` (incl. thermal ${(sim.thermal().eps * 100).toFixed(2)} %)` : ''} · a = ${((sim.spec.cryst ?? P.CRYST[sim.spec.id]).a * sc).toFixed(4)} Å`, 10 * s.dpr, s.H - 14 * s.dpr, s.dpr, { color: C.muted, size: 9 });
 }

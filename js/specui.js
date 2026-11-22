@@ -114,7 +114,7 @@ export function createSpecimenUI(api) {
   // ---------------------------------------------------------------- what the viewer shows
   function structureKey() {
     const sp = api.sim.spec, ice = api.sim.ice?.() ?? { t: 0 };
-    return [api.isLor() ? `lor:${S.magSpec}:${S.lorChir}:${S.lorPol}:${Math.round(S.lorField)}:${S.lorThick}:${S.lorFov}` : S.spec, sp.ver ?? 0, sp.damageVer ?? 0, Math.round(S.cx / 2), Math.round(S.cy / 2), S.fov.toFixed(2), S.thick, Math.round(ice.t), Math.round((api.sim.temp?.() ?? 293) / 25)].join('|');
+    return [api.isLor() ? `lor:${S.magSpec}:${S.lorChir}:${S.lorPol}:${Math.round(S.lorField)}:${S.lorThick}:${S.lorFov}` : S.spec, sp.zoneKey ?? '', sp.ver ?? 0, sp.damageVer ?? 0, Math.round(S.cx / 2), Math.round(S.cy / 2), S.fov.toFixed(2), S.thick, Math.round(ice.t), Math.round((api.sim.temp?.() ?? 293) / 25)].join('|');
   }
   function overlay() {
     const m = S.mode, fam = family(m), fovA = api.isLor() ? S.lorFov * 1e4 : api.sim.fovA();

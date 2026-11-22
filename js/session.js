@@ -86,6 +86,8 @@ export function readSession(o, base = defaultState()) {
   }
   if (mods.zpp) out.objAp = 'zpp';
   else if (out.objAp === 'zpp') out.objAp = 'none'; // a v2 file that switched the plate off in mods
+  // zone axis: three small integers, not all zero (anything else: as built)
+  if (!(Array.isArray(out.zone) && out.zone.length === 3 && out.zone.every((v) => Number.isInteger(v) && Math.abs(v) <= 9) && out.zone.some((v) => v))) out.zone = null;
   // acquisition plan overrides: known techniques and fields with valid values only
   out.plan = {};
   const plan = version >= 2 && o.acq?.plan && typeof o.acq.plan === 'object' ? o.acq.plan : {};
