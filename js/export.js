@@ -16,6 +16,17 @@ export function collectData(sim, S) {
     arrays.image = A(sim.stemImg.img, [sim.stemImg.c, sim.stemImg.c], `${sim.stemImg.type} signal (a.u.)`);
     cal.pixel_A = sim.stemImg.dx;
     if (sim.probe) { arrays.probe = A(sim.probe.I, [sim.probe.n, sim.probe.n], 'intensity'); cal.probe_pixel_A = sim.probe.dx; }
+  } else if (m === 'ed3d' && sim.ed && !sim.ed.none) {
+    // the frame on the detector and the unmerged reflections recorded so far (h, k, l, I, σ, d)
+    const e = sim.ed, img = sim.edFrame(e.det.W), acc = new Map(), upTo = Math.max(1, Math.ceil(e.collected));
+    e.series.frames.forEach((fr, f) => { if (f < upTo) for (const o of fr) { const a = acc.get(o.i) ?? [0, 0]; a[0] += o.n; a[1] += o.n + o.b; acc.set(o.i, a); } });
+    const rows = [...acc].map(([i, [n, v]]) => { const R = e.refl[i]; return [R.h, R.k, R.l, n, Math.sqrt(v), 1 / R.g]; });
+    arrays.frame = A(img.arr, [img.W, img.W], 'counts');
+    arrays.reflections = A(Float32Array.from(rows.flat()), [rows.length, 6], 'columns: h, k, l, I (counts), sigma, d (Å)');
+    const p = e.series.plan;
+    Object.assign(cal, { wavelength_A: sim.lam, camera_length_mm: e.det.L, pixel_mm: e.det.pix, detector_px: e.det.W, rotation_axis_deg: S.edAxis, start_deg: e.o.start, end_deg: e.o.end,
+      wedge_deg: p.wedge, frames: p.frames, frames_recorded: Math.min(p.frames, upTo), method: S.edMethod, dose_per_frame: p.dosePerFrame, total_dose: p.totalDose,
+      completeness: e.stats.completeness, merge: S.edMerge, d_limit_A: e.stats.dLimit, crystal: e.name });
   } else if (m === '4d' && sim.fd) {
     const f = sim.fd;
     arrays.datacube = A(f.data, [f.N, f.N, f.n4, f.n4], 'counts (a.u.); axes: scan y, scan x, ky, kx');

@@ -254,3 +254,14 @@ def test_other_zone_axis(tem):
     assert any(abs(v - 2.255) < 0.05 for v in d) and any(abs(v - 2.761) < 0.05 for v in d)
     tem.set(zone_axis=None)
     assert "[011]" not in tem.structure()["name"]
+
+
+def test_3d_ed_completeness(tem):
+    tem.set(specimen="sto", mode="ed3d", zone_axis=[1, 2, 5], ed_range_deg=[-45, 45], ed_merge="friedel")
+    acq = tem.acquire(steps=5)
+    assert acq.meta["calibration"]["frames"] > 10 and "reflections" in acq.arrays
+    a = tem.analyze("ed3d_stats")
+    assert abs(a["result"]["completeness"] - 0.5) < 0.06  # Friedel pairs only: Φ / 180°
+    tem.set(ed_merge="laue")
+    assert tem.analyze("ed3d_stats")["result"]["completeness"] > 0.95  # cubic symmetry fills the rest
+    tem.set(zone_axis=None)

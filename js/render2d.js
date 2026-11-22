@@ -5,6 +5,7 @@ import { drawRonch, drawCBED } from './techniques.js';
 import { drawOAH, drawILH } from './holography.js';
 import { drawLTEM, drawLSTEM } from './lorentz.js';
 import { edgeStats, fourierRatio } from './eels.js';
+import * as ED from './ed3d.js';
 
 const C = {
   accent: '#6fd6ff', warm: '#ffb45e', text: '#e9edf2', muted: '#8a94a3', dim: '#566070',
@@ -179,7 +180,7 @@ export function draw(sim, S, mainCv, secCv, hover) {
   const m = fit(mainCv), s = fit(secCv);
   m.ctx.fillStyle = C.bg; m.ctx.fillRect(0, 0, m.W, m.H);
   s.ctx.fillStyle = C.bg; s.ctx.fillRect(0, 0, s.W, s.H);
-  const fn = { tem: drawTEM, stem: drawSTEM, diff: drawDiff, '4d': draw4D, eds: drawEDS, eels: drawEELS, ronch: drawRonch, cbed: drawCBED, oah: drawOAH, ilh: drawILH, ltem: drawLTEM, lstem: drawLSTEM }[S.mode];
+  const fn = { ed3d: drawED3D, tem: drawTEM, stem: drawSTEM, diff: drawDiff, '4d': draw4D, eds: drawEDS, eels: drawEELS, ronch: drawRonch, cbed: drawCBED, oah: drawOAH, ilh: drawILH, ltem: drawLTEM, lstem: drawLSTEM }[S.mode];
   fn(sim, S, m, s, performance.now() / 1000);
   cryoLabel(m.ctx, sim, S, m.W, m.H, m.dpr);
   if (sim.single?.hits && sim.single.count && !['4d', 'eds', 'eels', 'ilh', 'ltem', 'lstem'].includes(S.mode)) {
@@ -363,6 +364,53 @@ function detectorDiagram(q, S, r, dpr, type) {
   q.beginPath(); q.arc(cx, cy, Math.min(S.detOut, maxM) * sc, 0, 7); q.arc(cx, cy, S.detIn * sc, 0, 7, true); q.fill();
   label(q, `${type} detector  ${S.detIn}–${S.detOut} mrad`, x0 + 6 * dpr, y0 + 14 * dpr, dpr, { color: C.warm });
   label(q, `bright-field disk α = ${S.alpha} mrad`, x0 + 6 * dpr, y0 + h - 12 * dpr, dpr, { color: C.accent, size: 9 });
+}
+
+// 3D ED / MicroED: the frame on the detector (main), a reciprocal-space layer and the shell statistics (secondary)
+function drawED3D(sim, S, m, s) {
+  const e = sim.ed, { ctx, W, H, dpr } = m;
+  if (!e || e.none) { label(ctx, '3D ED needs a crystal or a structure of atoms (load an XYZ or CIF)', W / 2, H / 2, dpr, { color: C.warm, align: 'center' }); return; }
+  const img = sim.edFrame(256), p = e.series.plan;
+  if (img) {
+    // the current frame, over a dim stack of every frame recorded so far
+    const arr = img.stack ? img.arr.map((v, i) => v + 0.04 * img.stack[i]) : img.arr;
+    let mx = 0; for (const v of arr) mx = Math.max(mx, v);
+    paint(ctx, arr, img.W, img.W, [0, 0, W, H], { lo: 0.5, hi: Math.log10(Math.max(10, mx)) + 0.2, log: true, lut: real(S) ? LUT.gray : LUT.magma });
+  }
+  const f = Math.max(0, Math.ceil(e.collected) - 1), phi = e.o.start + (f + 0.5) * p.wedge;
+  label(ctx, `${e.running ? 'collecting · ' : e.collected >= p.frames ? 'series done · ' : 'press Collect · '}frame ${Math.min(p.frames, f + 1)}/${p.frames} · φ ${phi.toFixed(1)}° · ${p.wedge.toFixed(2)}°/frame`, 10 * dpr, 16 * dpr, dpr, { color: C.accent, size: 9 });
+  label(ctx, `${e.name} · ${{ cred: 'continuous rotation', step: 'stepwise stills', pedt: `precession-assisted stills (φ ${S.pedPhi} mrad)` }[S.edMethod]} · axis ${S.edAxis}°`, 10 * dpr, 34 * dpr, dpr, { color: C.muted, size: 9 });
+  const dose = Math.min(p.frames, e.collected) * p.dosePerFrame;
+  label(ctx, `dose ${dose < 10 ? dose.toFixed(2) : dose.toFixed(0)} e⁻/Å²${Number.isFinite(e.o.Dc) ? ` of D_c ≈ ${e.o.Dc.toFixed(0)}` : ''} · real time ${(p.time_s * Math.min(1, e.collected / p.frames)).toFixed(0)} s`, 10 * dpr, H - 14 * dpr, dpr, { color: Number.isFinite(e.o.Dc) && dose > e.o.Dc ? C.warm : C.muted, size: 9 });
+  // the secondary panel: a reciprocal-space layer and the shells
+  if (e.diffuse) { label(s.ctx, 'no lattice found in this structure: the series shows diffuse scattering (amorphous or molecular); there are no reflections to index', 10 * s.dpr, 20 * s.dpr, s.dpr, { color: C.warm, size: 9 }); return; }
+  const q = s.ctx, dq = s.dpr, Ws = s.W, Hs = s.H, side = Math.min(Hs - 30 * dq, Ws * 0.55), x0 = 10 * dq, y0 = 22 * dq;
+  q.fillStyle = '#06080b'; q.fillRect(x0, y0, side, side);
+  const pts = ED.layer(e.refl, e.series, S.edSlice, S.edLayer, Math.ceil(e.collected));
+  const maxuv = Math.max(1, ...pts.map((t) => Math.max(Math.abs(t.u), Math.abs(t.v)))), sc = (side / 2 - 8 * dq) / maxuv, cx = x0 + side / 2, cy = y0 + side / 2;
+  let Imax = 0; for (const t of pts) Imax = Math.max(Imax, t.I);
+  q.strokeStyle = C.grid; q.beginPath(); q.moveTo(x0, cy); q.lineTo(x0 + side, cy); q.moveTo(cx, y0); q.lineTo(cx, y0 + side); q.stroke();
+  for (const t of pts) {
+    const x = cx + t.u * sc, y = cy - t.v * sc, r = t.seen ? (1.5 + 3.5 * Math.sqrt(t.I / (Imax || 1))) * dq : 1.6 * dq;
+    q.beginPath(); q.arc(x, y, r, 0, 2 * Math.PI);
+    if (t.seen) { q.fillStyle = C.accent; q.fill(); } else { q.strokeStyle = 'rgba(255,255,255,0.25)'; q.lineWidth = 1 * dq; q.stroke(); }
+  }
+  const axes = { hk0: ['h', 'k'], h0l: ['h', 'l'], '0kl': ['k', 'l'] }[S.edSlice];
+  label(q, `${S.edSlice.replace('0', String(S.edLayer))} layer · hollow: not recorded`, x0, y0 - 8 * dq, dq, { color: C.muted, size: 9 });
+  label(q, axes[0], x0 + side - 8 * dq, cy - 8 * dq, dq, { color: C.muted, size: 9 }); label(q, axes[1], cx + 6 * dq, y0 + 10 * dq, dq, { color: C.muted, size: 9 });
+  // shells: completeness bars and ⟨I/σ⟩
+  const st = e.stats, bx = x0 + side + 18 * dq, bw = Ws - bx - 10 * dq, n = st.shells.length, rowH = Math.min(18 * dq, (Hs - 70 * dq) / n);
+  label(q, `${(100 * st.completeness).toFixed(1)} % complete${e.merge === 'friedel' && !e.cubic ? ' (Friedel)' : ''} · ${st.observed}/${st.unique}`, bx, y0 - 8 * dq, dq, { color: C.text, size: 9 });
+  st.shells.forEach((sh, i) => {
+    const y = y0 + 6 * dq + i * rowH;
+    q.fillStyle = 'rgba(255,255,255,0.06)'; q.fillRect(bx + 52 * dq, y, bw - 100 * dq, rowH * 0.7);
+    q.fillStyle = sh.medianIsig >= 2 ? C.accent : C.warm; q.fillRect(bx + 52 * dq, y, (bw - 100 * dq) * sh.completeness, rowH * 0.7);
+    font(q, 8, dq); q.fillStyle = C.muted; q.textBaseline = 'top'; q.textAlign = 'left';
+    q.fillText(`${sh.dLow.toFixed(2)}–${sh.dHigh.toFixed(2)}`, bx, y);
+    q.textAlign = 'right'; q.fillText(`${Math.round(100 * sh.completeness)}% · ${sh.medianIsig.toFixed(1)}`, bx + bw, y); q.textAlign = 'left';
+  });
+  label(q, 'd (Å) · complete · median I/σ', bx, y0 + 12 * dq + n * rowH, dq, { color: C.muted, size: 9 });
+  label(q, st.dLimit ? `resolution ≈ ${st.dLimit.toFixed(2)} Å (median I/σ ≥ 2)` : 'no shell at median I/σ ≥ 2', bx, y0 + 26 * dq + n * rowH, dq, { color: st.dLimit ? C.accent : C.warm, size: 9 });
 }
 
 function drawDiff(sim, S, m, s) {

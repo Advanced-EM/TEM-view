@@ -35,6 +35,7 @@ const SETTINGS = {
   lorentz_fov_um: 'field of view in µm (Lorentz modes)', film_thickness_nm: 'magnetic film thickness', field_mT: 'objective-lens field along the beam',
   divergence_urad: 'illumination divergence (ltem)', foucault: '+x, -x, +y, -y: the deflection the Foucault aperture passes', dpc_view: 'color, x, y, sum (lstem)',
   probe_urad: 'Lorentz-STEM probe semi-angle',
+  ed_method: 'cred, step, pedt (3D ED)', ed_range_deg: '[start, end] of the rotation (±70°)', ed_speed_deg_s: 'rotation speed (cred)', ed_fps: 'frame rate (cred)', ed_step_deg: 'tilt step (stills)', ed_exposure_s: 'exposure per still', ed_dose_rate: 'e⁻/Å²/s', ed_axis_deg: 'rotation axis in the image plane', ed_merge: 'friedel or laue',
   zone_axis: '[u, v, w] of the crystal along the beam (SrTiO₃, Au, Si, perovskites), or None for the specimen as built',
   precession_mrad: 'precession semi-angle φ in mrad, 0 for off (SAED, CBED)', precession_steps: 'azimuth steps around the cone', descan_error_pct: 'descan error, % of φ',
   eels_offset_eV: 'energy at the first channel', eels_dispersion: '0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1 eV per channel', eels_window_eV: '[centre, width] of the energy window',
@@ -74,6 +75,10 @@ export function settingsToOps(a) {
   if (a.field_mT !== undefined) ops.push({ op: 'set', k: 'lorField', v: +a.field_mT });
   if (a.divergence_urad !== undefined) ops.push({ op: 'set', k: 'lorDiv', v: +a.divergence_urad });
   if (a.probe_urad !== undefined) ops.push({ op: 'set', k: 'lorAlpha', v: +a.probe_urad });
+  // 3D ED
+  const edMap = { ed_method: 'edMethod', ed_speed_deg_s: 'edSpeed', ed_fps: 'edFps', ed_step_deg: 'edStep', ed_exposure_s: 'edExp', ed_dose_rate: 'edDoseRate', ed_axis_deg: 'edAxis', ed_merge: 'edMerge' };
+  for (const [k, key] of Object.entries(edMap)) if (a[k] !== undefined) ops.push({ op: 'set', k: key, v: typeof a[k] === 'string' ? a[k] : +a[k] });
+  if (a.ed_range_deg !== undefined) { const [s0, s1] = a.ed_range_deg; ops.push({ op: 'set', k: 'edStart', v: +s0 }, { op: 'set', k: 'edEnd', v: +s1 }); }
   if (a.zone_axis !== undefined) { const z = a.zone_axis; if (z !== null && !(Array.isArray(z) && z.length === 3 && z.every((v) => Number.isInteger(+v)) && z.some((v) => +v !== 0))) throw new Error('zone_axis must be [u, v, w] (integers, not all zero) or None'); ops.push({ op: 'set', k: 'zone', v: z }); }
   // precession (modifier ped): φ > 0 switches it on
   if (a.precession_mrad !== undefined) { const v = +a.precession_mrad; if (!(v >= 0 && v <= 60)) throw new Error('precession_mrad must be 0–60'); ops.push({ op: 'set', k: 'pedOn', v: v > 0 }); if (v > 0) ops.push({ op: 'set', k: 'pedPhi', v }); }

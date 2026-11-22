@@ -44,6 +44,7 @@ const DEFAULTS = {
   oah: { kind: 'camera', det: 4096, bits: 16, exposure_s: 4, frames: 1 },
   ilh: { kind: 'camera', det: 4096, bits: 16, exposure_s: 1, frames: 10 },
   ltem: { kind: 'camera', det: 4096, bits: 16, exposure_s: 1, frames: 1 },
+  ed3d: { kind: 'camera', det: 512, bits: 16, exposure_s: 0.25, frames: 160 }, // a rotation series (frames from the 3D ED settings)
   lstem: { kind: 'scan', scan: 256, bits: 32, dwell_us: 20, flyback_us: 100, detectors: 4, current_pA: 5 },
 };
 export const PLAN_KINDS = Object.fromEntries(Object.entries(DEFAULTS).map(([k, v]) => [k, v.kind]));
@@ -201,6 +202,10 @@ export function contextFor(S, sim, extra = {}) {
 }
 export function footprintFor(S, sim, extra = {}) {
   const plan = { ...(S.mode === 'ilh' ? { frames: S.nFocal } : {}), ...(S.plan?.[S.mode] ?? {}) };
+  if (S.mode === 'ed3d') { // the series: frames, exposure per frame and the dose per frame from the 3D ED settings
+    const p = sim.ed?.series?.plan;
+    if (p) { Object.assign(plan, { frames: p.frames, exposure_s: +p.exposure.toFixed(4) }); return footprint('ed3d', plan, contextFor(S, sim, { dose: p.dosePerFrame, field_A: 2000, ...extra })); }
+  }
   return footprint(S.mode, plan, contextFor(S, sim, extra));
 }
 

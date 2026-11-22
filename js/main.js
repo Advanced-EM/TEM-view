@@ -13,6 +13,7 @@ import { footprintFor, fmtBytes, fmtTime, PLAN_FIELDS, PLAN_KINDS } from './foot
 import { createSpecimenUI } from './specui.js';
 import { defaultBackend } from './compute.js';
 import { STANDARD_ZONES, hasZones, asBuilt, zoneLabel } from './zone.js';
+import * as ED from './ed3d.js';
 import { ZLP_SOURCES, toMSA } from './eels.js';
 import { PRESETS, newProfile, sanitizeProfile } from './profile.js';
 import { HOLDERS } from './holder.js';
@@ -134,7 +135,7 @@ const logMap = (min, max) => ({ to: (v) => (Math.log(v / min) / Math.log(max / m
 const NOT_RONCH = 'tem stem 4d diff eds eels cbed oah ilh';
 const TILTABLE = 'tem stem 4d diff eds eels cbed oah ilh ltem lstem';
 // the atomic-scale specimens and the objective lens: not in the Lorentz modes (objective off, magnetic specimens)
-const NOT_LOR = 'tem stem 4d diff cbed eds eels ronch oah ilh';
+const NOT_LOR = 'tem stem 4d diff cbed eds eels ronch oah ilh ed3d';
 const LOR = 'ltem lstem';
 // acquisition plan (footprint.js): the current technique's plan, and the chip options for one field
 const curPlan = () => { try { return footprintFor(S, sim).plan; } catch { return {}; } };
@@ -254,9 +255,25 @@ const CONTROLS = [
   { chips: 'detPreset', modes: 'stem', opts: [['bf', 'BF'], ['abf', 'ABF'], ['adf', 'ADF'], ['haadf', 'HAADF']] },
   { slider: 'detIn', inv: 'det', label: 'Inner angle', min: 0, max: 150, step: 1, fmt: (v) => `${v} mrad`, modes: 'stem' },
   { slider: 'detOut', inv: 'det', label: 'Outer angle', min: 5, max: 250, step: 1, fmt: (v) => `${v} mrad`, modes: 'stem' },
-  { slider: 'camL', label: 'Camera length', min: 80, max: 6000, log: true, fmt: (v) => `${Math.round(v)} mm`, modes: 'diff cbed', show: () => S.mode !== 'cbed' || S.cbedKind === 'cbed', ends: ['wide angle', '', 'zoomed'] },
+  { slider: 'camL', label: 'Camera length', min: 80, max: 6000, log: true, fmt: (v) => `${Math.round(v)} mm`, modes: 'diff cbed ed3d', show: () => S.mode !== 'cbed' || S.cbedKind === 'cbed', ends: ['wide angle', '', 'zoomed'] },
   { slider: 'sa', label: 'Selected area', min: 2, max: 12, step: 0.2, fmt: (v) => `${v.toFixed(1)} nm`, modes: 'diff' },
   { toggles: [['beamStop', 'Beam stop']], modes: 'diff' },
+  { sec: '3D ED / MicroED', modes: 'ed3d' },
+  { buttons: [['edCollect', 'Collect the series'], ['edExport', 'Export frames (.img)']], modes: 'ed3d' },
+  { chips: 'edMethod', label: 'Collection', small: true, modes: 'ed3d', opts: [['cred', 'Continuous (cRED)'], ['step', 'Stepwise stills'], ['pedt', 'Precession stills (PEDT)']] },
+  { slider: 'edStart', label: 'Tilt range: start', min: -70, max: 0, step: 1, fmt: (v) => `${v}°`, modes: 'ed3d' },
+  { slider: 'edEnd', label: 'Tilt range: end', min: 0, max: 70, step: 1, fmt: (v) => `+${v}°`, modes: 'ed3d' },
+  { slider: 'edSpeed', label: 'Rotation speed', min: 0.1, max: 10, log: true, fmt: (v) => `${(+v).toFixed(2)}°/s`, modes: 'ed3d', show: () => S.edMethod === 'cred' },
+  { chips: 'edFps', label: 'Frame rate', small: true, opts: [1, 2, 4, 10, 20, 40].map((v) => [v, `${v}/s`]), modes: 'ed3d', show: () => S.edMethod === 'cred' },
+  { slider: 'edStep', label: 'Tilt step', min: 0.1, max: 5, step: 0.1, fmt: (v) => `${(+v).toFixed(1)}°`, modes: 'ed3d', show: () => S.edMethod !== 'cred' },
+  { slider: 'edExp', label: 'Exposure per still', min: 0.05, max: 5, log: true, fmt: (v) => `${(+v).toFixed(2)} s`, modes: 'ed3d', show: () => S.edMethod !== 'cred' },
+  { slider: 'pedPhi', label: 'Precession angle φ', min: 2, max: 50, step: 0.5, fmt: (v) => `${v} mrad`, modes: 'ed3d', show: () => S.edMethod === 'pedt' },
+  { slider: 'edDoseRate', label: 'Dose rate', min: 0.001, max: 2, log: true, fmt: (v) => `${(+v).toPrecision(2)} e⁻/Å²/s`, modes: 'ed3d', ends: ['low dose', '', 'fast damage'] },
+  { slider: 'edAxis', label: 'Rotation axis (in the image)', min: 0, max: 180, step: 1, fmt: (v) => `${v}°`, modes: 'ed3d' },
+  { chips: 'edMerge', label: 'Merge equivalent reflections', small: true, modes: 'ed3d', opts: [['friedel', 'Friedel pairs'], ['laue', 'Cubic Laue class']], show: () => sim.ed?.cubic !== false && !sim.ed?.diffuse },
+  { chips: 'edSlice', label: 'Reciprocal-space layer', small: true, modes: 'ed3d', opts: [['hk0', 'hk0'], ['h0l', 'h0l'], ['0kl', '0kl']] },
+  { slider: 'edLayer', label: 'Layer index', min: -3, max: 3, step: 1, fmt: (v) => `${v}`, modes: 'ed3d' },
+  { pFn: () => { const e = sim.ed; if (!e || e.none) return 'Choose a crystal (SrTiO₃, Au, Si or a perovskite), or load any structure as XYZ or CIF: its lattice is found from the atoms. Set the orientation with the zone axis, or with Align to zone in the structure preview.'; if (e.diffuse) return `${e.series.plan.frames} frames over ${e.series.plan.range}°. No lattice was found in this structure, so the frames show its diffuse scattering (a molecule or amorphous material): there are no reflections to index.`; if (e.lattice) return `Lattice found from the atoms: ${e.name.split('· ')[1]} (${e.lattice.basis.length} atoms per cell, ${e.refl.length} reflections to ${(1 / e.gMax).toFixed(2)} Å). Indices refer to this primitive cell; equivalents merged as Friedel pairs. ${e.series.plan.frames} frames of ${e.series.plan.wedge.toFixed(2)}°: ${(100 * e.full.completeness).toFixed(1)} % complete over ${e.series.plan.range}°.`; const p = e.series.plan, f = e.full; return `${p.frames} frames of ${p.wedge.toFixed(2)}° over ${p.range}°: ${p.time_s.toFixed(0)} s, ${p.totalDose.toPrecision(3)} e⁻/Å² in total${Number.isFinite(e.o.Dc) ? ` (critical dose ≈ ${e.o.Dc.toFixed(0)} e⁻/Å²)` : ''}. Detector edge ${(1 / e.gMax).toFixed(2)} Å. Full series: ${(100 * f.completeness).toFixed(1)} % complete${f.dLimit ? `, ⟨I/σ⟩ ≥ 2 to ${f.dLimit.toFixed(2)} Å` : ''}. With Friedel symmetry only, a range Φ covers Φ/180° of reciprocal space; more range, or a higher-symmetry crystal, fills the rest.`; }, modes: 'ed3d' },
   { sec: 'Precession (PED)', modes: 'diff cbed 4d' },
   { toggles: [['pedOn', 'Precess the beam (hollow cone)']], modes: 'diff cbed 4d' },
   { slider: 'pedPhi', label: 'Precession angle φ', min: 0, max: 50, step: 0.5, fmt: (v) => `${v} mrad (${(v * 0.0573).toFixed(2)}°)`, modes: 'diff cbed 4d', show: () => S.pedOn, ends: ['', '', 'wide cone'] },
@@ -603,6 +620,8 @@ function action(id, el) {
     S.lorChir = Math.random() < 0.5 ? -1 : 1; S.lorPol = Math.random() < 0.5 ? -1 : 1;
     sim.invalidate('magnet'); explainChange('lorReset');
   }
+  if (id === 'edCollect') { sim.startED3D(); return; }
+  if (id === 'edExport') return exportSMV();
   if (id === 'eelsWhole') { S.eelsPx = null; sim.invalidate('eelsPx'); return; }
   if (id === 'eelsMSA') return exportMSA();
   if (id === 'loadXYZ') specimenUI().pickFile(); // preview first: check, orient and load from the structure card
@@ -739,6 +758,7 @@ function updateDetectorHeader() {
     diff: [S.camera === 'screen' ? 'Fluorescent screen · pattern' : 'Direct electron detector · pattern', 'Ring profile & d-spacings'],
     eds: ['EDS element map', 'X-ray spectrum'],
     eels: ['Energy-filtered map', 'Electron energy-loss spectrum'],
+    ed3d: ['Diffraction frame · rotation series', 'Reciprocal space · completeness by shell'],
     ronch: ['Ronchigram · direct electron detector', 'Aberration phase & budget'],
     oah: [`Off-axis hologram · ${({ holo: 'raw hologram', phase: 'reconstructed phase', amp: 'reconstructed amplitude', contour: 'phase contours' })[S.holoView]}`, 'Sideband selection & phase profile'],
     ilh: [`In-line holography · ${({ phase: 'exit-wave phase', amp: 'exit-wave amplitude', series: 'focal series' })[S.ilhView]}`, 'Focal series & convergence'],
@@ -1040,6 +1060,21 @@ function loadSessionFile(text) {
   refreshControls();
   explainChange('loaded');
 }
+// a 3D ED series as SMV frames (DIALS, XDS, PETS) in a zip, with the geometry
+async function exportSMV() {
+  const e = sim.ed;
+  if (!e || e.none) return;
+  const { zip } = await import('./npy.js');
+  const p = e.series.plan, files = [], real = S.clarity === 'real';
+  for (let f = 0; f < p.frames; f++) {
+    const img = ED.frameImage(e.refl, e.series, f, { W: e.det.W, pix: e.det.pix, L: e.det.L, lam: sim.lam, axis: S.edAxis, start: e.o.start, noise: real ? (v) => P.poisson(v) : null });
+    files.push({ name: `frames/frame_${String(f + 1).padStart(4, '0')}.img`, bytes: ED.smvFrame(img, e.det.W, { pix: e.det.pix, L: e.det.L, lam: sim.lam, oscStart: e.o.start + f * p.wedge, oscRange: p.wedge, axis: S.edAxis, exposure: p.exposure }) });
+  }
+  const readme = `TEM-view simulated 3D ED series (${e.name})\n${p.frames} frames, ${p.wedge}° each from ${e.o.start}°, rotation axis ${S.edAxis}° from x in the image plane\nwavelength ${sim.lam.toFixed(6)} Å, camera length ${e.det.L.toFixed(1)} mm, ${e.det.W}×${e.det.W} pixels of ${e.det.pix} mm, beam centre at the middle\nmethod: ${ED.METHODS[S.edMethod]}; dose ${p.totalDose.toPrecision(3)} e⁻/Å² in total. Simulated (kinematical) data for teaching and pipeline tests.\n`;
+  files.push({ name: 'README.txt', bytes: new TextEncoder().encode(readme) });
+  download(new Blob([zip(files)], { type: 'application/zip' }), `tem-view-3ded-${S.spec}-${stamp()}.zip`);
+  explainChange('exported');
+}
 // the recorded EELS spectrum (and the low-loss one with Dual EELS) as EMSA/MSA, readable by HyperSpy and DM
 function exportMSA() {
   const e = sim.eels, a = sim.accE;
@@ -1119,8 +1154,8 @@ function wire() {
     }
     const b = document.createElement('button');
     b.dataset.mode = m;
-    b.title = `${sub} (key ${KEYS[m]})`;
-    b.innerHTML = `${name}<kbd>${KEYS[m]}</kbd>`;
+    b.title = KEYS[m] ? `${sub} (key ${KEYS[m]})` : sub;
+    b.innerHTML = KEYS[m] ? `${name}<kbd>${KEYS[m]}</kbd>` : name;
     b.addEventListener('click', () => setMode(m));
     grp.lastChild.appendChild(b);
   });

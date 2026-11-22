@@ -111,6 +111,20 @@ export const ANALYSES = {
         result: { edges: found, window_eV: [r(c.energy_start_eV, 1), r(c.energy_start_eV + n * c.energy_eV_per_channel, 1)] }, truth: { elements: present } };
     },
   },
+  // 3D ED: completeness and ⟨I/σ⟩ per resolution shell of the series recorded so far, and the dose-limited resolution
+  ed3d_stats: {
+    skill: null, registry: false, label: '3D ED completeness and resolution', modes: ['ed3d'],
+    run(sim, S) {
+      const e = sim.ed;
+      if (!e || e.none) throw new Error('3D ED needs a crystal or a structure of atoms (load an XYZ or CIF)');
+      if (e.diffuse) return { summary: `${e.name}: diffuse scattering only, nothing to index`, result: { lattice: null, completeness: 0, frames: e.series.plan.frames }, truth: {} };
+      const st = e.collected >= 1 ? e.stats : e.full, p = e.series.plan;
+      return { summary: `${(100 * st.completeness).toFixed(1)} % complete (${S.edMerge === 'laue' ? 'cubic Laue class' : 'Friedel pairs'}) over ${p.range}° in ${p.frames} frames; ${st.dLimit ? `median I/σ ≥ 2 to ${st.dLimit.toFixed(2)} Å` : 'no shell at median I/σ ≥ 2'}; ${p.totalDose.toPrecision(3)} e⁻/Å²${e.collected < 1 ? ' (the full planned series; press Collect to record it)' : ''}`,
+        result: { lattice: e.lattice ? Object.fromEntries(Object.entries(e.lattice.params).map(([k, v]) => [k, r(v, 4)])) : null, completeness: r(st.completeness, 4), unique: st.unique, observed: st.observed, d_limit_A: st.dLimit ? r(st.dLimit, 3) : null, range_deg: p.range, frames: p.frames, wedge_deg: r(p.wedge, 4), total_dose: r(p.totalDose, 4), method: S.edMethod, merge: e.merge,
+          shells: st.shells.map((s) => ({ d_A: [r(s.dLow, 3), r(s.dHigh, 3)], completeness: r(s.completeness, 3), mean_I_over_sigma: r(s.meanIsig, 2) })) },
+        truth: { expected_completeness_friedel: r(Math.min(1, p.range / 180), 4) } };
+    },
+  },
   // orientation and phase mapping (ACOM) of a 4D-STEM / SPED scan: grains (orientation clusters), phase fractions
   map_orientation: {
     skill: null, registry: false, label: '4D-STEM orientation and phase map', modes: ['4d'],

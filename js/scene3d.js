@@ -829,7 +829,8 @@ export class Scene3D {
     this.heatGlow.visible = S.holder === 'heat' && T > 450;
     if (this.heatGlow.visible) { const g = Math.min(1, (T - 450) / 900); this.heatGlow.material.opacity = 0.25 + 0.7 * g; this.heatGlow.material.color.setRGB(1, 0.35 + 0.5 * g, 0.12 + 0.6 * g * g); }
     // α (tiltX) turns the holder about its own rod (the x axis); β (tiltY) is the cradle tilt about the perpendicular axis
-    this.holder.rotation.x = (S.tiltX * Math.PI / 180) * 6;
+    // 3D ED: the goniometer turns the holder through the series, at true scale
+    this.holder.rotation.x = S.mode === 'ed3d' && sim.ed && !sim.ed.none ? sim.edPhi() * Math.PI / 180 : (S.tiltX * Math.PI / 180) * 6;
     this.holder.rotation.z = (S.tiltY * Math.PI / 180) * 6;
     this.corrector.visible = S.corrector;
     this.corrector.children.forEach((c, i) => { c.material.emissiveIntensity = m === 'ronch' ? 0.35 + 0.25 * Math.sin(this.time * 4 + i) : 0.05; });

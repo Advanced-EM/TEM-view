@@ -1,5 +1,6 @@
 // The technique registry is the one list of modes: check that every interface agrees with it and that every
 // technique still runs headless.   node tools/registry-check.mjs
+import { modeInfo } from '../js/explain.js';
 import { readFileSync } from 'node:fs';
 import { TECHNIQUES, GROUPS, MODE_IDS, KEYS, MODIFIERS, DISPLAY, family } from '../js/registry.js';
 import { MODES as OPS_MODES, fam } from '../js/ops.js';
@@ -33,7 +34,10 @@ for (const m of MODE_IDS) {
     const S = defaultState(); S.mode = m; S.df = S.dfFam[family(m)];
     const sim = new Sim(S);
     for (let i = 0; i < 3; i++) sim.update(0.1);
-    ok(true, `headless step: ${m}`);
+    // every technique has its explanation panel (the exhibit renders it on every mode switch)
+    const inf = modeInfo(S, sim);
+    if (!inf?.title || !inf?.body || !Array.isArray(inf.stats)) throw new Error('no explanation (explain.js modeInfo)');
+    ok(true, `headless step and explanation: ${m}`);
   } catch (e) { ok(false, `headless step: ${m}: ${e.message}`); }
 }
 console.log(fails ? `${fails} failed` : 'all passed');

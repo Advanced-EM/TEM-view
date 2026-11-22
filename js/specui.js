@@ -119,7 +119,8 @@ export function createSpecimenUI(api) {
   function overlay() {
     const m = S.mode, fam = family(m), fovA = api.isLor() ? S.lorFov * 1e4 : api.sim.fovA();
     // crystals tilt only ±3° here: shown ×6 (as on the 3D column) so the turn can be seen; ±30° ranges true to scale
-    const ov = { mode: m, family: fam, tiltX: S.tiltX, tiltY: S.tiltY, tiltShow: tiltLimit(S) <= 5 ? 6 : 1, zone: api.sim.spec?.zone ?? '' };
+    const ed = m === 'ed3d' && api.sim.ed && !api.sim.ed.none; // 3D ED: the structure turns with the goniometer
+    const ov = { mode: m, family: fam, tiltX: ed ? api.sim.edPhi() : S.tiltX, tiltY: ed ? 0 : S.tiltY, tiltShow: ed ? 1 : tiltLimit(S) <= 5 ? 6 : 1, zone: api.sim.spec?.zone ?? '' };
     if (m === '4d' && api.sim.fd) { const sl = api.sim.fd.slices; ov.scan_A = api.sim.fd.scan; ov.slices = Array.isArray(sl) || ArrayBuffer.isView(sl) ? sl.length : +sl || 0; } // a count: fd.slices holds the slice arrays
     else if (m === 'cbed' || m === 'ronch') ov.probe = [0, 0];
     else if (m === 'diff') ov.fov_A = Math.min(fovA, S.sa * 10);

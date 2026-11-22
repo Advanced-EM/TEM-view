@@ -8,6 +8,8 @@ import { focalSpread } from './profile.js';
 import * as EELS from './eels.js';
 import * as KR from './kernels.js';
 import { hasZones, zoneSpec } from './zone.js';
+import * as ED from './ed3d.js';
+import * as LAT from './lattice.js';
 import { InlineBackend } from './compute.js';
 import { HOLDERS, specimenT, u2Ratio, thermalStrain, radiolysisFactor, iceSublimation, DEVITRIFY_K } from './holder.js';
 
@@ -168,6 +170,7 @@ export class Sim {
     const map = {
       objAp: ['tem'], alpha: ['stem', 'fd', 'vimg', 'si', 'eels', 'probe'], det: ['stem'],
       sa: ['diff'], camL: ['diff'], beamStop: [], camera: [], vdet: ['vimg'], eelsWin: ['eels'], eelsRange: ['eels'], eelsDisp: ['eels'], eelsOffset: ['eels'], eelsExp: ['eels'], eelsExpLow: ['eels'], eelsCurrent: ['eels'], dualEels: ['eels'], bgsub: ['eels'],
+      edMethod: [], edStart: [], edEnd: [], edSpeed: [], edFps: [], edStep: [], edExp: [], edDoseRate: [], edAxis: [], edMerge: [], edSlice: [], edLayer: [],
       pedOn: ['diff', 'fd', 'vimg'], pedPhi: ['diff', 'fd', 'vimg'], pedSteps: ['diff', 'fd', 'vimg'], pedDescan: ['diff', 'fd', 'vimg'],
       eelsSource: ['eels'], eelsBeta: ['eels'], eelsDet: ['eels'], eelsPx: ['eels'], eelsYScale: [], eelsFit: [], eelsPre: [], eelsDeconv: [], eelsLine: [],
       dose: ['si'], edsSel: [], mode: [],
@@ -430,6 +433,69 @@ export class Sim {
     for (let b = 0; b < nb; b++) prof[b] = cnt[b] ? prof[b] / cnt[b] : 0;
     this.diff = { I, n, dk, prof, kStep, lam };
     this.resampleDiff();
+  }
+
+  // ------------------------------------------------------------ 3D ED / MicroED (ed3d.js)
+  // The detector: 56 mm across (512 × 512 binned pixels of 0.11 mm) at the camera length; its edge sets the resolution.
+  edParams() {
+    const S = this.S, spec = this.spec;
+    return { method: S.edMethod, start: S.edStart, end: S.edEnd, speed: S.edSpeed, fps: S.edFps, step: S.edStep, exposure: S.edExp, doseRate: S.edDoseRate, axis: S.edAxis,
+      pedPhi: S.pedPhi, t: (spec.slabT ?? S.thick * 10), lam: this.lam, Dc: spec.beamSensitive ? this.critDose() : Infinity, crystalArea: Math.PI * 1000 ** 2, mosaic: 0.05 };
+  }
+  computeED3D() {
+    const S = this.S, spec = this.spec, cr = spec.cryst ?? P.CRYST[spec.id], o = this.edParams();
+    const det = { W: 512, pix: 0.11, L: this.camLTrue() }, gMax = Math.min(2, ((det.W / 2) * det.pix) / det.L / this.lam);
+    let refl, name, cubic = true, lattice = null;
+    if (cr && !cr.twoD) { refl = ED.reflections(cr, gMax, S.kV, o.t); name = `${cr.name}${spec.zone && spec.zone !== '—' ? ` along ${spec.zone}` : ''}`; }
+    else if (spec.xyz3) {
+      // any structure of explicit atoms (an uploaded XYZ): find its lattice from the atoms (lattice.js), once
+      spec._lattice ??= LAT.findLattice(spec.xyz3.sym, spec.xyz3.P3) ?? false;
+      lattice = spec._lattice || null;
+      const P3 = spec.xyz3.P3; let z0 = Infinity, z1 = -Infinity; for (let i = 2; i < P3.length; i += 3) { z0 = Math.min(z0, P3[i]); z1 = Math.max(z1, P3[i]); }
+      o.t = Math.max(10, z1 - z0); // the structure's own thickness along the beam
+      if (!lattice) { // no lattice: amorphous or molecular, the series shows diffuse scattering
+        const plan = ED.plan(o);
+        this.ed = { diffuse: true, series: { plan, frames: Array.from({ length: plan.frames }, () => []) }, refl: [], gMax, det, o, collected: 0, running: false, img: null, imgF: -1, name: `${spec.short ?? 'structure'}: no lattice found (amorphous or molecular)`, stats: { completeness: 0, shells: [], unique: 0, observed: 0, dLimit: null }, full: { completeness: 0, shells: [], unique: 0, observed: 0, dLimit: null } };
+        return;
+      }
+      refl = LAT.cellReflections(lattice, gMax);
+      const p = lattice.params; cubic = false; // hkl refer to the found (primitive) cell: Friedel merging only
+      name = `${spec.short ?? 'structure'} · cell ${p.a.toFixed(2)} ${p.b.toFixed(2)} ${p.c.toFixed(2)} Å, ${p.alpha.toFixed(1)}° ${p.beta.toFixed(1)}° ${p.gamma.toFixed(1)}°`;
+    } else { this.ed = { none: true, key: '' }; return; }
+    const series = ED.collect(refl, o);
+    this.ed = { refl, series, gMax, det, o, cr, lattice, cubic, collected: 0, running: false, img: null, imgF: -1, name };
+    this.edStats();
+  }
+  edStats() { const e = this.ed; if (!e || e.none || e.diffuse) return; const merge = e.cubic ? this.S.edMerge : 'friedel'; e.merge = merge; e.stats = ED.statistics(e.refl, e.series, { merge, gMax: e.gMax, upTo: Math.max(1, e.collected) }); e.full = ED.statistics(e.refl, e.series, { merge, gMax: e.gMax }); }
+  // the goniometer angle now (during or after a series)
+  edPhi() { const e = this.ed; if (!e || e.none) return 0; const p = e.series.plan; return e.o.start + Math.min(p.frames, Math.max(0, e.collected)) * p.wedge; }
+  // the series for the current settings, then record it
+  startED3D() { this.stepED3D(0); if (!this.ed || this.ed.none) return; this.ed.collected = 0; this.ed.running = true; this.edStats(); this.version++; }
+  // a series plays in ~10 s of exhibit time (the real time is in plan.time_s)
+  stepED3D(dt) {
+    const S = this.S, key = JSON.stringify([this.spec.zoneKey ?? S.spec, S.kV, S.thick, this.camLTrue().toFixed(1), S.edMethod, S.edStart, S.edEnd, S.edSpeed, S.edFps, S.edStep, S.edExp, S.edDoseRate, S.edAxis, S.pedPhi, this.spec.beamSensitive ? this.critDose().toFixed(2) : 0]);
+    if (this.ed?.key !== key) { this.computeED3D(); this.ed.key = key; this.version++; }
+    const e = this.ed;
+    if (e.none) return;
+    if (e.mergeKey !== S.edMerge) { e.mergeKey = S.edMerge; this.edStats(); this.version++; }
+    if (!e.running || S.paused) return;
+    const F = e.series.plan.frames, before = Math.floor(e.collected);
+    e.collected = Math.min(F, e.collected + (F / 10) * dt * S.speed);
+    if (Math.floor(e.collected) !== before) { this.edStats(); this.version++; }
+    if (e.collected >= F) { e.running = false; this.edStats(); this.version++; }
+  }
+  // the frame on the detector (the last one recorded, or the first before a series)
+  edFrame(W = 256) {
+    const e = this.ed; if (!e || e.none) return null;
+    const f = Math.max(0, Math.min(e.series.plan.frames - 1, Math.ceil(e.collected) - 1));
+    if (e.imgF === f && e.img?.W === W) return e.img;
+    const real = this.S.clarity === 'real', geo = { W, pix: (e.det.pix * e.det.W) / W, L: e.det.L, lam: this.lam, axis: this.S.edAxis, start: e.o.start };
+    if (e.diffuse) { const arr = ED.diffuseFrame(this.spec.xyz3, e.o.start + (f + 0.5) * e.series.plan.wedge, geo); e.img = { arr, W, f }; e.imgF = f; return e.img; }
+    const arr = ED.frameImage(e.refl, e.series, f, { ...geo, noise: real ? (v) => P.poisson(v) : null });
+    // the sweep so far: every recorded spot at its own frame's rotation, dim under the current frame
+    const n = Math.ceil(e.collected), stack = n ? ED.stackImage(e.refl, e.series, n, geo) : null;
+    e.img = { arr, stack, W, f }; e.imgF = f;
+    return e.img;
   }
 
   // the precession modifier (registry MODIFIERS: ped) in effect for the current technique, or null
@@ -1265,6 +1331,7 @@ export class Sim {
       if (m === 'eels' && this.stale.eels) { this.buildEELS(); this.stale.eels = 0; this.version++; }
       if (!S.paused) this.accumulate(dt * S.speed);
     }
+    if (m === 'ed3d') this.stepED3D(dt);
     if (m === 'oah' && this.oah.stale) { this.oah.compute(); this.version++; }
     if (m === 'oah') this.main = this.oah.disp ? { arr: this.oah.disp.holo, w: this.oah.disp.c, h: this.oah.disp.c } : null;
     if (m === 'ilh') {

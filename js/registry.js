@@ -19,6 +19,8 @@ export const TECHNIQUES = [
   { id: 'ilh', name: 'In-line', sub: 'focal-series exit wave', group: '4D-STEM & Phase', family: 'tem', key: '0', caps: ['phase', 'focal-series'] },
   { id: 'eds', name: 'EDS', sub: 'X-ray spectra', group: 'Spectroscopy', family: 'probe', key: '6', caps: ['spectrum', 'scan'] },
   { id: 'eels', name: 'EELS', sub: 'energy loss', group: 'Spectroscopy', family: 'probe', key: '7', caps: ['spectrum', 'scan'] },
+  // 3D reconstruction: a rotation series of diffraction patterns (no shortcut key: new techniques add none)
+  { id: 'ed3d', name: '3D ED', sub: 'MicroED · rotation series', group: '3D & Cryo Reconstruction', family: 'tem', caps: ['diffraction', 'tilt-series'] },
   { id: 'ronch', name: 'Ronchigram', sub: 'corrector tuning', group: 'Optics & Fields', family: 'probe', key: '8', caps: ['alignment'] },
   { id: 'ltem', name: 'Lorentz TEM', sub: 'magnetic domains', group: 'Optics & Fields', family: 'tem', key: '-', caps: ['image', 'magnetic'] },
   // Lorentz STEM scans a probe, but with its own (µrad) probe model rather than the atomic-resolution one

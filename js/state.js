@@ -31,6 +31,9 @@ export const defaultState = () => ({
   mods: {},
   // precession (modifier ped, on SAED and CBED): on/off, cone semi-angle φ (mrad), azimuth steps, descan error (% of φ)
   pedOn: false, pedPhi: 20, pedSteps: 32, pedDescan: 0,
+  // 3D ED / MicroED (ed3d.js): method (cred | step | pedt), tilt range (°), rotation speed (°/s) and frame rate, step (°)
+  // and exposure (s) of stills, dose rate (e⁻/Å²/s), rotation-axis angle in the image plane (°), merging, the layer shown
+  edMethod: 'cred', edStart: -40, edEnd: 40, edSpeed: 2, edFps: 4, edStep: 1, edExp: 0.5, edDoseRate: 0.05, edAxis: 20, edMerge: 'friedel', edSlice: 'hk0', edLayer: 0,
   // zone axis [u, v, w] of a built-in crystal along the beam (zone.js); null: the specimen as built
   zone: null,
   // acquisition plan overrides by technique (footprint.js): scan size, detector pixels, bit depth, dwell, ...
@@ -45,7 +48,8 @@ export const SESSION_KEYS = [
   'objAp', 'alpha', 'alpha4d', 'detIn', 'detOut', 'detPreset', 'camL', 'sa', 'beamStop', 'camera', 'vdet', 'vdIn', 'vdOut', 'vdX', 'vdY', 'vdR',
   'edsSel', 'eelsRange', 'eelsWin', 'eelsWidth', 'bgsub', 'eelsDisp', 'eelsOffset', 'eelsExp', 'eelsExpLow', 'eelsCurrent', 'dualEels',
   'eelsSource', 'eelsBeta', 'eelsDet', 'eelsYScale', 'eelsFit', 'eelsPre', 'eelsDeconv', 'eelsPx', 'eelsLine',
-  'pedOn', 'pedPhi', 'pedSteps', 'pedDescan', 'zone', 'ab', 'ronchAp', 'cbedKind', 'alphaCB', 'alphaLA', 'strain', 'holz',
+  'pedOn', 'pedPhi', 'pedSteps', 'pedDescan', 'zone',
+  'edMethod', 'edStart', 'edEnd', 'edSpeed', 'edFps', 'edStep', 'edExp', 'edDoseRate', 'edAxis', 'edMerge', 'edSlice', 'edLayer', 'ab', 'ronchAp', 'cbedKind', 'alphaCB', 'alphaLA', 'strain', 'holz',
   'biprism', 'sbR', 'numCorr', 'holoView', 'nFocal', 'focalStep', 'ilhView', 'holder', 'tempSet', 'profile', 'mis',
   'magSpec', 'lorThick', 'lorFov', 'lorDf', 'lorDiv', 'lorView', 'lorFouc', 'lorApR', 'lorField', 'lorChir', 'lorPol', 'lstemView', 'lorAlpha',
 ];

@@ -89,6 +89,16 @@ export function modeInfo(S, sim) {
         ],
       };
     }
+    case 'ed3d': {
+      const e = sim.ed, p = e?.series?.plan, st = e?.stats;
+      return {
+        title: 'Turning a crystal through <em>reciprocal space</em>',
+        body: `A single nanocrystal, far too small for X-ray crystallography, is rotated on the goniometer while the camera records a diffraction pattern every fraction of a degree. Each pattern is a flat slice through the crystal's 3D <b>reciprocal lattice</b> (the Ewald sphere is nearly flat for fast electrons), so the series sweeps the lattice through that slice and builds up the full 3D set of reflections, which is what structure solution needs. <b>Continuous rotation</b> (MicroED, cRED) integrates every reflection as it crosses; <b>stills</b> taken in steps miss what falls between them, unless the beam is <b>precessed</b> (PEDT). The holder can only turn so far, so a <b>missing wedge</b> of reciprocal space stays empty: with no symmetry a range Φ records Φ/180° of it, and symmetry fills the rest. Beam-sensitive crystals fade as dose builds up, the finest detail first, so the dose is spread over the whole series.`,
+        stats: e && !e.none && !e.diffuse
+          ? [['Tilt range', `${p.range}°`, `${p.frames} frames of ${p.wedge.toFixed(2)}°`], ['Completeness', `${(100 * (e.collected >= 1 ? st : e.full).completeness).toFixed(1)} %`, S.edMerge === 'laue' ? 'cubic Laue class' : 'Friedel pairs'], ['Resolution', (e.collected >= 1 ? st : e.full).dLimit ? `${(e.collected >= 1 ? st : e.full).dLimit.toFixed(2)} Å` : '—', 'median I/σ ≥ 2'], ['Total dose', `${p.totalDose.toPrecision(2)} e⁻/Å²`, Number.isFinite(e.o.Dc) ? `D_c ≈ ${e.o.Dc.toFixed(0)}` : 'robust crystal']]
+          : [['Specimen', 'no atoms', 'choose a crystal or load an XYZ / CIF']],
+      };
+    }
     case 'cbed': {
       const cb = sim.cbed, f = cb.fit?.best, lac = S.cbedKind === 'lacbed';
       return {

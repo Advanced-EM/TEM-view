@@ -7,6 +7,7 @@
 // parseCommand() is pure and runs in Node too, so the grammar is tested without a browser.
 
 export const VOICE_MODES = [
+  ['ed3d', /\b(3\s*-?\s*d\s*-?\s*(ed|e\s*d|electron\s*diffraction)|micro\s*-?\s*ed|rotation\s*series|cred)\b/],
   ['lstem', /\b(lorentz\s*-?\s*stem|magnetic\s*(dpc|stem)|induction\s*map)\b/],
   ['ltem', /\b(lorentz(\s*-?\s*tem)?|magnetic\s*(domains?|imaging)|fresnel\s*(mode|imaging)?|foucault|skyrmions?)\b/],
   ['4d', /\b(4\s*-?\s*d|four\s*-?\s*d(imensional)?)(\s*-?\s*stem)?\b/],
