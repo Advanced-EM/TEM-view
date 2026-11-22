@@ -1,0 +1,375 @@
+{
+ "E1": {
+  "title": "Radiolysis threshold: when do bubbles form?",
+  "kind": "liquid",
+  "timeline": [
+   {
+    "key": "lcRate",
+    "t0": 10,
+    "t1": 70,
+    "to": 80
+   }
+  ],
+  "movie": {
+   "duration_s": 90,
+   "fps": 2
+  },
+  "runs": {
+   "static": {
+    "threshold_e_A2_s": 6.69,
+    "first_bubble_s": 18.5,
+    "rate_at_first_bubble": 11.76,
+    "bubbles_at_end": 12,
+    "estimate": {
+     "frames": 180,
+     "raw": "5.63 GB",
+     "acquire": "90 s",
+     "dose_total_e_A2": 36000,
+     "tier": "gpu",
+     "shape": [
+      180,
+      4096,
+      4096
+     ]
+    },
+    "session": "sessions/E1-static.json"
+   },
+   "flow 2 µL/min": {
+    "threshold_e_A2_s": 33.44,
+    "first_bubble_s": 37,
+    "rate_at_first_bubble": 36.27,
+    "bubbles_at_end": 12,
+    "estimate": {
+     "frames": 180,
+     "raw": "5.63 GB",
+     "acquire": "90 s",
+     "dose_total_e_A2": 36000,
+     "tier": "gpu",
+     "shape": [
+      180,
+      4096,
+      4096
+     ]
+    },
+    "session": "sessions/E1-flow.json"
+   }
+  }
+ },
+ "E2": {
+  "title": "Gold growth from a precursor: growth rate against dose rate, below the bubble threshold",
+  "kind": "liquid",
+  "timeline": [
+   {
+    "key": "lcRate",
+    "t0": 30,
+    "t1": 31,
+    "to": 2
+   }
+  ],
+  "movie": {
+   "duration_s": 60,
+   "fps": 2
+  },
+  "runs": {
+   "main": {
+    "r_start_A": 21,
+    "r_end_A": 30.71,
+    "growth_A_s_at_0_5": 0.109,
+    "growth_A_s_at_2": 0.219,
+    "ratio": 2,
+    "sqrt_rate_ratio": 2,
+    "bubbles_at_end": 0,
+    "estimate": {
+     "frames": 120,
+     "raw": "3.75 GB",
+     "acquire": "60 s",
+     "dose_total_e_A2": 24000,
+     "tier": "gpu",
+     "shape": [
+      120,
+      4096,
+      4096
+     ]
+    },
+    "session": "sessions/E2.json"
+   }
+  }
+ },
+ "E3": {
+  "title": "Sintering of gold nanoparticles: oxygen versus nitrogen",
+  "kind": "gas + heating",
+  "timeline": [
+   {
+    "key": "tempSet",
+    "t0": 10,
+    "t1": 60,
+    "to": 800
+   }
+  ],
+  "movie": {
+   "duration_s": 180,
+   "fps": 1
+  },
+  "runs": {
+   "O2": {
+    "r_start_A": 21,
+    "r_end_A": 29,
+    "sinter_end_A": 8.35,
+    "onset_s": 52,
+    "onset_T_K": 724,
+    "contrast_kept_pct": 95.7,
+    "drift_A": 30.7,
+    "estimate": {
+     "frames": 180,
+     "raw": "5.63 GB",
+     "acquire": "3.0 min",
+     "dose_total_e_A2": 72000,
+     "tier": "gpu",
+     "shape": [
+      180,
+      4096,
+      4096
+     ]
+    },
+    "session": "sessions/E3-O2.json"
+   },
+   "N2": {
+    "r_start_A": 21,
+    "r_end_A": 25,
+    "sinter_end_A": 4.17,
+    "onset_s": 55,
+    "onset_T_K": 755,
+    "contrast_kept_pct": 96,
+    "drift_A": 30.7,
+    "estimate": {
+     "frames": 180,
+     "raw": "5.63 GB",
+     "acquire": "3.0 min",
+     "dose_total_e_A2": 72000,
+     "tier": "gpu",
+     "shape": [
+      180,
+      4096,
+      4096
+     ]
+    },
+    "session": "sessions/E3-N2.json"
+   }
+  }
+ },
+ "E4": {
+  "title": "How much gas can the image take? A pressure ramp in an open column",
+  "kind": "gas (ETEM)",
+  "timeline": [
+   {
+    "key": "gcP",
+    "t0": 5,
+    "t1": 65,
+    "to": 20
+   }
+  ],
+  "movie": {
+   "duration_s": 70,
+   "fps": 1
+  },
+  "runs": {
+   "main": {
+    "contrast_at_20_mbar_pct": 37.2,
+    "half_contrast_mbar": 14,
+    "worst_deviation_from_exp_pct": 0.6,
+    "estimate": {
+     "frames": 70,
+     "raw": "2.19 GB",
+     "acquire": "70 s",
+     "dose_total_e_A2": 28000,
+     "tier": "gpu",
+     "shape": [
+      70,
+      4096,
+      4096
+     ]
+    },
+    "session": "sessions/E4.json"
+   }
+  }
+ },
+ "E5": {
+  "title": "Redox cycling of SrTiO₃: reduce in H₂, re-oxidise in O₂",
+  "kind": "gas + heating",
+  "timeline": [
+   {
+    "key": "tempSet",
+    "t0": 5,
+    "t1": 25,
+    "to": 800
+   }
+  ],
+  "movie": {
+   "duration_s": 120,
+   "fps": 1
+  },
+  "runs": {
+   "main": {
+    "xi_end_H2": 1,
+    "t_90pct_reduced_s": 41,
+    "xi_end_O2": 0,
+    "t_90pct_reoxidised_s": 18,
+    "estimate": {
+     "frames": 120,
+     "raw": "3.75 GB",
+     "acquire": "2.0 min",
+     "dose_total_e_A2": 48000,
+     "tier": "gpu",
+     "shape": [
+      120,
+      4096,
+      4096
+     ]
+    },
+    "session": "sessions/E5.json"
+   }
+  }
+ },
+ "E6": {
+  "title": "Helium bubbles in silicon: coarsening, escape and voids on annealing",
+  "kind": "heating",
+  "timeline": [
+   {
+    "key": "tempSet",
+    "t0": 20,
+    "t1": 220,
+    "to": 1100
+   }
+  ],
+  "movie": {
+   "duration_s": 600,
+   "fps": 1
+  },
+  "runs": {
+   "main": {
+    "cavities_start": 260,
+    "d_start_nm": 1.67,
+    "cavities_end": 10,
+    "d_end_nm": 5.88,
+    "he_end": 0,
+    "stages": [
+     {
+      "stage": "coarsening",
+      "t_s": 132,
+      "T_K": 750
+     },
+     {
+      "stage": "helium escaping",
+      "t_s": 195,
+      "T_K": 1007
+     },
+     {
+      "stage": "empty faceted voids",
+      "t_s": 222,
+      "T_K": 1110
+     },
+     {
+      "stage": "voids annealing out",
+      "t_s": null
+     }
+    ],
+    "thermal_drift_A": 58.3,
+    "estimate": {
+     "frames": 600,
+     "raw": "18.8 GB",
+     "acquire": "10.0 min",
+     "dose_total_e_A2": 240000,
+     "tier": "gpu",
+     "shape": [
+      600,
+      4096,
+      4096
+     ]
+    },
+    "session": "sessions/E6.json"
+   }
+  }
+ },
+ "E7": {
+  "title": "Mapping the field across a biased gap by holography, then breaking it down",
+  "kind": "biasing",
+  "timeline": [
+   {
+    "key": "bsV",
+    "t0": 2,
+    "t1": 22,
+    "to": 20
+   }
+  ],
+  "movie": {
+   "duration_s": 25,
+   "fps": 1
+  },
+  "runs": {
+   "main": {
+    "phase_slope_per_V": -0.00003546,
+    "predicted_per_V": -0.00003644,
+    "ratio": 0.973,
+    "breakdown_tip_5um_10MVm_V": 17.87,
+    "estimate": {
+     "frames": 25,
+     "raw": "800 MB",
+     "acquire": "25 s",
+     "dose_total_e_A2": 2500,
+     "tier": "gpu",
+     "shape": [
+      25,
+      4096,
+      4096
+     ]
+    },
+    "session": "sessions/E7.json"
+   }
+  }
+ },
+ "E8": {
+  "title": "Electrochemistry: deposit gold, then strip it",
+  "kind": "liquid + biasing",
+  "timeline": [
+   {
+    "key": "bsV",
+    "t0": 5,
+    "t1": 10,
+    "to": -0.3
+   },
+   {
+    "key": "bsV",
+    "t0": 30,
+    "t1": 35,
+    "to": 0.7
+   }
+  ],
+  "movie": {
+   "duration_s": 60,
+   "fps": 2
+  },
+  "runs": {
+   "main": {
+    "r_start_A": 21,
+    "r_max_A": 31,
+    "t_max_s": 30,
+    "r_end_A": 22.5,
+    "deposition_A_s": 0.42,
+    "stripping_A_s": -0.42,
+    "estimate": {
+     "frames": 120,
+     "raw": "3.75 GB",
+     "acquire": "60 s",
+     "dose_total_e_A2": 24000,
+     "tier": "gpu",
+     "shape": [
+      120,
+      4096,
+      4096
+     ]
+    },
+    "session": "sessions/E8.json"
+   }
+  }
+ }
+}
