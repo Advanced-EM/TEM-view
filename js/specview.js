@@ -263,7 +263,7 @@ export class SpecViewer {
   }
   applyTilt() {
     const ov = this.ov;
-    const a = this.opts.sync ? (ov.tiltX ?? 0) * DEG : 0, b = this.opts.sync ? (ov.tiltY ?? 0) * DEG : 0;
+    const k = ov.tiltShow ?? 1, a = this.opts.sync ? (ov.tiltX ?? 0) * DEG * k : 0, b = this.opts.sync ? (ov.tiltY ?? 0) * DEG * k : 0;
     this.specG.rotation.set(a, b, 0, 'XYZ'); this.envG.rotation.set(a, b, 0, 'XYZ');
   }
 
@@ -304,7 +304,7 @@ export class SpecViewer {
     const s = 18, X = ax(new THREE.Vector3(1, 0, 0)), Y = ax(new THREE.Vector3(0, 1, 0)), Z = ax(new THREE.Vector3(0, 0, 1));
     const n = (v) => { const l = Math.hypot(...v) || 1; return [v[0] / l * s, v[1] / l * s]; };
     const line = (v, col, t) => { const [x, y] = n(v); return `<line x1="24" y1="24" x2="${24 + x}" y2="${24 + y}" stroke="${col}" stroke-width="1.6"/><text x="${24 + x * 1.3}" y="${27 + y * 1.3}" fill="${col}" font-size="9" text-anchor="middle">${t}</text>`; };
-    this.hud.innerHTML = `<svg width="48" height="48" viewBox="0 0 48 48" aria-hidden="true">${line(X, '#ff8a8a', 'x')}${line(Y, '#8aff9a', 'y')}${line(Z, '#8ab4ff', 'z')}</svg><span>beam ↓${ov.zone && ov.zone !== '—' ? ` ∥ ${ov.zone}` : ''}${this.opts.sync && (ov.tiltX || ov.tiltY) ? ` · tilt α ${(+ov.tiltX).toFixed(1)}° β ${(+ov.tiltY).toFixed(1)}°` : ''}${st.count > POINTS_ABOVE ? ' · point cloud' : ''}</span>`;
+    this.hud.innerHTML = `<svg width="48" height="48" viewBox="0 0 48 48" aria-hidden="true">${line(X, '#ff8a8a', 'x')}${line(Y, '#8aff9a', 'y')}${line(Z, '#8ab4ff', 'z')}</svg><span>beam ↓${ov.zone && ov.zone !== '—' ? ` ∥ ${ov.zone}` : ''}${this.opts.sync && (ov.tiltX || ov.tiltY) ? ` · tilt α ${(+ov.tiltX).toFixed(1)}° β ${(+ov.tiltY).toFixed(1)}°${(ov.tiltShow ?? 1) > 1 ? ` (shown ×${ov.tiltShow})` : ''}` : ''}${st.count > POINTS_ABOVE ? ' · point cloud' : ''}</span>`;
   }
 
   // a small picture of a structure (for the specimen cards); needs the renderer
