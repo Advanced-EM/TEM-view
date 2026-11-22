@@ -1,14 +1,15 @@
 // The compute worker: runs kernels.js jobs off the main thread for WorkerBackend (compute.js).
 // Messages in:  { op: 'run', id, job } · { op: 'pause', id, paused } · { op: 'cancel', id }
 // Messages out: { id, type: 'patterns', from, count, data } (4D scan, in chunks) · { id, type: 'epie' | 'msepie',
-//               iter, k, errHist, ... object } (snapshots) · { id, type: 'error', message } · final: true at the end
+//               iter, k, errHist, ... object } (snapshots) · { id, type: 'tomo', x, iter, resid } (a reconstruction,
+//               after every SIRT iteration) · { id, type: 'error', message } · final: true at the end
 // The 4D data set of a scan stays here (the last two), so ptychography jobs reuse it without copying 26 MB.
 const V = self.location.search; // the page's cache-busting stamp, passed on to the kernels
-let K = null;
+let K = null, TOMO = null;
 const pending = [], tasks = new Map(), datasets = new Map();
 const now = () => performance.now();
 self.onmessage = (e) => (K ? handle(e.data) : pending.push(e.data));
-import(`./kernels.js${V}`).then((m) => { K = m; for (const d of pending.splice(0)) handle(d); });
+Promise.all([import(`./kernels.js${V}`), import(`./tomo.js${V}`)]).then(([m, t]) => { K = m; TOMO = t; for (const d of pending.splice(0)) handle(d); });
 
 function handle(m) {
   if (m.op === 'cancel') { const t = tasks.get(m.id); if (t) t.cancelled = true; tasks.delete(m.id); return; }
@@ -16,7 +17,9 @@ function handle(m) {
   if (m.op !== 'run') return;
   const job = m.job, t = { id: m.id, job, paused: false, cancelled: false, lastPost: 0 };
   try {
-    if (job.kind === 'fd-scan') {
+    if (job.kind === 'tomo') {
+      if (job.method === 'sirt') t.st = TOMO.sirtInit(job.ser, { iterations: job.iterations, positivity: true });
+    } else if (job.kind === 'fd-scan') {
       const g = job.geom;
       t.data = new Float32Array(g.N * g.N * g.n4 * g.n4);
       t.st = K.fdInit(job, t.data); t.sent = t.st.done;
@@ -37,6 +40,16 @@ function schedule(t) { if (!t.scheduled) { t.scheduled = true; setTimeout(() => 
 function work(t) {
   if (t.cancelled || t.paused) return;
   const j = t.job, g = j.geom;
+  if (j.kind === 'tomo') {
+    // WBP in one go; SIRT an iteration per slice of work (an iteration is the unit: ~0.1–2 s)
+    const x = j.method === 'sirt' ? (TOMO.sirtStep(t.st, j.ser, 0, now), t.st.x) : TOMO.wbp(j.ser, { filter: j.filter });
+    const iter = j.method === 'sirt' ? t.st.iter : 1, end = iter >= (j.method === 'sirt' ? j.iterations : 1);
+    const snap = x.slice();
+    self.postMessage({ id: t.id, type: 'tomo', x: snap, iter, resid: t.st ? [...t.st.resid] : [], final: end }, [snap.buffer]);
+    if (end) { tasks.delete(t.id); return; }
+    schedule(t);
+    return;
+  }
   if (j.kind === 'fd-scan') {
     K.fdStep(t.st, 25, now);
     const end = t.st.done >= g.N * g.N;

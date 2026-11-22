@@ -89,6 +89,14 @@ export function modeInfo(S, sim) {
         ],
       };
     }
+    case 'tomo': {
+      const T = sim.tomo, st = T?.stats, F = T?.angles?.length ?? 0;
+      return {
+        title: 'From a tilt series to a <em>3D volume</em>',
+        body: `One image shows the specimen flattened along the beam. Tilting it step by step and recording a projection at each angle gives a <b>tilt series</b>; by the projection-slice theorem each projection is one line through the 2D Fourier transform of every slice of the object, so the series fills Fourier space line by line and can be inverted. <b>Weighted back-projection</b> smears each projection back along its beam direction after a ramp filter that undoes the over-weighting of low frequencies; <b>SIRT</b> instead adjusts a volume until its projections match the data, which copes better with noise and few tilts. A tomogram needs a signal that is a true projection: <b>HAADF-STEM</b> grows with mass and thickness only, while bright-field diffraction contrast flickers with the tilt. The holder cannot reach 90°, so a <b>missing wedge</b> of Fourier space stays empty and features are stretched along the beam. Dose is shared across all projections, and beam-sensitive specimens change while they are recorded.`,
+        stats: T ? [['Tilt series', `${F} × ${S.tomoStep}°`, `${S.tomoScheme === 'saxton' ? 'Saxton' : 'linear'} to ±${S.tomoMax}°`], ['Elongation', `${T.pred.toFixed(2)}×`, st?.meas ? `measured ${st.meas.toFixed(2)}× on the beads` : 'predicted for a point (missing wedge)'], ['Agreement', st ? `${st.corr.toFixed(2)}` : '—', 'correlation with the phantom'], ['Dose', `${T.o.dose.toExponential(1)} e⁻/Å²`, T.o.Dc ? `D_c ≈ ${T.o.Dc.toFixed(0)}, mass left ${Math.round(100 * T.ser.massLeft)} %` : 'for the series']] : [['Tilt series', '—', 'collect it']],
+      };
+    }
     case 'ed3d': {
       const e = sim.ed, p = e?.series?.plan, st = e?.stats;
       return {

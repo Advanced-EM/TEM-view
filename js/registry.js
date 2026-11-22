@@ -21,6 +21,8 @@ export const TECHNIQUES = [
   { id: 'eels', name: 'EELS', sub: 'energy loss', group: 'Spectroscopy', family: 'probe', key: '7', caps: ['spectrum', 'scan'] },
   // 3D reconstruction: a rotation series of diffraction patterns (no shortcut key: new techniques add none)
   { id: 'ed3d', name: '3D ED', sub: 'MicroED · rotation series', group: '3D & Cryo Reconstruction', family: 'tem', caps: ['diffraction', 'tilt-series'] },
+  // a tilt series of images reconstructed into a volume; HAADF-STEM by default (its own signal model, no atomic probe)
+  { id: 'tomo', name: 'Tomography', sub: 'tilt series · WBP / SIRT', group: '3D & Cryo Reconstruction', family: 'probe', caps: ['image', 'tilt-series'], ownProbe: true },
   { id: 'ronch', name: 'Ronchigram', sub: 'corrector tuning', group: 'Optics & Fields', family: 'probe', key: '8', caps: ['alignment'] },
   { id: 'ltem', name: 'Lorentz TEM', sub: 'magnetic domains', group: 'Optics & Fields', family: 'tem', key: '-', caps: ['image', 'magnetic'] },
   // Lorentz STEM scans a probe, but with its own (µrad) probe model rather than the atomic-resolution one

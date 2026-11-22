@@ -265,3 +265,16 @@ def test_3d_ed_completeness(tem):
     tem.set(ed_merge="laue")
     assert tem.analyze("ed3d_stats")["result"]["completeness"] > 0.95  # cubic symmetry fills the rest
     tem.set(zone_axis=None)
+
+
+def test_tomography_series_and_reconstruction():
+    tem = tv.connect("headless")
+    tem.set(mode="tomo", specimen="au", tomo_object="beads", tomo_volume=64, tomo_max_tilt_deg=60, tomo_dose=1e7)
+    acq = tem.acquire()
+    assert acq["tilt_series"].shape == (61, 64, 64)
+    assert acq["reconstruction"].shape == (64, 64, 64)
+    a = tem.analyze("tomo_stats")
+    r = a["result"]
+    assert r["projections"] == 61 and r["max_tilt_deg"] == 60
+    assert abs(r["elongation_predicted"] - 1.552) < 0.01
+    assert abs(r["elongation_measured"] / r["elongation_predicted"] - 1) < 0.15

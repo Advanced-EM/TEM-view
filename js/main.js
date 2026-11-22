@@ -14,6 +14,7 @@ import { createSpecimenUI } from './specui.js';
 import { defaultBackend } from './compute.js';
 import { STANDARD_ZONES, hasZones, asBuilt, zoneLabel } from './zone.js';
 import * as ED from './ed3d.js';
+import * as TOMO from './tomo.js';
 import { ZLP_SOURCES, toMSA } from './eels.js';
 import { PRESETS, newProfile, sanitizeProfile } from './profile.js';
 import { HOLDERS } from './holder.js';
@@ -135,7 +136,7 @@ const logMap = (min, max) => ({ to: (v) => (Math.log(v / min) / Math.log(max / m
 const NOT_RONCH = 'tem stem 4d diff eds eels cbed oah ilh';
 const TILTABLE = 'tem stem 4d diff eds eels cbed oah ilh ltem lstem';
 // the atomic-scale specimens and the objective lens: not in the Lorentz modes (objective off, magnetic specimens)
-const NOT_LOR = 'tem stem 4d diff cbed eds eels ronch oah ilh ed3d';
+const NOT_LOR = 'tem stem 4d diff cbed eds eels ronch oah ilh ed3d tomo';
 const LOR = 'ltem lstem';
 // acquisition plan (footprint.js): the current technique's plan, and the chip options for one field
 const curPlan = () => { try { return footprintFor(S, sim).plan; } catch { return {}; } };
@@ -274,6 +275,23 @@ const CONTROLS = [
   { chips: 'edSlice', label: 'Reciprocal-space layer', small: true, modes: 'ed3d', opts: [['hk0', 'hk0'], ['h0l', 'h0l'], ['0kl', '0kl']] },
   { slider: 'edLayer', label: 'Layer index', min: -3, max: 3, step: 1, fmt: (v) => `${v}`, modes: 'ed3d' },
   { pFn: () => { const e = sim.ed; if (!e || e.none) return 'Choose a crystal (SrTiO₃, Au, Si or a perovskite), or load any structure as XYZ or CIF: its lattice is found from the atoms. Set the orientation with the zone axis, or with Align to zone in the structure preview.'; if (e.diffuse) return `${e.series.plan.frames} frames over ${e.series.plan.range}°. No lattice was found in this structure, so the frames show its diffuse scattering (a molecule or amorphous material): there are no reflections to index.`; if (e.lattice) return `Lattice found from the atoms: ${e.name.split('· ')[1]} (${e.lattice.basis.length} atoms per cell, ${e.refl.length} reflections to ${(1 / e.gMax).toFixed(2)} Å). Indices refer to this primitive cell; equivalents merged as Friedel pairs. ${e.series.plan.frames} frames of ${e.series.plan.wedge.toFixed(2)}°: ${(100 * e.full.completeness).toFixed(1)} % complete over ${e.series.plan.range}°.`; const p = e.series.plan, f = e.full; return `${p.frames} frames of ${p.wedge.toFixed(2)}° over ${p.range}°: ${p.time_s.toFixed(0)} s, ${p.totalDose.toPrecision(3)} e⁻/Å² in total${Number.isFinite(e.o.Dc) ? ` (critical dose ≈ ${e.o.Dc.toFixed(0)} e⁻/Å²)` : ''}. Detector edge ${(1 / e.gMax).toFixed(2)} Å. Full series: ${(100 * f.completeness).toFixed(1)} % complete${f.dLimit ? `, ⟨I/σ⟩ ≥ 2 to ${f.dLimit.toFixed(2)} Å` : ''}. With Friedel symmetry only, a range Φ covers Φ/180° of reciprocal space; more range, or a higher-symmetry crystal, fills the rest.`; }, modes: 'ed3d' },
+  { sec: 'Tomography', modes: 'tomo' },
+  { buttons: [['tomoCollect', 'Collect the tilt series'], ['tomoExport', 'Export volume + series (.mrc)']], modes: 'tomo' },
+  { chips: 'tomoPhantom', label: 'Object', small: true, modes: 'tomo', opts: [['specimen', 'This specimen'], ['beads', 'Gold test beads']] },
+  { chips: 'tomoSignal', label: 'Signal', small: true, modes: 'tomo', opts: [['haadf', 'HAADF-STEM'], ['bf', 'BF-TEM']] },
+  { chips: 'tomoScheme', label: 'Tilt scheme', small: true, modes: 'tomo', opts: [['linear', 'Linear'], ['saxton', 'Saxton (finer at high tilt)']] },
+  { slider: 'tomoMax', label: 'Maximum tilt', min: 20, max: 80, step: 1, fmt: (v) => `±${v}°`, modes: 'tomo', ends: ['in situ holder', '', 'tomography holder'] },
+  { slider: 'tomoStep', label: 'Tilt step', min: 0.5, max: 10, step: 0.5, fmt: (v) => `${(+v).toFixed(1)}°`, modes: 'tomo' },
+  { slider: 'tomoDose', label: 'Dose for the whole series', min: 1, max: 1e7, log: true, fmt: (v) => `${(+v).toExponential(1)} e⁻/Å²`, modes: 'tomo', ends: ['cryo-ET', '', 'robust metal'] },
+  { slider: 'tomoJitter', label: 'Stage jitter between tilts', min: 0, max: 5, step: 0.1, fmt: (v) => `${(+v).toFixed(1)} px rms`, modes: 'tomo' },
+  { toggles: [['tomoAlign', 'Align the projections (centre of mass)']], modes: 'tomo' },
+  { chips: 'tomoRecon', label: 'Reconstruction', small: true, modes: 'tomo', opts: [['wbp', 'WBP (filtered back-projection)'], ['sirt', 'SIRT (iterative)']] },
+  { chips: 'tomoFilter', label: 'WBP filter', small: true, modes: 'tomo', opts: [['ramp', 'Ramp'], ['hann', 'Hann (less noise)']], show: () => S.tomoRecon === 'wbp' },
+  { slider: 'tomoIter', label: 'SIRT iterations', min: 1, max: 100, step: 1, fmt: (v) => `${v}`, modes: 'tomo', show: () => S.tomoRecon === 'sirt' },
+  { chips: 'tomoN', label: 'Volume', small: true, modes: 'tomo', opts: [[64, '64³'], [96, '96³'], [128, '128³']] },
+  { chips: 'tomoView', label: 'View', small: true, modes: 'tomo', opts: [['series', 'Tilt series'], ['xy', 'XY'], ['xz', 'XZ'], ['yz', 'YZ (across the axis)']] },
+  { slider: 'tomoDepth', label: 'Slice position', min: -0.5, max: 0.5, step: 0.01, fmt: (v) => `${(+v * 100).toFixed(0)} % of the box`, modes: 'tomo', show: () => S.tomoView !== 'series' },
+  { pFn: () => { const T = sim.tomo; if (!T) return ''; const F = T.angles?.length ?? 0, st = T.stats; return `${F} projections from −${S.tomoMax}° to +${S.tomoMax}°. The holder cannot tilt to 90°, so a ${180 - 2 * S.tomoMax}° wedge of Fourier space is never measured and every feature is stretched along the beam by about ${T.pred?.toFixed(2)}× (a point; larger objects stretch less).${st?.meas ? ` Measured on the smallest beads: ${st.meas.toFixed(2)}×.` : ''} HAADF intensity grows with mass and thickness only, so its projections can be reconstructed; bright-field diffraction contrast changes with the tilt and breaks that.${T.o?.Dc ? ` This specimen is beam-sensitive (critical dose ≈ ${T.o.Dc.toFixed(0)} e⁻/Å²): it loses mass during the series, so the projections disagree.` : ''}`; }, modes: 'tomo' },
   { sec: 'Precession (PED)', modes: 'diff cbed 4d' },
   { toggles: [['pedOn', 'Precess the beam (hollow cone)']], modes: 'diff cbed 4d' },
   { slider: 'pedPhi', label: 'Precession angle φ', min: 0, max: 50, step: 0.5, fmt: (v) => `${v} mrad (${(v * 0.0573).toFixed(2)}°)`, modes: 'diff cbed 4d', show: () => S.pedOn, ends: ['', '', 'wide cone'] },
@@ -621,6 +639,8 @@ function action(id, el) {
     sim.invalidate('magnet'); explainChange('lorReset');
   }
   if (id === 'edCollect') { sim.startED3D(); return; }
+  if (id === 'tomoCollect') { sim.startTomo(); return; }
+  if (id === 'tomoExport') return exportMRC();
   if (id === 'edExport') return exportSMV();
   if (id === 'eelsWhole') { S.eelsPx = null; sim.invalidate('eelsPx'); return; }
   if (id === 'eelsMSA') return exportMSA();
@@ -759,6 +779,7 @@ function updateDetectorHeader() {
     eds: ['EDS element map', 'X-ray spectrum'],
     eels: ['Energy-filtered map', 'Electron energy-loss spectrum'],
     ed3d: ['Diffraction frame · rotation series', 'Reciprocal space · completeness by shell'],
+    tomo: [`${S.tomoSignal === 'bf' ? 'BF-TEM' : 'HAADF-STEM'} tilt series · tomogram`, 'Across the tilt axis · missing wedge'],
     ronch: ['Ronchigram · direct electron detector', 'Aberration phase & budget'],
     oah: [`Off-axis hologram · ${({ holo: 'raw hologram', phase: 'reconstructed phase', amp: 'reconstructed amplitude', contour: 'phase contours' })[S.holoView]}`, 'Sideband selection & phase profile'],
     ilh: [`In-line holography · ${({ phase: 'exit-wave phase', amp: 'exit-wave amplitude', series: 'focal series' })[S.ilhView]}`, 'Focal series & convergence'],
@@ -1073,6 +1094,21 @@ async function exportSMV() {
   const readme = `TEM-view simulated 3D ED series (${e.name})\n${p.frames} frames, ${p.wedge}° each from ${e.o.start}°, rotation axis ${S.edAxis}° from x in the image plane\nwavelength ${sim.lam.toFixed(6)} Å, camera length ${e.det.L.toFixed(1)} mm, ${e.det.W}×${e.det.W} pixels of ${e.det.pix} mm, beam centre at the middle\nmethod: ${ED.METHODS[S.edMethod]}; dose ${p.totalDose.toPrecision(3)} e⁻/Å² in total. Simulated (kinematical) data for teaching and pipeline tests.\n`;
   files.push({ name: 'README.txt', bytes: new TextEncoder().encode(readme) });
   download(new Blob([zip(files)], { type: 'application/zip' }), `tem-view-3ded-${S.spec}-${stamp()}.zip`);
+  explainChange('exported');
+}
+// a tomogram as MRC files (IMOD, tomopy, napari, Chimera): the reconstruction, the aligned tilt series and the angles
+async function exportMRC() {
+  const T = sim.tomo;
+  if (!T || T.ser.proj.length < T.angles.length) return;
+  const { zip } = await import('./npy.js');
+  const N = T.ph.N, F = T.angles.length, stack = new Float32Array(N * N * F);
+  T.ser.proj.forEach((p, i) => stack.set(p, i * N * N));
+  const files = [{ name: 'tilt-series.mrc', bytes: TOMO.mrc(stack, N, N, F, [T.ph.vox, T.ph.vox, 1], { stack: true, label: `TEM-view tilt series ${S.spec}` }) },
+    { name: 'tilt-series.tlt', bytes: new TextEncoder().encode(T.angles.map((a) => a.toFixed(2)).join('\n') + '\n') }];
+  if (sim.tomoVolume()) files.push({ name: 'reconstruction.mrc', bytes: TOMO.mrc(sim.tomoVolume(), N, N, N, T.ph.vox, { label: `TEM-view ${T.rec.method} ${S.spec}` }) });
+  const readme = `TEM-view simulated electron tomography (${T.ph.name})\n${F} projections, ${S.tomoScheme} scheme to ±${S.tomoMax}°, ${S.tomoSignal === 'bf' ? 'bright-field TEM' : 'HAADF-STEM'}, tilt axis along x (the image rows)\n${N}×${N} pixels of ${T.ph.vox.toFixed(3)} Å; ${T.o.dose.toPrecision(3)} e⁻/Å² for the series\nreconstruction: ${T.rec?.method === 'sirt' ? `SIRT, ${T.rec.iter} iterations` : `WBP (${S.tomoFilter})`}${S.tomoAlign ? ', projections aligned by centre of mass' : ''}\nThe tilt series is as recorded (not aligned); angles in tilt-series.tlt (IMOD convention).\nSimulated data for teaching and pipeline tests.\n`;
+  files.push({ name: 'README.txt', bytes: new TextEncoder().encode(readme) });
+  download(new Blob([zip(files)], { type: 'application/zip' }), `tem-view-tomo-${S.spec}-${stamp()}.zip`);
   explainChange('exported');
 }
 // the recorded EELS spectrum (and the low-loss one with Dual EELS) as EMSA/MSA, readable by HyperSpy and DM
@@ -1455,7 +1491,7 @@ function frame(now) {
     window.temDrive?.tick(dt);
     scn.tick();
     sim.update(dt);
-    const live = S.clarity === 'real' && ['tem', 'stem', 'diff', 'ronch', 'cbed'].includes(S.mode) && !S.paused;
+    const live = (S.clarity === 'real' && ['tem', 'stem', 'diff', 'ronch', 'cbed'].includes(S.mode) && !S.paused) || (S.mode === 'tomo' && (S.tomoView === 'series' || !sim.tomoVolume()) && sim.tomo?.ser?.proj.length === sim.tomo?.angles?.length); // a recorded tilt series plays on a loop
     if (sim.version !== lastVer || (live && now - lastDraw > 70) || redraw) {
       redraw = false;
       drawPopout(); // first, so the main canvases leave R2.layout set for their own interactions
@@ -1493,7 +1529,7 @@ function frame(now) {
       b.el.hidden = !vis;
       if (vis) b.el.textContent = b.c.pFn();
     }
-    if (['eds', '4d', 'eels', 'stem', 'ronch', 'cbed', 'oah', 'ilh', 'ltem', 'lstem'].includes(S.mode)) renderInfo();
+    if (['eds', '4d', 'eels', 'stem', 'ronch', 'cbed', 'oah', 'ilh', 'ltem', 'lstem', 'ed3d', 'tomo'].includes(S.mode)) renderInfo();
     $('#status').textContent = `· ${fps} fps`;
   }
   if (!scene.renderer.xr.isPresenting) requestAnimationFrame(frame); else xrLoop = true; // in a headset the XR session drives the frames

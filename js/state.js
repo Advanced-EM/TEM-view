@@ -34,6 +34,12 @@ export const defaultState = () => ({
   // 3D ED / MicroED (ed3d.js): method (cred | step | pedt), tilt range (°), rotation speed (°/s) and frame rate, step (°)
   // and exposure (s) of stills, dose rate (e⁻/Å²/s), rotation-axis angle in the image plane (°), merging, the layer shown
   edMethod: 'cred', edStart: -40, edEnd: 40, edSpeed: 2, edFps: 4, edStep: 1, edExp: 0.5, edDoseRate: 0.05, edAxis: 20, edMerge: 'friedel', edSlice: 'hk0', edLayer: 0,
+  // electron tomography (tomo.js): phantom (the specimen, or gold test beads), volume size (voxels per side),
+  // signal (HAADF-STEM or BF-TEM), tilt scheme (linear | saxton), maximum tilt and step (°), dose for the whole
+  // series (e⁻/Å²), alignment error (rms pixels) and centre-of-mass alignment, reconstruction (wbp | sirt), its
+  // filter and iterations, the view (series | xy | xz | yz) and the slice position (fraction of the box, 0 = centre)
+  tomoPhantom: 'specimen', tomoN: 96, tomoSignal: 'haadf', tomoScheme: 'linear', tomoMax: 70, tomoStep: 2, tomoDose: 1e5,
+  tomoJitter: 0, tomoAlign: true, tomoRecon: 'wbp', tomoFilter: 'ramp', tomoIter: 20, tomoView: 'yz', tomoDepth: 0,
   // zone axis [u, v, w] of a built-in crystal along the beam (zone.js); null: the specimen as built
   zone: null,
   // acquisition plan overrides by technique (footprint.js): scan size, detector pixels, bit depth, dwell, ...
@@ -49,7 +55,8 @@ export const SESSION_KEYS = [
   'edsSel', 'eelsRange', 'eelsWin', 'eelsWidth', 'bgsub', 'eelsDisp', 'eelsOffset', 'eelsExp', 'eelsExpLow', 'eelsCurrent', 'dualEels',
   'eelsSource', 'eelsBeta', 'eelsDet', 'eelsYScale', 'eelsFit', 'eelsPre', 'eelsDeconv', 'eelsPx', 'eelsLine',
   'pedOn', 'pedPhi', 'pedSteps', 'pedDescan', 'zone',
-  'edMethod', 'edStart', 'edEnd', 'edSpeed', 'edFps', 'edStep', 'edExp', 'edDoseRate', 'edAxis', 'edMerge', 'edSlice', 'edLayer', 'ab', 'ronchAp', 'cbedKind', 'alphaCB', 'alphaLA', 'strain', 'holz',
+  'edMethod', 'edStart', 'edEnd', 'edSpeed', 'edFps', 'edStep', 'edExp', 'edDoseRate', 'edAxis', 'edMerge', 'edSlice', 'edLayer',
+  'tomoPhantom', 'tomoN', 'tomoSignal', 'tomoScheme', 'tomoMax', 'tomoStep', 'tomoDose', 'tomoJitter', 'tomoAlign', 'tomoRecon', 'tomoFilter', 'tomoIter', 'tomoView', 'tomoDepth', 'ab', 'ronchAp', 'cbedKind', 'alphaCB', 'alphaLA', 'strain', 'holz',
   'biprism', 'sbR', 'numCorr', 'holoView', 'nFocal', 'focalStep', 'ilhView', 'holder', 'tempSet', 'profile', 'mis',
   'magSpec', 'lorThick', 'lorFov', 'lorDf', 'lorDiv', 'lorView', 'lorFouc', 'lorApR', 'lorField', 'lorChir', 'lorPol', 'lstemView', 'lorAlpha',
 ];

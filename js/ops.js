@@ -91,11 +91,12 @@ export function modeState(S, sim, m) {
 // (Lorentz microscopy, and the EELS spectrometer)
 export const LOR_LIMITS = { lorDf: [-3000, 3000, 0], lorFov: [0.3, 10, 3], lorThick: [10, 150, 0], lorField: [0, 600, 0], lorDiv: [0.5, 30, 1], lorAlpha: [20, 3000, 0], lorApR: [2, 40, 1],
   pedPhi: [0, 60, 1], pedSteps: [4, 128, 0], pedDescan: [0, 20, 1],
+  tomoMax: [20, 80, 0], tomoStep: [0.5, 10, 1], tomoDose: [1, 1e7, 0], tomoJitter: [0, 5, 1], tomoIter: [1, 100, 0], tomoDepth: [-0.5, 0.5, 2],
   edStart: [-70, 0, 1], edEnd: [0, 70, 1], edSpeed: [0.1, 10, 2], edStep: [0.1, 5, 2], edExp: [0.05, 5, 3], edDoseRate: [0.001, 2, 4], edAxis: [0, 180, 1], edLayer: [-3, 3, 0],
   eelsBeta: [1, 100, 1], eelsOffset: [-50, 3000, 1], eelsWin: [0, 6000, 2], eelsWidth: [0.5, 80, 1], eelsCurrent: [5, 2000, 0], eelsExp: [1e-4, 10, 5], eelsExpLow: [1e-5, 0.1, 6] };
 export const LOR_CHOICES = { lorView: ['fresnel', 'foucault', 'tie', 'phase'], lstemView: ['color', 'x', 'y', 'sum'], lorFouc: ['+x', '-x', '+y', '-y'],
   eelsSource: ['profile', 'schottky', 'cfeg', 'mono'], eelsDet: ['ccd', 'direct'], eelsYScale: ['log', 'lin', 'split'], eelsDisp: [0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1],
-  pedOn: [true, false], dualEels: [true, false], edMethod: ['cred', 'step', 'pedt'], edFps: [1, 2, 4, 10, 20, 40], edMerge: ['friedel', 'laue'], edSlice: ['hk0', 'h0l', '0kl'], eelsFit: [true, false], eelsDeconv: [true, false], eelsLine: [true, false], bgsub: [true, false] };
+  pedOn: [true, false], dualEels: [true, false], edMethod: ['cred', 'step', 'pedt'], tomoPhantom: ['specimen', 'beads'], tomoN: [64, 96, 128], tomoSignal: ['haadf', 'bf'], tomoScheme: ['linear', 'saxton'], tomoAlign: [true, false], tomoRecon: ['wbp', 'sirt'], tomoFilter: ['ramp', 'hann'], tomoView: ['series', 'xy', 'xz', 'yz'], edFps: [1, 2, 4, 10, 20, 40], edMerge: ['friedel', 'laue'], edSlice: ['hk0', 'h0l', '0kl'], eelsFit: [true, false], eelsDeconv: [true, false], eelsLine: [true, false], bgsub: [true, false] };
 // a Lorentz setting from a command, clamped; true if `op` was one
 export function lorSet(S, set, op) {
   // zone axis [u, v, w] of a built-in crystal (null: as built); the field returns to the crystal's centre
@@ -238,6 +239,9 @@ export function runOpState(S, sim, op) {
     case 'action':
       if (op.v === 'optfocus') { set('df', optimalDefocus(S, sim), 'df'); return true; }
       if (op.v === 'pause') { S.paused = !S.paused; return true; }
+      // record the series of a series technique (3D ED, tomography): at once, for scripts and agents
+      if (op.v === 'collect') { if (S.mode === 'ed3d') { sim.startED3D(); sim.stepED3D(1e6); return true; } if (S.mode === 'tomo') { sim.startTomo({ instant: true }); return true; } return false; }
+      if (op.v === 'reconstruct' && S.mode === 'tomo') { sim.reconstructTomo({ instant: true }); return true; }
       return false;
     case 'beam': S.paused = !!op.v; return true;
     case 'analyze':

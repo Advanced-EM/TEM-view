@@ -6,6 +6,7 @@ import { drawOAH, drawILH } from './holography.js';
 import { drawLTEM, drawLSTEM } from './lorentz.js';
 import { edgeStats, fourierRatio } from './eels.js';
 import * as ED from './ed3d.js';
+import * as TOMO from './tomo.js';
 
 const C = {
   accent: '#6fd6ff', warm: '#ffb45e', text: '#e9edf2', muted: '#8a94a3', dim: '#566070',
@@ -180,7 +181,7 @@ export function draw(sim, S, mainCv, secCv, hover) {
   const m = fit(mainCv), s = fit(secCv);
   m.ctx.fillStyle = C.bg; m.ctx.fillRect(0, 0, m.W, m.H);
   s.ctx.fillStyle = C.bg; s.ctx.fillRect(0, 0, s.W, s.H);
-  const fn = { ed3d: drawED3D, tem: drawTEM, stem: drawSTEM, diff: drawDiff, '4d': draw4D, eds: drawEDS, eels: drawEELS, ronch: drawRonch, cbed: drawCBED, oah: drawOAH, ilh: drawILH, ltem: drawLTEM, lstem: drawLSTEM }[S.mode];
+  const fn = { tomo: drawTomo, ed3d: drawED3D, tem: drawTEM, stem: drawSTEM, diff: drawDiff, '4d': draw4D, eds: drawEDS, eels: drawEELS, ronch: drawRonch, cbed: drawCBED, oah: drawOAH, ilh: drawILH, ltem: drawLTEM, lstem: drawLSTEM }[S.mode];
   fn(sim, S, m, s, performance.now() / 1000);
   cryoLabel(m.ctx, sim, S, m.W, m.H, m.dpr);
   if (sim.single?.hits && sim.single.count && !['4d', 'eds', 'eels', 'ilh', 'ltem', 'lstem'].includes(S.mode)) {
@@ -411,6 +412,82 @@ function drawED3D(sim, S, m, s) {
   });
   label(q, 'd (Å) · complete · median I/σ', bx, y0 + 12 * dq + n * rowH, dq, { color: C.muted, size: 9 });
   label(q, st.dLimit ? `resolution ≈ ${st.dLimit.toFixed(2)} Å (median I/σ ≥ 2)` : 'no shell at median I/σ ≥ 2', bx, y0 + 26 * dq + n * rowH, dq, { color: st.dLimit ? C.accent : C.warm, size: 9 });
+}
+
+// electron tomography: the tilt series or a slice of the reconstruction (main); across the beam, the phantom
+// beside the reconstruction and the Fourier plane each tilt fills (secondary)
+function drawTomo(sim, S, m, s, t) {
+  const T = sim.tomo, { ctx, W, H, dpr } = m;
+  if (!T) return;
+  const N = T.ph.N, F = T.angles.length, vol = sim.tomoVolume(), done = T.ser.proj.length;
+  const side = Math.min(W, H), x0 = (W - side) / 2, y0 = (H - side) / 2, dst = [x0, y0, side, side];
+  const lut = real(S) ? LUT.gray : S.tomoSignal === 'bf' ? LUT.gray : LUT.magma;
+  const showSeries = T.running || !vol || S.tomoView === 'series';
+  let th = 0, what;
+  if (showSeries) {
+    // while recording: the latest projection; afterwards the series plays on a loop; before: the 0° view
+    let arr = T.preview, i = -1;
+    if (T.running && done) i = done - 1;
+    else if (done === F) i = Math.floor(t * 8) % F;
+    if (i >= 0) { arr = T.ser.proj[i]; th = T.angles[i]; }
+    const [lo, hi] = range(arr, 0.01, 0.998);
+    paint(ctx, arr, N, N, dst, { lo: S.tomoSignal === 'bf' ? hi : lo, hi: S.tomoSignal === 'bf' ? lo : hi, lut });
+    what = T.running ? `recording · ${done}/${F} · tilt ${th.toFixed(1)}°` : done === F ? `tilt series · ${i + 1}/${F} · ${th.toFixed(1)}°` : 'press Collect · the projection at 0°';
+  } else {
+    const k = Math.max(0, Math.min(N - 1, Math.round(N / 2 + S.tomoDepth * N))), sl = TOMO.orthoslices(vol, N, k, k, k)[S.tomoView];
+    const [lo, hi] = range(sl, 0.01, 0.999);
+    paint(ctx, sl, N, N, dst, { lo, hi, lut: real(S) ? LUT.gray : LUT.magma });
+    const ax = { xy: ['x', 'y'], xz: ['x', 'z (beam)'], yz: ['y', 'z (beam)'] }[S.tomoView];
+    label(ctx, `${ax[0]} →`, x0 + side - 40 * dpr, y0 + side - 12 * dpr, dpr, { color: C.muted, size: 9 });
+    label(ctx, `↓ ${ax[1]}`, x0 + 6 * dpr, y0 + side - 30 * dpr, dpr, { color: C.muted, size: 9 });
+    const r = T.rec;
+    what = `${S.tomoView.toUpperCase()} slice ${k - N / 2 >= 0 ? '+' : ''}${(((k - N / 2) * T.ph.vox) / 10).toFixed(1)} nm · ${r.method === 'sirt' ? `SIRT ${r.iter}/${r.iterations}` : `WBP (${S.tomoFilter === 'hann' ? 'Hann-filtered ramp' : 'ramp'})`}`;
+  }
+  // the tilt axis (x, horizontal in the image) on projections
+  if (showSeries) { ctx.strokeStyle = 'rgba(111,214,255,0.35)'; ctx.setLineDash([6 * dpr, 6 * dpr]); ctx.beginPath(); ctx.moveTo(x0, y0 + side / 2); ctx.lineTo(x0 + side, y0 + side / 2); ctx.stroke(); ctx.setLineDash([]); label(ctx, 'tilt axis', x0 + side - 64 * dpr, y0 + side / 2 - 12 * dpr, dpr, { color: C.accent, size: 8 }); }
+  label(ctx, what, 10 * dpr, 16 * dpr, dpr, { color: C.accent, size: 9 });
+  label(ctx, T.ph.name, 10 * dpr, 34 * dpr, dpr, { color: C.muted, size: 9 });
+  label(ctx, `${S.tomoSignal === 'bf' ? 'BF-TEM' : 'HAADF-STEM'} · ${S.tomoScheme === 'saxton' ? 'Saxton' : 'linear'} ±${S.tomoMax}° · ${N}³ × ${(T.ph.vox / 10).toFixed(2)} nm`, 10 * dpr, 52 * dpr, dpr, { color: C.muted, size: 9 });
+  const dose = (done * T.ser.dosePerImage);
+  label(ctx, `dose ${dose < 100 ? dose.toFixed(1) : dose.toExponential(1)} e⁻/Å² of ${T.o.dose.toExponential(1)}${T.o.Dc ? ` · D_c ≈ ${T.o.Dc.toFixed(0)} · mass left ${Math.round(100 * T.ser.massLeft)} %` : ''}`, 10 * dpr, H - 14 * dpr, dpr, { color: T.o.Dc && dose > T.o.Dc ? C.warm : C.muted, size: 9 });
+  if (T.ph.empty) label(ctx, 'nothing under the beam here: move to the specimen, or use the test beads', W / 2, H / 2, dpr, { color: C.warm, align: 'center' });
+
+  // ---- secondary: phantom and reconstruction (YZ, across the tilt axis), the Fourier plane, readouts; three tiles
+  // across a wide panel, a 2 × 2 grid in a narrow one
+  const q = s.ctx, dq = s.dpr, gap = 10 * dq, wide = s.W > 1.6 * s.H, ty = 22 * dq;
+  const tile = wide ? Math.min((s.W - 4 * gap) / 3, s.H - 120 * dq) : Math.min((s.W - 3 * gap) / 2, (s.H - ty - 3 * gap) / 2);
+  const pos = wide ? [[gap, ty], [2 * gap + tile, ty], [3 * gap + 2 * tile, ty]] : [[gap, ty], [2 * gap + tile, ty], [gap, ty + tile + 2 * gap]];
+  const ix = N >> 1, phS = TOMO.orthoslices(T.ph.vol, N, ix, ix, ix).yz;
+  { const [lo, hi] = range(phS, 0.01, 0.999); paint(q, phS, N, N, [...pos[0], tile, tile], { lo, hi: hi || 1, lut: LUT.magma }); }
+  label(q, 'phantom · YZ', pos[0][0], pos[0][1] - 10 * dq, dq, { color: C.muted, size: 8 });
+  if (vol) { const rS = TOMO.orthoslices(vol, N, ix, ix, ix).yz, [lo, hi] = range(rS, 0.01, 0.999); paint(q, rS, N, N, [...pos[1], tile, tile], { lo, hi, lut: LUT.magma }); }
+  else { q.fillStyle = '#06080b'; q.fillRect(...pos[1], tile, tile); }
+  label(q, vol ? 'reconstruction · YZ' : 'reconstruction (after)', pos[1][0], pos[1][1] - 10 * dq, dq, { color: C.muted, size: 8 });
+  // Fourier plane: |F| of the reconstructed slice, and a line for every projection recorded so far
+  const [fx, fy] = pos[2];
+  q.fillStyle = '#06080b'; q.fillRect(fx, fy, tile, tile);
+  if (vol) {
+    if (T._fft?.x !== vol || T._fft.iter !== T.rec.iter) { const rS = TOMO.orthoslices(vol, N, ix, ix, ix).yz; T._fft = { x: vol, iter: T.rec.iter, ...TOMO.fourierSlice(rS, N) }; }
+    const [lo, hi] = range(T._fft.arr, 0.3, 0.9995);
+    paint(q, T._fft.arr, T._fft.M, T._fft.M, [fx, fy, tile, tile], { lo, hi, lut: LUT.ice });
+  }
+  const fc = [fx + tile / 2, fy + tile / 2], R = tile / 2;
+  q.save(); q.beginPath(); q.rect(fx, fy, tile, tile); q.clip();
+  q.strokeStyle = vol ? 'rgba(255,255,255,0.10)' : 'rgba(111,214,255,0.55)'; q.lineWidth = 1 * dq;
+  for (let i = 0; i < done; i++) { const a = (T.angles[i] * Math.PI) / 180, c = Math.cos(a), sn = Math.sin(a); q.beginPath(); q.moveTo(fc[0] - R * c, fc[1] + R * sn); q.lineTo(fc[0] + R * c, fc[1] - R * sn); q.stroke(); }
+  q.strokeStyle = C.warm; q.setLineDash([4 * dq, 4 * dq]);
+  for (const sg of [-1, 1]) { const a = (sg * S.tomoMax * Math.PI) / 180, c = Math.cos(a), sn = Math.sin(a); q.beginPath(); q.moveTo(fc[0] - 1.5 * R * c, fc[1] + 1.5 * R * sn); q.lineTo(fc[0] + 1.5 * R * c, fc[1] - 1.5 * R * sn); q.stroke(); }
+  q.setLineDash([]); q.restore();
+  label(q, `Fourier · wedge ${180 - 2 * S.tomoMax}°`, fx, fy - 10 * dq, dq, { color: C.muted, size: 8 });
+  label(q, 'kz', fc[0] + 4 * dq, fy + 10 * dq, dq, { color: C.muted, size: 8 });
+  // readouts, one short line each
+  const st = T.stats, lines = [[`${F} projections`, C.text], [`${(T.o.dose / F).toPrecision(2)} e⁻/Å² each`, C.muted], [`elongation ${T.pred.toFixed(2)}×`, C.text], ['predicted (missing wedge)', C.muted]];
+  if (st?.meas) lines.push([`measured ${st.meas.toFixed(2)}× (${st.meas >= st.pred ? '+' : ''}${(100 * (st.meas / st.pred - 1)).toFixed(0)} %)`, C.accent], [`larger beads ${st.beads.slice(2).map((b) => b.e.toFixed(2)).join(' ')}`, C.muted]);
+  if (st) lines.push([`correlation ${st.corr.toFixed(2)}`, C.accent]);
+  if (st && T.rec.method === 'sirt' && T.rec.resid?.length) lines.push([`SIRT ${T.rec.iter}/${T.rec.iterations} · residual ${(100 * T.rec.resid.at(-1)).toFixed(0)} %`, C.muted]);
+  if (!st) lines.push([T.running ? 'recording…' : done === F ? 'reconstructing…' : 'press Collect', C.muted]);
+  const tx = wide ? gap : fx + tile + gap, tyy = wide ? ty + tile + 18 * dq : fy + 6 * dq, lh = 16 * dq;
+  lines.forEach(([txt, color], i) => label(q, txt, wide ? tx + (i % 2) * (s.W / 2) : tx, wide ? tyy + Math.floor(i / 2) * lh : tyy + i * lh, dq, { color, size: 8 }));
 }
 
 function drawDiff(sim, S, m, s) {

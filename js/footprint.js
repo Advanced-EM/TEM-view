@@ -18,6 +18,8 @@
 //   dose, camera      D per image as set; rate = D/t
 //   ePIE working set  3·8·(N_obj² + N_p²) + the diffraction stack as float32, N_obj = field/dx + N_p, dx = λ/(4α)
 //   compression       sparse counting data (< 1 e⁻ per pixel per frame) 3–10×, dense data 1.2–2×
+//   tomography        a tilt series of scans: tilts·N²·B; volume N³ float32 (N = scan); WBP ≈ tilts·N³·4 flop,
+//                     SIRT ≈ iterations·tilts·N³·8 (a projection and a back-projection per iteration)
 //   badge (first match)  browser: working set ≤ 512 MB and processing ≤ 60 s; local GPU: ≤ the worker's memory
 //                     and ≤ 2 h; HPC otherwise
 import { beamThickness } from './structure.js';
@@ -45,6 +47,7 @@ const DEFAULTS = {
   ilh: { kind: 'camera', det: 4096, bits: 16, exposure_s: 1, frames: 10 },
   ltem: { kind: 'camera', det: 4096, bits: 16, exposure_s: 1, frames: 1 },
   ed3d: { kind: 'camera', det: 512, bits: 16, exposure_s: 0.25, frames: 160 }, // a rotation series (frames from the 3D ED settings)
+  tomo: { kind: 'tilt', scan: 1024, bits: 16, dwell_us: 10, flyback_us: 100, current_pA: 50, tilts: 71, recon: 'wbp', iters: 20 }, // a HAADF tilt series (tilts, method from the settings)
   lstem: { kind: 'scan', scan: 256, bits: 32, dwell_us: 20, flyback_us: 100, detectors: 4, current_pA: 5 },
 };
 export const PLAN_KINDS = Object.fromEntries(Object.entries(DEFAULTS).map(([k, v]) => [k, v.kind]));
@@ -73,6 +76,7 @@ export function planFor(technique, overrides = {}) {
 }
 export function validPlanValue(k, v) {
   if (k === 'format' || k === 'analysis') return PLAN_FIELDS[k].includes(v);
+  if (k === 'recon') return v === 'wbp' || v === 'sirt';
   return typeof v === 'number' && isFinite(v) && v > 0 && (k !== 'bits' || [8, 16, 32].includes(v));
 }
 
@@ -122,9 +126,19 @@ export function footprint(technique, plan, ctx) {
     const I = technique === 'eels' && ctx.current_pA ? ctx.current_pA * 1e-12 : doseLimited || !p.current_pA ? (D * E_CHARGE * dx * dx) / tau : p.current_pA * 1e-12; // A
     f.dose_from = technique === 'eels' ? 'beam current' : doseLimited || !p.current_pA ? 'dose (low-dose)' : 'probe current';
     const Dpix = (I * tau) / (E_CHARGE * dx * dx), ePerPos = (I * tau) / E_CHARGE;
-    f.time = { acquire_s: tScan * (p.frames ?? 1) };
-    f.dose = { total: Dpix * (p.frames ?? 1), per_image: Dpix, rate: I / (E_CHARGE * field * field), current_pA: I * 1e12, pixel_A: dx, electrons_per_position: ePerPos };
-    if (p.kind === 'scan') {
+    const reps = p.kind === 'tilt' ? p.tilts : (p.frames ?? 1);
+    f.time = { acquire_s: tScan * reps };
+    f.dose = { total: Dpix * reps, per_image: Dpix, rate: I / (E_CHARGE * field * field), current_pA: I * 1e12, pixel_A: dx, electrons_per_position: ePerPos };
+    if (p.kind === 'tilt') {
+      const V = N * N * N;
+      raw = p.tilts * pos * B;
+      f.shape = [p.tilts, N, N];
+      parts.push(['tilt series as float32', p.tilts * pos * 4], ['volume (float32)', V * 4]);
+      if (p.recon === 'sirt') { parts.push(['SIRT update and normalisation', 2 * V * 4]); procFlops = p.iters * p.tilts * V * 8; }
+      else { parts.push(['filter buffers', 2 * 2 * N * 8]); procFlops = p.tilts * V * 4; }
+      f.volume_px = N;
+      eventsPerPixelFrame = ePerPos;
+    } else if (p.kind === 'scan') {
       raw = pos * p.detectors * B;
       f.shape = p.detectors > 1 ? [p.detectors, N, N] : [N, N];
       parts.push(['images as float32', pos * p.detectors * 4]);
@@ -205,6 +219,11 @@ export function footprintFor(S, sim, extra = {}) {
   if (S.mode === 'ed3d') { // the series: frames, exposure per frame and the dose per frame from the 3D ED settings
     const p = sim.ed?.series?.plan;
     if (p) { Object.assign(plan, { frames: p.frames, exposure_s: +p.exposure.toFixed(4) }); return footprint('ed3d', plan, contextFor(S, sim, { dose: p.dosePerFrame, field_A: 2000, ...extra })); }
+  }
+  if (S.mode === 'tomo') { // the series: number of tilts, method and dose per projection from the tomography settings
+    const F = sim.tomo?.angles?.length ?? Math.floor(S.tomoMax / S.tomoStep) * 2 + 1;
+    Object.assign(plan, { tilts: F, recon: S.tomoRecon, iters: S.tomoIter });
+    return footprint('tomo', plan, contextFor(S, sim, { dose: S.tomoDose / F, ...extra }));
   }
   return footprint(S.mode, plan, contextFor(S, sim, extra));
 }

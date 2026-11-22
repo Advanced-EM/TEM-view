@@ -16,6 +16,15 @@ export function collectData(sim, S) {
     arrays.image = A(sim.stemImg.img, [sim.stemImg.c, sim.stemImg.c], `${sim.stemImg.type} signal (a.u.)`);
     cal.pixel_A = sim.stemImg.dx;
     if (sim.probe) { arrays.probe = A(sim.probe.I, [sim.probe.n, sim.probe.n], 'intensity'); cal.probe_pixel_A = sim.probe.dx; }
+  } else if (m === 'tomo' && sim.tomo) {
+    // the reconstruction (z, y, x), the tilt series recorded so far (tilt, v, x) and its angles
+    const T = sim.tomo, N = T.ph.N, n = T.ser.proj.length, stack = new Float32Array(N * N * n);
+    T.ser.proj.forEach((p, i) => stack.set(p, i * N * N));
+    if (n) arrays.tilt_series = A(stack, [n, N, N], 'projections (Σ Z^1.7 per pixel, HAADF); axes: tilt, v, x (tilt axis along x)');
+    arrays.tilt_angles = A(Float32Array.from(T.angles.slice(0, n)), [n], 'degrees');
+    if (sim.tomoVolume()) arrays.reconstruction = A(sim.tomoVolume(), [N, N, N], 'reconstructed density; axes: z (beam), y, x');
+    Object.assign(cal, { voxel_A: T.ph.vox, volume_px: N, max_tilt_deg: S.tomoMax, scheme: S.tomoScheme, signal: S.tomoSignal, method: T.rec?.method ?? null, iterations: T.rec?.iter ?? 0, total_dose: T.o.dose,
+      elongation_predicted: T.pred, ...(T.stats ? { correlation: T.stats.corr, elongation_measured: T.stats.meas ?? null } : {}), object: T.ph.name });
   } else if (m === 'ed3d' && sim.ed && !sim.ed.none) {
     // the frame on the detector and the unmerged reflections recorded so far (h, k, l, I, σ, d)
     const e = sim.ed, img = sim.edFrame(e.det.W), acc = new Map(), upTo = Math.max(1, Math.ceil(e.collected));

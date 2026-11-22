@@ -111,6 +111,20 @@ export const ANALYSES = {
         result: { edges: found, window_eV: [r(c.energy_start_eV, 1), r(c.energy_start_eV + n * c.energy_eV_per_channel, 1)] }, truth: { elements: present } };
     },
   },
+  // tomography: the reconstruction against the phantom, and the missing-wedge elongation (measured on test beads)
+  tomo_stats: {
+    skill: null, registry: false, label: 'Tomogram quality and missing-wedge elongation', modes: ['tomo'],
+    run(sim, S) {
+      const T = sim.tomo;
+      if (!T || T.ser.proj.length < T.angles.length) throw new Error('collect the tilt series first (action collect)');
+      if (!T.stats) sim.tomoStats();
+      const st = T.stats;
+      return { summary: `${T.angles.length} projections to ±${S.tomoMax}° (${S.tomoScheme}), ${T.rec.method === 'sirt' ? `SIRT ${T.rec.iter} iterations` : 'WBP'}: correlation with the phantom ${st.corr.toFixed(3)}; elongation along the beam predicted ${st.pred.toFixed(3)}${st.meas ? `, measured ${st.meas.toFixed(3)} on the smallest beads` : ''}`,
+        result: { projections: T.angles.length, max_tilt_deg: S.tomoMax, scheme: S.tomoScheme, method: T.rec.method, iterations: T.rec.iter, voxel_A: r(T.ph.vox, 4), volume_px: T.ph.N, correlation: r(st.corr, 4), elongation_predicted: r(st.pred, 4), elongation_measured: st.meas ? r(st.meas, 4) : null,
+          beads: st.beads?.map((b) => ({ d_nm: r(b.d_nm, 3), elongation: r(b.e, 4), fwhm_y_px: r(b.wy, 3), fwhm_z_px: r(b.wz, 3) })) ?? null, total_dose: r(T.o.dose, 4), mass_left: r(T.ser.massLeft, 3) },
+        truth: { elongation_radermacher: r(st.pred, 4) } };
+    },
+  },
   // 3D ED: completeness and ⟨I/σ⟩ per resolution shell of the series recorded so far, and the dose-limited resolution
   ed3d_stats: {
     skill: null, registry: false, label: '3D ED completeness and resolution', modes: ['ed3d'],

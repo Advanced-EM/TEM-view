@@ -11,6 +11,8 @@ import { hasZones, zoneSpec } from './zone.js';
 import * as ED from './ed3d.js';
 import * as LAT from './lattice.js';
 import { InlineBackend } from './compute.js';
+import * as TOMO from './tomo.js';
+import { buildStructure } from './structure.js';
 import { HOLDERS, specimenT, u2Ratio, thermalStrain, radiolysisFactor, iceSublimation, DEVITRIFY_K } from './holder.js';
 
 const SP = P.SPECIMENS;
@@ -782,6 +784,98 @@ export class Sim {
   propagate(wr, wi, n, H, back) { KR.propagate(wr, wi, n, H, back); }
 
 
+  // ------------------------------------------------------------ electron tomography (tomo.js)
+  // The phantom is the specimen as the structure viewer builds it (structure.js: atoms, amorphous layers, shells),
+  // voxelised in a cube around the field of view, so it works for every built-in specimen and any uploaded XYZ or
+  // CIF; or a set of gold test beads. The series is recorded one projection at a time as the holder turns (~8 s
+  // of exhibit time), then reconstructed on the compute backend (a worker in the exhibit).
+  // this.tomo: { ph, o, angles, ser, collected, running, rec: { x, iter, iterations, resid }, stats }
+  tomoParams() {
+    const S = this.S, beads = S.tomoPhantom === 'beads';
+    return { N: S.tomoN, signal: S.tomoSignal, scheme: S.tomoScheme, max: S.tomoMax, step: S.tomoStep, dose: S.tomoDose, jitter: S.tomoJitter, Dc: !beads && this.spec.beamSensitive ? +this.critDose().toFixed(2) : null };
+  }
+  buildTomoPhantom() {
+    const S = this.S;
+    if (S.tomoPhantom === 'beads') { const ph = TOMO.beadPhantom(S.tomoN); ph.name = `gold test beads, ${ph.beads.map((b) => ((2 * b.r * ph.vox) / 10).toFixed(1)).join(', ')} nm, in a carbon film`; return ph; }
+    const st = buildStructure(S, this);
+    const ph = TOMO.phantomFromStructure(st, S.tomoN);
+    ph.name = st.name; ph.notes = st.notes; ph.empty = !ph.vol.some((v) => v > 0);
+    return ph;
+  }
+  tomoRecKey() { const S = this.S; return JSON.stringify([this.tomo?.acqKey, S.tomoRecon, S.tomoRecon === 'sirt' ? S.tomoIter : S.tomoFilter, S.tomoAlign]); }
+  stepTomo(dt) {
+    const S = this.S, phKey = JSON.stringify([this.spec.zoneKey ?? S.spec, S.tomoPhantom, S.tomoN, ...(S.tomoPhantom === 'beads' ? [] : [S.thick, S.fov, S.cx, S.cy, this.spec.damageVer ?? 0])]);
+    let T = this.tomo;
+    if (!T || T.phKey !== phKey || T.spec !== this.spec) {
+      T?.task?.cancel();
+      const ph = this.buildTomoPhantom();
+      T = this.tomo = { phKey, spec: this.spec, ph, acqKey: null, preview: TOMO.project(ph.vol, ph.N, 0), collected: 0, running: false, rec: null, recKey: null, task: null };
+      this.version++;
+    }
+    const o = this.tomoParams(), acqKey = JSON.stringify(o);
+    if (T.acqKey !== acqKey) { // new acquisition settings: the series and its reconstruction start over
+      T.task?.cancel(); Object.assign(T, { task: null, rec: null, recKey: null, stats: null, o, acqKey, collected: 0, running: false });
+      T.angles = TOMO.tilts(o.scheme, o.max, o.step);
+      T.ser = this.tomoSeries();
+      T.pred = TOMO.predictedElongation(o.max);
+      this.version++;
+    }
+    const F = T.angles.length;
+    if (T.running && !S.paused) {
+      T.collected = Math.min(F, T.collected + (F / 8) * dt * S.speed);
+      while (T.ser.proj.length < Math.ceil(T.collected)) TOMO.seriesNext(T.ser);
+      if (T.collected >= F) { T.running = false; this.reconstructTomo(); }
+      this.version++;
+    }
+    if (T.running || T.ser.proj.length < F) return;
+    if (T.recKey !== this.tomoRecKey()) this.reconstructTomo();
+    if (T.task && !T.taskDone) {
+      if (T.task.error) { console.warn('compute:', T.task.error, '(running on the main thread)'); T.task = new InlineBackend().run(T.job, { out: T.rec }); }
+      const before = T.rec.iter, x0 = T.rec.x;
+      T.task.pump(S.paused ? 0 : 12);
+      if (T.rec.iter !== before || T.rec.x !== x0) { this.tomoStats(); this.version++; }
+      if (T.task.finished && !T.task.queue?.length) T.taskDone = true;
+    }
+  }
+  tomoSeries() { const T = this.tomo, o = T.o; return TOMO.seriesInit({ ph: T.ph, angles: T.angles, signal: o.signal, dosePerImage: o.dose / T.angles.length, Dc: o.Dc ?? Infinity, jitter: o.jitter, seed: 7 + (T.runs ?? 0) }); }
+  // record the series (instant: at once, for scripts, agents and tests)
+  startTomo({ instant = false } = {}) {
+    this.stepTomo(0);
+    const T = this.tomo;
+    T.task?.cancel(); T.runs = (T.runs ?? 0) + 1;
+    Object.assign(T, { task: null, rec: null, recKey: null, stats: null, collected: 0, running: true, ser: this.tomoSeries() });
+    if (instant) { while (TOMO.seriesNext(T.ser)); T.collected = T.angles.length; T.running = false; this.reconstructTomo({ instant: true }); }
+    this.version++;
+  }
+  reconstructTomo({ instant = false } = {}) {
+    const T = this.tomo, S = this.S;
+    if (!T?.ser || T.ser.proj.length < T.angles.length) return;
+    T.task?.cancel();
+    let ser = TOMO.seriesData(T.ser);
+    if (S.tomoAlign) ser = TOMO.alignCOM(ser);
+    T.rec = {}; T.recKey = this.tomoRecKey(); T.taskDone = false; T.stats = null;
+    T.job = { kind: 'tomo', method: S.tomoRecon, filter: S.tomoFilter, iterations: S.tomoIter, ser };
+    T.task = (instant ? new InlineBackend() : this.compute).run(T.job, { out: T.rec });
+    if (instant) { while (!T.task.finished) T.task.pump(Infinity); T.taskDone = true; this.tomoStats(); }
+    this.version++;
+  }
+  // quality: correlation with the phantom; for the test beads, the elongation along the beam against the
+  // missing-wedge prediction (mean of the two smallest beads, which are close to points)
+  tomoStats() {
+    const T = this.tomo, x = T?.rec?.x;
+    if (!x) return;
+    const N = T.ph.N, st = { corr: TOMO.correlation(x, T.ph.vol), pred: T.pred };
+    if (T.ph.beads) {
+      st.beads = T.ph.beads.map((b) => ({ d_nm: (2 * b.r * T.ph.vox) / 10, ...TOMO.elongation(x, N, b) }));
+      st.meas = (st.beads[0].e + st.beads[1].e) / 2;
+    }
+    T.stats = st;
+  }
+  // the volume shown: the reconstruction when there is one, else nothing (the series is shown instead)
+  tomoVolume() { return this.tomo?.rec?.x ?? null; }
+  // the holder angle now: the tilt being recorded (0 outside a series)
+  tomoPhi() { const T = this.tomo; return T?.running && T.ser.proj.length ? T.angles[T.ser.proj.length - 1] : 0; }
+
   // ------------------------------------------------------------ multislice ptychography (MS-ePIE / 3PIE)
   // The object is a stack of K slices; the wave is propagated between them in the forward model, and the
   // correction is back-propagated slice by slice, updating each slice's transmission and the wave entering it.
@@ -1332,6 +1426,7 @@ export class Sim {
       if (!S.paused) this.accumulate(dt * S.speed);
     }
     if (m === 'ed3d') this.stepED3D(dt);
+    if (m === 'tomo') this.stepTomo(dt);
     if (m === 'oah' && this.oah.stale) { this.oah.compute(); this.version++; }
     if (m === 'oah') this.main = this.oah.disp ? { arr: this.oah.disp.holo, w: this.oah.disp.c, h: this.oah.disp.c } : null;
     if (m === 'ilh') {
