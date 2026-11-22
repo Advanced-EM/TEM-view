@@ -54,11 +54,12 @@ export function bulgedPath(cell, deflect, S) {
 }
 
 // reactions (dt s, T K): the extent ξ of a perovskite's reduction moves towards its equilibrium for the gas (H₂: 1,
-// O₂: 0) at an Arrhenius rate ∝ √p; gold sinters (Å of radius) above ~600 K, faster in oxygen
+// O₂: 0) at an Arrhenius rate ∝ √p; gold coarsens (Å of radius) at an Arrhenius rate calibrated on the size change
+// of gold on a SiNₓ heating chip (insitu-cal.js), faster in oxygen (trend)
 export function react(st, S, T, dt) {
   const pBar = S.gcP / 1000, k = (Ea) => Math.exp(-Ea / (8.617e-5 * T));
   const eq = S.gcGas === 'H2' || S.gcGas === 'CO' ? 1 : S.gcGas === 'O2' ? 0 : st.xi;
   st.xi += (eq - st.xi) * Math.min(1, K.p('redox_A') * k(K.p('redox_Ea')) * Math.sqrt(pBar) * dt);
-  if (T > 600) st.sinter = Math.min(20, st.sinter + K.p('sinter_A') * k(K.p('sinter_Ea')) * (S.gcGas === 'O2' ? K.p('sinter_O2') : 1) * dt);
+  st.sinter = Math.min(500, /* the process; the rendered particle is capped in sim.js */ st.sinter + K.p('sinter_A') * k(K.p('sinter_Ea')) * (S.gcGas === 'O2' ? K.p('sinter_O2') : 1) * dt);
   return st;
 }

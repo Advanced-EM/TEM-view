@@ -56,12 +56,12 @@ export const EXPERIMENTS = [
   {
     id: 'E3', kind: 'gas + heating', title: 'Sintering of gold nanoparticles: oxygen versus nitrogen', question: 'At what temperature do the particles start to coarsen, and does oxygen speed it up?', obs: ['T_K', 'radius_A', 'sinter_A', 'drift_A'],
     setup(S, sim) { S.mode = 'tem'; S.spec = 'au'; S.fov = 40; chipState(S, sim, 'holder', 'heat'); chipState(S, sim, 'envCell', 'gas'); chipState(S, sim, 'gcGeom', 'windowed'); S.gcP = 1000; S.gcGap = 5; },
-    timeline: [{ key: 'tempSet', t0: 10, t1: 60, to: 800 }], dur: 180, fps: 1,
+    timeline: [{ key: 'tempSet', t0: 10, t1: 110, to: 1250 }], dur: 300, fps: 1, // calibrated (Horwath 2022): ~1000 K for 10 % in an hour, so minutes need ~1200 K
     variants: { O2: (S) => { S.gcGas = 'O2'; }, N2: (S) => { S.gcGas = 'N2'; } },
     probe: (sim) => ({ r_A: goldR(), sinter_A: sim.gasSt?.sinter ?? 0 }),
     summary(rows, S, sim) {
       const onset = rows.find((r) => r.sinter_A > 0.05);
-      const g = ENV.gasNow(S, 800);
+      const g = ENV.gasNow(S, 1250);
       return { r_start_A: rows[0].r_A, r_end_A: rows.at(-1).r_A, sinter_end_A: +rows.at(-1).sinter_A.toFixed(2), onset_s: onset?.t ?? null, onset_T_K: onset ? Math.round(onset.T_K) : null, contrast_kept_pct: +(100 * g.col.transmitted).toFixed(1), drift_A: +Math.hypot(...rows.at(-1).drift_A).toFixed(1) };
     },
   },
@@ -116,6 +116,18 @@ export const EXPERIMENTS = [
     summary(rows) {
       const max = rows.reduce((b, r) => (r.r_A > b.r_A ? r : b));
       return { r_start_A: rows[0].r_A, r_max_A: max.r_A, t_max_s: max.t, r_end_A: rows.at(-1).r_A, deposition_A_s: +Math.max(...rows.map((r) => r.rate)).toFixed(2), stripping_A_s: +Math.min(...rows.map((r) => r.rate)).toFixed(2) };
+    },
+  },
+  {
+    id: 'E9', kind: 'liquid (calibrated)', title: 'Silver nucleation: a threshold dose rate and an induction dose', question: 'Is there a dose rate below which no particles nucleate, and above it, how much dose does nucleation take?', obs: ['supersat', 'nucleated_s', 'bubbles'],
+    setup(S, sim) { S.mode = 'tem'; S.spec = 'au'; S.fov = 40; chipState(S, sim, 'envCell', 'liquid'); Object.assign(S, { lcClass: 'sinx', lcGap: 800, lcDP: 0.5, lcPrecursor: true, lcMetal: 'ag', lcRate: 0.3 }); },
+    timeline: [{ key: 'lcRate', t0: 90, t1: 91, to: 3.37 }], dur: 120, fps: 2,
+    variants: { fresh: (S) => { S.lcRate = 3.37; }, predosed: () => {} }, // fresh: 3.37 e⁻/Å²/s from the start; predosed: 90 s at 0.3 first
+    probe: (sim) => ({ supersat: sim.liq?.supersat ?? 0, nucleated_s: sim.liq?.nucleated ?? null, bubbles: sim.liq?.bubbles.length ?? 0 }),
+    summary(rows, S) {
+      const first = rows.find((r) => r.nucleated_s != null), thr = LIQ.nucleationThreshold({ ...S, lcRate: 1 });
+      const pre = rows.filter((r) => r.t < 90), dose = first ? rows.filter((r) => r.t <= first.t).reduce((a, r, i, arr) => a + (i ? r.lcRate * (r.t - arr[i - 1].t) : 0), 0) : null;
+      return { threshold_e_A2_s: +thr.toFixed(2), induction_dose_fresh_e_A2: +LIQ.induction({ ...S, lcRate: 3.37 }).dose_e_A2.toFixed(1), supersat_before_step: pre.length ? +pre.at(-1).supersat.toFixed(2) : null, nucleated_s: first ? +first.nucleated_s.toFixed(1) : null, dose_to_nucleation_e_A2: dose != null ? +dose.toFixed(1) : null, bubbles_at_end: rows.at(-1).bubbles };
     },
   },
 ];

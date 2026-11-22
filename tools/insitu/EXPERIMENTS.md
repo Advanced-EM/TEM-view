@@ -31,14 +31,19 @@ design, and the kinetics behind every process in play, with each parameter's sou
 | --- | --- | --- |
 | Radiolysis | literature | A water-radiolysis reaction network: published yields and rate constants (Buxton et al. 1988; Schneider et al. 2014), diffusion out of the beam, a reservoir that fills in a static cell and is flushed in a flow cell, closed graphene pockets |
 | Bubbles | literature | Nucleate where H₂ exceeds its Henry solubility at the liquid's pressure |
-| Growth from a precursor | trend | Gold ions reduced by hydrated electrons from the network; the share that deposits on existing particles (η = 0.003) is a placeholder |
-| Sintering | trend | One Arrhenius rate; the ×2 in oxygen is established for platinum and unverified for gold |
+| Growth from a precursor | trend | Gold or silver ions reduced by hydrated electrons from the network (a nitrate counter-ion competes for them); the share that deposits on existing particles (η = 0.003) is a placeholder |
+| Nucleation | partly calibrated | Reduced metal accumulates in the irradiated liquid and nucleates at a critical amount: a threshold dose rate and an induction dose. **Silver calibrated** to Woehl et al. 2012 (threshold 0.5 e⁻/Å²/s, induction dose 27.8 e⁻/Å²); gold at trend |
+| Sintering | partly calibrated | One Arrhenius rate, **calibrated** to Horwath et al. 2022 (gold on a SiNₓ heating chip: Eₐ 1.2 eV, a 10 % size change in 1 h at ~1000 K); the ×2 in oxygen is established for platinum and unverified for gold (trend) |
 | Redox | trend | Relaxation to the gas's equilibrium at an Arrhenius rate |
 | Electrochemistry | trend | Butler–Volmer with a placeholder exchange rate |
 
 *Literature* means published parameters that have not yet been compared with in situ TEM data here. *Trend*
-means the value only reproduces a published trend. Treat results labelled *trend* as qualitative. The next step,
-calibrating against measured series, will add *calibrated* parameters with the dataset named.
+means the value only reproduces a published trend. *Calibrated* means fitted to a measured in situ series, with
+the dataset named. Treat results labelled *trend* as qualitative.
+
+The exhibit runs on the published calibration by default. **Calibration** (in the in situ controls) switches to
+the uncalibrated defaults, or fits the kinetics to your own measured series: the simulator then becomes a digital
+twin of your instrument and specimen. See [tools/calibrate/README.md](../calibrate/README.md).
 
 Holders, cells and chips are described by their physics (window material and size, gap, pressure, electrode
 layout), never by product names. Acquisition, export and processing follow [SOP HPC-09](../hpc/SOP.md#hpc-09-acquire-an-in-situ-campaign).
@@ -47,12 +52,13 @@ layout), never by product names. Acquisition, export and processing follow [SOP 
 | --- | --- | --- | --- | --- | --- |
 | [E1](#e1-radiolysis-bubbles-from-the-beam-or-from-a-cell-that-fills-with-h₂) | Radiolysis: bubbles from the beam, or from a cell that fills with H₂? | liquid (static vs flow) | TEM | 300 s, 1 fps | 9.4 GB per run |
 | [E2](#e2-gold-growth-against-dose-rate) | Gold growth against dose rate | liquid + precursor | TEM | 60 s, 2 fps | 3.8 GB |
-| [E3](#e3-sintering-of-gold-nanoparticles-oxygen-versus-nitrogen) | Sintering: oxygen versus nitrogen | windowed gas cell + heating | TEM | 180 s, 1 fps | 5.6 GB per run |
+| [E3](#e3-sintering-of-gold-nanoparticles-oxygen-versus-nitrogen) | Sintering: oxygen versus nitrogen | windowed gas cell + heating | TEM | 300 s, 1 fps | 9.4 GB per run |
 | [E4](#e4-how-much-gas-can-the-image-take) | How much gas can the image take? | open column (ETEM) | TEM | 70 s, 1 fps | 2.2 GB |
 | [E5](#e5-redox-cycling-of-srtio₃) | Redox cycling of SrTiO₃ | windowed gas cell + heating, gas switched | TEM, then EDS/EELS | 240 s, 1 fps | 7.5 GB |
 | [E6](#e6-helium-bubbles-in-silicon-on-annealing) | Helium bubbles in silicon on annealing | heating in vacuum | TEM | 600 s, 1 fps | 18.8 GB |
 | [E7](#e7-the-field-across-a-biased-gap-then-breakdown) | The field across a biased gap, then breakdown | biasing chip | off-axis holography | 25 s, 1 fps | 0.8 GB |
 | [E8](#e8-electrochemistry-deposit-gold-then-strip-it) | Electrochemistry: deposit gold, then strip it | liquid + biasing | TEM | 60 s, 2 fps | 3.8 GB |
+| [E9](#e9-silver-nucleation-a-threshold-dose-rate-and-an-induction-dose) | Silver nucleation: a threshold dose rate and an induction dose (calibrated) | liquid + AgNO₃ | TEM | 120 s, 2 fps | 7.5 GB per run |
 
 Full-scale data is the estimator's figure for a 4096² camera at 16 bits, all frames. Every design lands in the
 *local GPU* tier for processing. The cluster route (bundle → `run_job.py` insitu engine: drift correction, aligned
@@ -126,23 +132,26 @@ and does flow prevent them?
 - **Setup:** gold nanoparticles; heating holder; windowed gas cell (SiNₓ, 50 × 200 µm windows, 30 nm), 5 µm gap,
   1 bar. TEM at 40 nm.
 - **Variants:** O₂ and N₂ (sessions `E3-O2`, `E3-N2`).
-- **Timeline:** setpoint 293 K for 10 s, ramped to 800 K over 10–60 s (10 K/s), held to 180 s.
+- **Timeline:** setpoint 293 K for 10 s, ramped to 1250 K over 10–110 s (9.6 K/s), held to 300 s.
 - **Measure:** the particle radius against time and temperature, and the onset (the first 0.05 Å of growth).
 
-**Expected:**
+**Expected** (calibrated rate, Horwath et al. 2022):
 
-| | Onset | Radius at 180 s | Contrast kept through the gas (800 K) |
+| | Onset | Radius gained by 300 s | Contrast kept through the gas (1250 K) |
 | --- | --- | --- | --- |
-| O₂ | 724 K (52 s) | 21 → 29 Å | 95.7 % |
-| N₂ | 755 K (55 s) | 21 → 25 Å | 96.0 % |
+| O₂ | 1145 K (98 s) | 4.3 Å (21 → 25 Å) | 96.9 % |
+| N₂ | 1204 K (104 s) | 2.1 Å (21 → 23 Å) | 97.2 % |
 
-- Oxygen doubles the sintering rate, and the onset comes about 30 K earlier.
-- The ramp adds about 25 Å of thermal drift (31 Å in total over the movie). Drift-correct before measuring sizes
-  (SOP HPC-09, or the insitu engine on a cluster).
+- The calibrated rate (Eₐ 1.2 eV) makes gold on SiNₓ change by 10 % of its radius in an hour at ~1000 K. Within
+  minutes it takes ~1150–1250 K. The uncalibrated trend value (onset ~750 K) was far too fast.
+- Oxygen doubles the rate (*trend*: established for platinum, unverified for gold), so its onset comes ~60 K
+  earlier.
+- The ramp adds about 57 Å of thermal drift. Drift-correct before measuring sizes (SOP HPC-09, or the insitu
+  engine on a cluster).
 
 **Design notes:**
-- 800 K keeps the growth well below saturation within 3 minutes. At 900 K both atmospheres reach the same final
-  size, and the difference is lost.
+- In minutes, the window between "nothing" and "fast" is narrow (Eₐ 1.2 eV doubles the rate every ~50 K here).
+  For an hour-long hold, 1000–1050 K is the range to look at, as in the published series.
 - Check the windows' margin in the gas note before recording: these windows hold 8.9 bar.
 
 ## E4 How much gas can the image take?
@@ -263,6 +272,40 @@ become voids?
 - Keep the imaging dose rate low, or radiolysis grows gold too (E2) and confounds the electrochemistry.
 - Without gold ions, the negative step deposits nothing, while stripping still works.
 
+## E9 Silver nucleation: a threshold dose rate and an induction dose
+
+**Question:** is there a dose rate below which no particles nucleate, and above it, how much dose does nucleation
+take?
+
+This design runs on kinetics **calibrated** to Woehl et al. (ACS Nano 6, 8599, 2012): Ag from 1 mM AgNO₃ in
+liquid-cell STEM at 200 kV, 800 nm of liquid.
+
+- **Setup:** static SiNₓ liquid cell, 800 nm spacer, 0.5 bar; 1 mM AgNO₃ (**Precursor → Silver**). TEM at 40 nm.
+- **Variants:** `E9-fresh`: 3.37 e⁻/Å²/s from the start. `E9-predosed`: 90 s at 0.3 e⁻/Å²/s (below the threshold),
+  then 3.37 e⁻/Å²/s.
+- **Measure:** the reduced metal relative to what nucleation takes (*supersat*), the nucleation time, and bubbles.
+
+**Expected:**
+
+| | Threshold | Nucleation | Dose to nucleation |
+| --- | --- | --- | --- |
+| fresh | 0.50 e⁻/Å²/s | 8.5 s | 28.6 e⁻/Å² (measured: 27.8 ± 7.8) |
+| predosed | 0.50 e⁻/Å²/s | 94.5 s (4.5 s after the step) | 41.4 e⁻/Å² in all; 15 after the step |
+
+- Below the threshold, the reduced metal levels off at about half of what nucleation takes. Nothing nucleates,
+  however long you wait.
+- The sub-threshold dose is not wasted in the model: it shortens the induction after the step. This is a
+  prediction (the effective loss rate k_n sets the memory, ~40 s). Woehl et al. did not test it, so E9-predosed
+  is an experiment worth running.
+- No bubbles: 3.37 e⁻/Å²/s is far below the H₂ threshold (E1).
+
+**Design notes:**
+- The fitted nucleation parameters are effective. They absorb re-oxidation by OH·, loss from the irradiated
+  region and growth to the ~5 nm detection limit. A different liquid thickness, precursor concentration or
+  detection limit needs its own calibration: fit your series in **Calibration**.
+- Gold's nucleation parameters are still at *trend*. Measure the threshold and induction dose for HAuCl₄ the same
+  way, and fit `nuc_c_au` and `nuc_k_au` (targets `nuc_threshold` and `nuc_dose`).
+
 ---
 
 ## Using the designs
@@ -272,6 +315,8 @@ become voids?
 3. To change a design, edit it in [`experiments.mjs`](experiments.mjs) (setup, timeline, movie, what to measure),
    rerun it, and the session and expected results update together.
 4. On a real instrument, keep the same plan (length, frame rate, detector, dose rate) and timeline, and check the
-   estimator's data volume and dose before booking time. The simulator's kinetics (sintering, reduction, growth,
-   bubble nucleation) are simple rate laws chosen to behave like the published trends, not fits to a particular
-   material: use them to plan, not to predict values.
+   estimator's data volume and dose before booking time. Silver nucleation and gold coarsening are calibrated to
+   published series. The other rates (gold growth yield, redox, electrochemistry, cell geometry) still follow
+   published trends: use them to plan, not to predict values.
+5. After the run, fit your measured series in **Calibration** (or `tools/calibrate/calibrate.mjs`). The fitted
+   profile saves with the session, so the next design runs on your instrument's numbers.

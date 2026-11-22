@@ -1,6 +1,6 @@
 {
  "format": "tem-view-session/2",
- "saved": "2026-11-22T18:35:17.446Z",
+ "saved": "2026-11-22T21:21:53.129Z",
  "note": "TEM-view in situ experiment E2: Gold growth from a precursor: growth rate against dose rate, below the bubble threshold. Load it, then press Record movie.",
  "technique": "tem",
  "mods": {},
@@ -27,6 +27,7 @@
   "lcRate": 0.5,
   "lcDepth": "middle",
   "lcPrecursor": true,
+  "lcMetal": "au",
   "lcFilter": false,
   "gcGeom": "windowed",
   "gcGas": "N2",
@@ -65,7 +66,9 @@
    "radius_A",
    "bubbles",
    "h2_cell_uM"
-  ]
+  ],
+  "calib": "published",
+  "calibProfile": null
  },
  "state": {
   "mode": "tem",
@@ -167,6 +170,7 @@
   "lcRate": 0.5,
   "lcDepth": "middle",
   "lcPrecursor": true,
+  "lcMetal": "au",
   "lcFilter": false,
   "gcGeom": "windowed",
   "gcGas": "N2",
@@ -191,6 +195,8 @@
    "bubbles",
    "h2_cell_uM"
   ],
+  "calib": "published",
+  "calibProfile": null,
   "bsOn": false,
   "bsLayout": "two",
   "bsGap": 5,

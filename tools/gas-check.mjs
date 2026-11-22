@@ -83,9 +83,9 @@ for (const mode of ['tem', 'stem']) {
   ok(xiH > 0.8 && xiO < 0.2 && oH < sim.eds.compSym.O, `SrTiO₃ at 1000 K: reduced in H₂ (ξ = ${xiH.toFixed(2)}, less oxygen in EDS), re-oxidised in O₂ (ξ = ${xiO.toFixed(2)})`);
 }
 {
-  const grow = (T, gas) => { const S = defaultState(); S.mode = 'tem'; S.spec = 'au'; const sim = new Sim(S); chipState(S, sim, 'holder', 'heat'); S.tempSet = T; chipState(S, sim, 'envCell', 'gas'); S.gcGas = gas; for (let i = 0; i < 80; i++) sim.update(0.1); const r = SPECIMENS.au.parts[0].r; sim.resetGas(); return r; };
-  const r0 = SPECIMENS.au.parts[0].r, cold = grow(293, 'O2'), hot = grow(900, 'N2'), hotO = grow(900, 'O2');
-  ok(cold === r0 && hot > r0 && hotO > hot, `gold sinters when hot (${r0} → ${hot} Å at 900 K in N₂, ${hotO} Å in O₂), not at room temperature`);
+  const grow = (T, gas) => { const S = defaultState(); S.mode = 'tem'; S.spec = 'au'; const sim = new Sim(S); chipState(S, sim, 'holder', 'heat'); S.tempSet = T; chipState(S, sim, 'envCell', 'gas'); S.gcGas = gas; for (let i = 0; i < 400; i++) sim.update(0.1); const r = SPECIMENS.au.parts[0].r; sim.resetGas(); return r; };
+  const r0 = SPECIMENS.au.parts[0].r, cold = grow(293, 'O2'), hot = grow(1400, 'N2'), hotO = grow(1400, 'O2'); // calibrated: 1.2 eV, a 10 % change in 1 h near 1000 K
+  ok(cold === r0 && hot > r0 && hotO > hot, `gold sinters when hot (${r0} → ${hot} Å in 40 s at 1400 K in N₂, ${hotO} Å in O₂), not at room temperature`);
 }
 // ---- geometry limits
 {

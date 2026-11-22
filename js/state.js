@@ -55,7 +55,7 @@ export const defaultState = () => ({
   // a cell sealed around the specimen (none | liquid, liquid.js): class, window short and long sides (µm), spacer gap
   // (nm), pressure difference (bar), flow (µL/min), graphene pocket size (nm), dose rate (e⁻/Å²/s), where the particle
   // sits (top: entrance window | middle | bottom: exit window), a gold precursor in the liquid, an energy filter (TEM)
-  envCell: 'none', lcClass: 'sinx', lcA: 50, lcB: 200, lcGap: 150, lcDP: 1, lcFlow: 0, lcPocket: 60, lcRate: 1, lcDepth: 'middle', lcPrecursor: false, lcFilter: false,
+  envCell: 'none', lcClass: 'sinx', lcA: 50, lcB: 200, lcGap: 150, lcDP: 1, lcFlow: 0, lcPocket: 60, lcRate: 1, lcDepth: 'middle', lcPrecursor: false, lcMetal: 'au', lcFilter: false,
   // the gas cell / environmental column (gas.js): windowed | open, the gas, pressure (mbar), the windowed cell's gap
   // (µm), the open column's path (mm); the windows' sides come from lcA, lcB and their thickness from envWinT
   gcGeom: 'windowed', gcGas: 'N2', gcP: 1000, gcGap: 5, gcPath: 2,
@@ -67,6 +67,8 @@ export const defaultState = () => ({
   movOn: false, movDur: 30, movFps: 5, timeline: [],
   // the experiment's design (observables.js): its name, the question it answers, what to measure each frame
   expName: '', expGoal: '', expObs: [],
+  // the kinetics' calibration (calibrate.js): 'published' (default), 'none' (the defaults) or 'user' (calibProfile)
+  calib: 'published', calibProfile: null,
   bsOn: false, bsLayout: 'two', bsGap: 5, bsMat: 'semi', bsMode: 'V', bsWave: 'dc', bsV: 0, bsI: 0, bsRate: 1, bsLimit: 100, bsRc: 100, bsRs: 50, bsLeak: 1e9, bsEbd: 30, bsStray: true,
   // where the 4D-STEM scan and tomography run in a browser with WebGPU: 'auto' (the GPU, gpu.js) | 'off' (JS)
   gpu: 'auto',
@@ -84,7 +86,7 @@ export const SESSION_KEYS = [
   'eelsSource', 'eelsBeta', 'eelsDet', 'eelsYScale', 'eelsFit', 'eelsPre', 'eelsDeconv', 'eelsPx', 'eelsLine',
   'pedOn', 'pedPhi', 'pedSteps', 'pedDescan', 'zone',
   'edMethod', 'edStart', 'edEnd', 'edSpeed', 'edFps', 'edStep', 'edExp', 'edDoseRate', 'edAxis', 'edMerge', 'edSlice', 'edLayer',
-  'tomoPhantom', 'tomoN', 'tomoSignal', 'tomoScheme', 'tomoMax', 'tomoStep', 'tomoDose', 'tomoJitter', 'tomoAlign', 'tomoRecon', 'tomoFilter', 'tomoIter', 'tomoView', 'tomoDepth', 'envWin', 'envWinT', 'envCell', 'lcClass', 'lcA', 'lcB', 'lcGap', 'lcDP', 'lcFlow', 'lcPocket', 'lcRate', 'lcDepth', 'lcPrecursor', 'lcFilter', 'gcGeom', 'gcGas', 'gcP', 'gcGap', 'gcPath', 'movOn', 'movDur', 'movFps', 'timeline', 'expName', 'expGoal', 'expObs', 'bsOn', 'bsLayout', 'bsGap', 'bsMat', 'bsMode', 'bsWave', 'bsV', 'bsI', 'bsRate', 'bsLimit', 'bsRc', 'bsRs', 'bsLeak', 'bsEbd', 'bsStray', 'ptTilts', 'ptMax', 'ptAlpha', 'ptDose', 'ptIters', 'ptFusion', 'ptView', 'spaSample', 'spaN', 'spaDose', 'spaDf', 'spaZpp', 'spaPref', 'spaAngErr', 'spaBin', 'spaView', 'ab', 'ronchAp', 'cbedKind', 'alphaCB', 'alphaLA', 'strain', 'holz',
+  'tomoPhantom', 'tomoN', 'tomoSignal', 'tomoScheme', 'tomoMax', 'tomoStep', 'tomoDose', 'tomoJitter', 'tomoAlign', 'tomoRecon', 'tomoFilter', 'tomoIter', 'tomoView', 'tomoDepth', 'envWin', 'envWinT', 'envCell', 'lcClass', 'lcA', 'lcB', 'lcGap', 'lcDP', 'lcFlow', 'lcPocket', 'lcRate', 'lcDepth', 'lcPrecursor', 'lcMetal', 'lcFilter', 'gcGeom', 'gcGas', 'gcP', 'gcGap', 'gcPath', 'movOn', 'movDur', 'movFps', 'timeline', 'expName', 'expGoal', 'expObs', 'calib', 'calibProfile', 'bsOn', 'bsLayout', 'bsGap', 'bsMat', 'bsMode', 'bsWave', 'bsV', 'bsI', 'bsRate', 'bsLimit', 'bsRc', 'bsRs', 'bsLeak', 'bsEbd', 'bsStray', 'ptTilts', 'ptMax', 'ptAlpha', 'ptDose', 'ptIters', 'ptFusion', 'ptView', 'spaSample', 'spaN', 'spaDose', 'spaDf', 'spaZpp', 'spaPref', 'spaAngErr', 'spaBin', 'spaView', 'ab', 'ronchAp', 'cbedKind', 'alphaCB', 'alphaLA', 'strain', 'holz',
   'biprism', 'sbR', 'numCorr', 'holoView', 'nFocal', 'focalStep', 'ilhView', 'holder', 'tempSet', 'profile', 'mis',
   'magSpec', 'lorThick', 'lorFov', 'lorDf', 'lorDiv', 'lorView', 'lorFouc', 'lorApR', 'lorField', 'lorChir', 'lorPol', 'lstemView', 'lorAlpha',
 ];

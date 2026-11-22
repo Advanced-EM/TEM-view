@@ -104,11 +104,11 @@ const cellGeom = (S, tLiqA) => {
   return { C, rb, Virr, Vres, kFlush };
 };
 export const h2Sat = (S) => K.p('H2_sat') * Math.max(0.05, S.lcDP ?? 1) / 1.01325; // M at the liquid's pressure (bar)
-// steady state in the beam for the reservoir's H₂ (M); gold precursor when on
+// steady state in the beam for the reservoir's H₂ (M); the metal precursor (and its counter-ion) when on
 export function radiolysisNow(S, kV, resH2 = 0) {
-  const C = CELLS[S.lcClass] ?? CELLS.sinx, D = doseRateGy(S.lcRate, kV);
-  const bulk = { O2: K.p('O2_air'), H2: resH2, ...(S.lcPrecursor ? { Au: K.p('Au_bulk') } : {}) };
-  const ss = K.steadyState(D, C.pockets ? { closed: true, scav: K.p('k_scav_gr'), bulk } : { bulk });
+  const C = CELLS[S.lcClass] ?? CELLS.sinx, D = doseRateGy(S.lcRate, kV), Mt = K.metalOf(S), metal = S.lcMetal ?? 'au';
+  const bulk = { O2: K.p('O2_air'), H2: resH2, ...(S.lcPrecursor ? { M: K.p('prec_bulk'), ...(Mt.counter ? { [Mt.counter]: K.p('prec_bulk') } : {}) } : {}) };
+  const ss = K.steadyState(D, C.pockets ? { closed: true, scav: K.p('k_scav_gr'), bulk, metal } : { bulk, metal });
   return { D, ss, ratio: ss.H2 / h2Sat(S), sat: h2Sat(S) };
 }
 // steady-state H₂ in the beam relative to its solubility (> 1: bubbles), for an empty reservoir unless given
@@ -127,13 +127,35 @@ export function reservoirRate(S, kV, resH2, tLiqA) {
   const efflux = K.p('D_H2') * (2.405 / g.rb) ** 2 * (r.ss.H2 - resH2) * g.Virr; // mol/s
   return efflux / g.Vres - g.kFlush * resH2;
 }
-// gold deposited on each particle (Å/s of radius at radius rA): reduced gold atoms in the column of liquid above the
+// metal atoms made by the beam (M/s): the precursor's reduction by hydrated electrons, ne electrons per atom
+export function reductionRate(S, kV, resH2 = 0) {
+  if (!S.lcPrecursor) return 0;
+  const Mt = K.metalOf(S), r = radiolysisNow(S, kV, resH2);
+  return (K.p(Mt.k) * r.ss.eaq * r.ss.M) / Mt.ne;
+}
+// metal deposited on each particle (Å/s of radius at radius rA): reduced atoms in the column of liquid above the
 // particle's share of the area, the fraction η that reaches existing particles, spread over its surface
 export function growthRate(S, kV, resH2, tLiqA, rA) {
   if (!S.lcPrecursor || !(tLiqA > 0)) return 0;
-  const r = radiolysisNow(S, kV, resH2), red = K.p('k_Au_e') * r.ss.eaq * r.ss.Au / 3; // M/s of gold atoms
-  const atoms = red * 6.022e-4 * tLiqA * 3500; // per s, per particle (3500 Å² each), 6.022·10⁻⁴ atoms/Å³ per M
-  return (K.p('Au_eta') * atoms * 16.96) / (4 * Math.PI * rA * rA);
+  const atoms = reductionRate(S, kV, resH2) * 6.022e-4 * tLiqA * 3500; // per s, per particle (3500 Å² each), 6.022·10⁻⁴ atoms/Å³ per M
+  return (K.p('Au_eta') * atoms * K.metalOf(S).vAtom) / (4 * Math.PI * rA * rA);
+}
+// nucleation (kinetics.js): reduced atoms accumulate, dc/dt = R − k_n·c, and nucleate at c_n
+export const nucParams = (S) => { const [c, k] = K.metalOf(S).nuc; return { cn: K.p(c), kn: K.p(k) }; };
+// the dose rate (e⁻/Å²/s) below which nothing nucleates (R/k_n < c_n), by bisection in log
+export function nucleationThreshold(S, kV = S.kV ?? 200) {
+  const { cn, kn } = nucParams(S), at = (j) => reductionRate({ ...S, lcPrecursor: true, lcRate: j }, kV) / kn - cn;
+  let lo = Math.log(1e-4), hi = Math.log(1e4);
+  if (at(Math.exp(hi)) < 0) return Infinity;
+  for (let i = 0; i < 50; i++) { const m = (lo + hi) / 2; if (at(Math.exp(m)) > 0) hi = m; else lo = m; }
+  return Math.exp((lo + hi) / 2);
+}
+// induction time (s) and dose (e⁻/Å²) at a constant dose rate: c(t) = (R/k_n)(1 − e^(−k_n t)) reaches c_n
+export function induction(S, kV = S.kV ?? 200) {
+  const { cn, kn } = nucParams(S), R = reductionRate({ ...S, lcPrecursor: true }, kV), x = (cn * kn) / R;
+  if (!(x < 1)) return { t_s: Infinity, dose_e_A2: Infinity };
+  const t = -Math.log(1 - x) / kn;
+  return { t_s: t, dose_e_A2: t * S.lcRate };
 }
 
 // one step of the processes (dt s): the reservoir fills (or is flushed), bubbles nucleate and grow where H₂ is
@@ -151,7 +173,14 @@ export function step(st, S, kV, dt, rng, fovA, tLiqA) {
     for (const b of st.bubbles) b.r = Math.min(tLiqA * 0.5 + fovA * 0.15, b.r + 40 * Math.sqrt(excess) * dt);
   } else for (const b of st.bubbles) b.r = Math.max(0, b.r - 15 * dt); // undersaturated: they dissolve
   st.bubbles = st.bubbles.filter((b) => b.r > 0);
-  if (S.lcPrecursor && tLiqA > 0) st.grow = Math.min(15, st.grow + growthRate(S, kV, st.res, tLiqA, 21 + st.grow) * dt); // Å of radius
+  if (S.lcPrecursor && tLiqA > 0) {
+    st.grow = Math.min(15, st.grow + growthRate(S, kV, st.res, tLiqA, 21 + st.grow) * dt); // Å of radius
+    // reduced atoms in solution, exactly integrated over the step, and the first nucleation
+    const { cn, kn } = nucParams(S), R = reductionRate(S, kV, st.res), e = Math.exp(-kn * dt);
+    st.mono = (st.mono ?? 0) * e + (R / kn) * (1 - e);
+    st.supersat = st.mono / cn;
+    if (st.supersat >= 1 && st.nucleated == null) { st.nucleated = st.t; st.events?.push({ event: 'nucleation', t: st.t }); }
+  }
   // hindered Brownian motion: free diffusion is far too fast to image; particles stuck near a window barely move
   const D = (depthOf(S) < 0.1 || depthOf(S) > 0.9 ? 0.5 : 6) * (tLiqA > 0 ? 1 : 0); // Å²/s
   const s = Math.sqrt(2 * D * dt), g = () => Math.sqrt(-2 * Math.log(1 - rng())) * Math.cos(2 * Math.PI * rng());

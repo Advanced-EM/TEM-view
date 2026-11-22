@@ -1,6 +1,6 @@
 {
  "format": "tem-view-session/2",
- "saved": "2026-11-22T18:36:28.823Z",
+ "saved": "2026-11-22T21:23:19.637Z",
  "note": "TEM-view in situ experiment E3 (N2): Sintering of gold nanoparticles: oxygen versus nitrogen. Load it, then press Record movie.",
  "technique": "tem",
  "mods": {},
@@ -27,6 +27,7 @@
   "lcRate": 1,
   "lcDepth": "middle",
   "lcPrecursor": false,
+  "lcMetal": "au",
   "lcFilter": false,
   "gcGeom": "windowed",
   "gcGas": "N2",
@@ -49,14 +50,14 @@
   "bsEbd": 30,
   "bsStray": true,
   "movOn": true,
-  "movDur": 180,
+  "movDur": 300,
   "movFps": 1,
   "timeline": [
    {
     "key": "tempSet",
     "t0": 10,
-    "t1": 60,
-    "to": 800
+    "t1": 110,
+    "to": 1250
    }
   ],
   "expName": "E3 (N2): Sintering of gold nanoparticles: oxygen versus nitrogen",
@@ -66,7 +67,9 @@
    "radius_A",
    "sinter_A",
    "drift_A"
-  ]
+  ],
+  "calib": "published",
+  "calibProfile": null
  },
  "state": {
   "mode": "tem",
@@ -168,6 +171,7 @@
   "lcRate": 1,
   "lcDepth": "middle",
   "lcPrecursor": false,
+  "lcMetal": "au",
   "lcFilter": false,
   "gcGeom": "windowed",
   "gcGas": "N2",
@@ -175,14 +179,14 @@
   "gcGap": 5,
   "gcPath": 2,
   "movOn": true,
-  "movDur": 180,
+  "movDur": 300,
   "movFps": 1,
   "timeline": [
    {
     "key": "tempSet",
     "t0": 10,
-    "t1": 60,
-    "to": 800
+    "t1": 110,
+    "to": 1250
    }
   ],
   "expName": "E3 (N2): Sintering of gold nanoparticles: oxygen versus nitrogen",
@@ -193,6 +197,8 @@
    "sinter_A",
    "drift_A"
   ],
+  "calib": "published",
+  "calibProfile": null,
   "bsOn": false,
   "bsLayout": "two",
   "bsGap": 5,

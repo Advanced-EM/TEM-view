@@ -20,6 +20,7 @@ import * as GAS from './gas.js';
 import * as BIAS from './bias.js';
 import * as INSITU from './insitu.js';
 import * as OBS from './observables.js';
+import { syncCalibration } from './insitu-cal.js';
 import { buildStructure } from './structure.js';
 import { HOLDERS, specimenT, u2Ratio, thermalStrain, radiolysisFactor, iceSublimation, DEVITRIFY_K } from './holder.js';
 
@@ -1081,7 +1082,7 @@ export class Sim {
     const xi0 = G.xi;
     GAS.react(G, S, this.temp(), dt * S.speed);
     if (Math.abs(G.xi - xi0) > 0.01) this.stale.si = 1, this.stale.eels = 1;
-    if (S.spec === 'au' && !S.zone && G.sinter - G.grown >= 0.5) { G.grown = G.sinter; P.regrowGold(Math.round(G.sinter * 2) / 2); this.mapCache.clear(); this.invalidate('damage'); }
+    if (S.spec === 'au' && !S.zone && Math.min(20, G.sinter) - G.grown >= 0.5) { G.grown = Math.min(20, G.sinter); P.regrowGold(Math.round(G.grown * 2) / 2); /* drawn up to +20 Å */ this.mapCache.clear(); this.invalidate('damage'); }
   }
   // ------------------------------------------------------------ biasing (bias.js)
   // the chip's operating point, heating, failures and I–V trace advance with the clock; under liquid the electrode
@@ -1731,6 +1732,7 @@ export class Sim {
   }
 
   update(dt) {
+    if (syncCalibration(this.S)) this.invalidate('env'); // the kinetics follow the session's calibration profile
     const rec = this.movie?.rec && !this.S.paused;
     if (rec) dt = this.movieBefore() / (this.S.speed || 1);
     this.sputter(dt);

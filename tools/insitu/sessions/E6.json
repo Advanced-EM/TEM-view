@@ -1,6 +1,6 @@
 {
  "format": "tem-view-session/2",
- "saved": "2026-11-22T18:37:29.197Z",
+ "saved": "2026-11-22T21:24:34.830Z",
  "note": "TEM-view in situ experiment E6: Helium bubbles in silicon: coarsening, escape and voids on annealing. Load it, then press Record movie.",
  "technique": "tem",
  "mods": {},
@@ -27,6 +27,7 @@
   "lcRate": 1,
   "lcDepth": "middle",
   "lcPrecursor": false,
+  "lcMetal": "au",
   "lcFilter": false,
   "gcGeom": "windowed",
   "gcGas": "N2",
@@ -67,7 +68,9 @@
    "cavity_d_nm",
    "he_density",
    "drift_A"
-  ]
+  ],
+  "calib": "published",
+  "calibProfile": null
  },
  "state": {
   "mode": "tem",
@@ -169,6 +172,7 @@
   "lcRate": 1,
   "lcDepth": "middle",
   "lcPrecursor": false,
+  "lcMetal": "au",
   "lcFilter": false,
   "gcGeom": "windowed",
   "gcGas": "N2",
@@ -195,6 +199,8 @@
    "he_density",
    "drift_A"
   ],
+  "calib": "published",
+  "calibProfile": null,
   "bsOn": false,
   "bsLayout": "two",
   "bsGap": 5,

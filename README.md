@@ -144,6 +144,10 @@ One technique registry ([`js/registry.js`](js/registry.js)) feeds the exhibit, s
     - the field appears in off-axis holography (the phase across the gap returns the specimen's voltage), Lorentz, 4D-STEM centre of mass and DPC, and shifts patterns and defocused images;
     - with the liquid cell, the electrode potential deposits or dissolves gold.
   - *In situ movies* ([`js/insitu.js`](js/insitu.js)): a timeline of temperature, pressure, bias and dose-rate ramps; frames recorded in simulated time with the holder's drift (and thermal drift during ramps); each frame exported with its time, environment and true drift.
+  - *Calibrated kinetics, and your own calibration* ([`js/kinetics.js`](js/kinetics.js), [`js/insitu-cal.js`](js/insitu-cal.js)):
+    - every rate constant carries a unit, an uncertainty, a source and a label (literature, calibrated or trend);
+    - by default, silver nucleation (threshold dose rate and induction dose) is calibrated to Woehl et al. 2012, and gold coarsening on a heating chip (Eₐ and onset) to Horwath et al. 2022;
+    - fit the remaining trend parameters, or replace the published ones, with your own measured series (a CSV, with the measured temperature as input). The profile saves with the session, so the simulator becomes a digital twin of your experiment. See [`tools/calibrate/`](tools/calibrate/README.md).
 
 Each of these has a check in [`tools/`](tools/) (`*-check.mjs`) that CI runs. For example, `bias-check` integrates the holographic phase across a biased gap and recovers the applied voltage, and `insitu-check` measures drift from the frames and compares it with the model.
 
@@ -214,6 +218,7 @@ Drag the column to orbit and scroll to zoom. Keys `1`–`9` and `0` switch modes
 | `js/tomo.js`, `js/spa.js`, `js/ptychotomo.js` | Tomography, single-particle cryo-EM, ptychographic tomography |
 | `js/remote.js`, `js/resources.js`, `js/bundle.js`, `tools/connect/`, `tools/hpc/` | Tier 2 (temview-connect), local resources and limits, Tier 3 job bundles and their runner |
 | `js/environment.js`, `js/liquid.js`, `js/gas.js`, `js/bias.js`, `js/insitu.js` | In situ: holders and windows, liquid cell, gas cell / ETEM, biasing, time series |
+| `js/kinetics.js`, `js/insitu-cal.js`, `js/calibration-published.js`, `tools/calibrate/` | In situ kinetics: documented parameters, the radiolysis network, calibration to published or your own series |
 | `js/structure.js`, `js/specview.js`, `js/lattice.js` | Specimen structures in 3D, the structure viewer, lattice finding for uploaded atoms |
 | `js/main.js` | State, controls, interaction, render loop |
 | `ruska/` | Ruska 1933 exhibit: `optics.js` (lenses, blur budget, brightness, heating), `specimens.js`, `screen.js` (phosphor-screen shader), `scene.js` (3D column), `main.js` (state, panel, missions, plates), `texts.js`, `i18n.js` (English/German), `console.js` (TEM-view Console and keyboard) |

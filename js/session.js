@@ -17,7 +17,7 @@ import { planFor, validPlanValue } from './footprint.js';
 
 export const SESSION_FORMAT = 'tem-view-session/2';
 export const ACQ_KEYS = ['kV', 'dose', 'camera', 'clarity']; // plus acq.plan (footprint.js overrides by technique)
-export const ENV_KEYS = ['holder', 'tempSet', 'envWin', 'envWinT', 'envCell', 'lcClass', 'lcA', 'lcB', 'lcGap', 'lcDP', 'lcFlow', 'lcPocket', 'lcRate', 'lcDepth', 'lcPrecursor', 'lcFilter', 'gcGeom', 'gcGas', 'gcP', 'gcGap', 'gcPath', 'bsOn', 'bsLayout', 'bsGap', 'bsMat', 'bsMode', 'bsWave', 'bsV', 'bsI', 'bsRate', 'bsLimit', 'bsRc', 'bsRs', 'bsLeak', 'bsEbd', 'bsStray', 'movOn', 'movDur', 'movFps', 'timeline', 'expName', 'expGoal', 'expObs'];
+export const ENV_KEYS = ['holder', 'tempSet', 'envWin', 'envWinT', 'envCell', 'lcClass', 'lcA', 'lcB', 'lcGap', 'lcDP', 'lcFlow', 'lcPocket', 'lcRate', 'lcDepth', 'lcPrecursor', 'lcMetal', 'lcFilter', 'gcGeom', 'gcGas', 'gcP', 'gcGap', 'gcPath', 'bsOn', 'bsLayout', 'bsGap', 'bsMat', 'bsMode', 'bsWave', 'bsV', 'bsI', 'bsRate', 'bsLimit', 'bsRc', 'bsRs', 'bsLeak', 'bsEbd', 'bsStray', 'movOn', 'movDur', 'movFps', 'timeline', 'expName', 'expGoal', 'expObs', 'calib', 'calibProfile'];
 const MOD_IDS = new Set(MODIFIERS.map((m) => m.id));
 
 // modifiers in effect for a state. The Zernike plate still lives in the objective-aperture slot of the
@@ -68,6 +68,7 @@ export function readSession(o, base = defaultState()) {
     else if (k === 'profile') out.profile = sanitizeProfile(v);
     else if (k === 'spec') { if (P.SPECIMENS[v]) out.spec = v; else warnings.push(`unknown specimen ${v}`); }
     else if (k === 'mis') out.mis = v && typeof v === 'object' ? v : null;
+    else if (k === 'calibProfile') out.calibProfile = v && typeof v === 'object' && typeof v.format === 'string' && v.format.startsWith('temview-calibration') && v.params ? v : null;
     else if (k === 'ab' || k === 'dfFam') { if (v && typeof v === 'object') out[k] = { ...d[k], ...Object.fromEntries(Object.entries(v).filter(([, x]) => typeof x === 'number')) }; }
     else if (typeof v === typeof d[k]) out[k] = v;
   }

@@ -1,6 +1,6 @@
 {
  "format": "tem-view-session/2",
- "saved": "2026-11-22T18:32:33.867Z",
+ "saved": "2026-11-22T21:18:42.828Z",
  "note": "TEM-view in situ experiment E1 (static): Radiolysis: bubbles from the beam, or from a cell that fills with H₂?. Load it, then press Record movie.",
  "technique": "tem",
  "mods": {},
@@ -27,6 +27,7 @@
   "lcRate": 10,
   "lcDepth": "middle",
   "lcPrecursor": false,
+  "lcMetal": "au",
   "lcFilter": false,
   "gcGeom": "windowed",
   "gcGas": "N2",
@@ -66,7 +67,9 @@
    "h2_beam_uM",
    "h2_cell_uM",
    "pH"
-  ]
+  ],
+  "calib": "published",
+  "calibProfile": null
  },
  "state": {
   "mode": "tem",
@@ -168,6 +171,7 @@
   "lcRate": 10,
   "lcDepth": "middle",
   "lcPrecursor": false,
+  "lcMetal": "au",
   "lcFilter": false,
   "gcGeom": "windowed",
   "gcGas": "N2",
@@ -193,6 +197,8 @@
    "h2_cell_uM",
    "pH"
   ],
+  "calib": "published",
+  "calibProfile": null,
   "bsOn": false,
   "bsLayout": "two",
   "bsGap": 5,

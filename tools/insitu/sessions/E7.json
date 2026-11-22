@@ -1,6 +1,6 @@
 {
  "format": "tem-view-session/2",
- "saved": "2026-11-22T18:37:48.209Z",
+ "saved": "2026-11-22T21:24:55.182Z",
  "note": "TEM-view in situ experiment E7: Mapping the field across a biased gap by holography, then breaking it down. Load it, then press Record movie.",
  "technique": "oah",
  "mods": {},
@@ -27,6 +27,7 @@
   "lcRate": 1,
   "lcDepth": "middle",
   "lcPrecursor": false,
+  "lcMetal": "au",
   "lcFilter": false,
   "gcGeom": "windowed",
   "gcGas": "N2",
@@ -65,7 +66,9 @@
    "V_specimen",
    "I_uA",
    "phase_grad"
-  ]
+  ],
+  "calib": "published",
+  "calibProfile": null
  },
  "state": {
   "mode": "oah",
@@ -167,6 +170,7 @@
   "lcRate": 1,
   "lcDepth": "middle",
   "lcPrecursor": false,
+  "lcMetal": "au",
   "lcFilter": false,
   "gcGeom": "windowed",
   "gcGas": "N2",
@@ -191,6 +195,8 @@
    "I_uA",
    "phase_grad"
   ],
+  "calib": "published",
+  "calibProfile": null,
   "bsOn": true,
   "bsLayout": "two",
   "bsGap": 2,

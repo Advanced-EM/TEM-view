@@ -18,6 +18,8 @@ export const OBSERVABLES = {
   h2_beam_uM: { label: 'H₂ in the beam', unit: 'µM', applies: liquid, get: (sim) => 1e6 * (sim.liq?.h2 ?? 0) },
   h2_cell_uM: { label: 'H₂ in the rest of the cell', unit: 'µM', applies: (S) => liquid(S) && S.lcClass !== 'graphene', get: (sim) => 1e6 * (sim.liq?.res ?? 0) },
   pH: { label: 'pH in the beam', unit: '', applies: liquid, get: (sim) => sim.liq?.pH ?? 7 },
+  supersat: { label: 'Reduced metal relative to nucleation', unit: '', applies: (S) => liquid(S) && S.lcPrecursor, get: (sim) => sim.liq?.supersat ?? 0 },
+  nucleated_s: { label: 'Nucleation time', unit: 's', applies: (S) => liquid(S) && S.lcPrecursor, get: (sim) => sim.liq?.nucleated ?? null },
   // gas
   transmitted: { label: 'Contrast kept through the gas', unit: '', applies: gas, get: (sim, S) => ENV.gasNow(S, sim.temp())?.col.transmitted ?? 1 },
   sinter_A: { label: 'Sintering (radius gained)', unit: 'Å', applies: (S) => gas(S) && S.spec === 'au', get: (sim) => sim.gasSt?.sinter ?? 0 },
@@ -36,7 +38,7 @@ export const OBSERVABLES = {
 export const applicable = (S) => Object.keys(OBSERVABLES).filter((k) => OBSERVABLES[k].applies(S));
 // a sensible default selection: what the environment is about
 export function suggested(S) {
-  const a = applicable(S), want = liquid(S) ? ['bubbles', 'h2_beam_uM', 'h2_cell_uM', 'radius_A'] : gas(S) ? ['T_K', 'transmitted', 'sinter_A', 'xi'] : S.spec === 'hesi' ? ['T_K', 'cavities', 'cavity_d_nm', 'he_density'] : ['T_K', 'drift_A'];
+  const a = applicable(S), want = liquid(S) ? (S.lcPrecursor ? ['radius_A', 'supersat', 'nucleated_s', 'bubbles'] : ['bubbles', 'h2_beam_uM', 'h2_cell_uM', 'pH']) : gas(S) ? ['T_K', 'transmitted', 'sinter_A', 'xi'] : S.spec === 'hesi' ? ['T_K', 'cavities', 'cavity_d_nm', 'he_density'] : ['T_K', 'drift_A'];
   if (bias(S)) want.push('V_specimen', 'I_uA', 'echem_A_s', 'phase_grad');
   return want.filter((k) => a.includes(k));
 }

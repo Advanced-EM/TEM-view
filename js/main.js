@@ -20,6 +20,7 @@ import * as BIASX from './bias.js';
 import * as INSITU from './insitu.js';
 import * as KIN from './kinetics.js';
 import * as OBSX from './observables.js';
+import * as ICAL from './insitu-cal.js';
 import { evaluate, PROFILES, LIMIT_TEXT, capFor } from './resources.js';
 import { RemoteBackend } from './remote.js';
 import { buildBundle, readResults } from './bundle.js';
@@ -161,7 +162,7 @@ function gasNote() {
   if (S.gcGeom !== 'open') { const Pb = LIQ.burstPressure({ a: (S.lcA / 2) * 1e-6, b: (S.lcB / 2) * 1e-6, t: (S.envWinT ?? 30) * 1e-9 }) / 1e5; parts.push(`The windows bulge the path to ${(g.pathA / 1e4).toFixed(1)} µm (gap ${S.gcGap} µm); they burst at ${Pb.toFixed(1)} bar.`); }
   if (sim.temp() > 500) parts.push(`At ${Math.round(sim.temp())} K the gas reacts:${S.spec === 'au' ? ` the gold has sintered by ${(G?.sinter ?? 0).toFixed(1)} Å${S.gcGas === 'O2' ? ' (faster in oxygen)' : ''}.` : S.spec === 'sto' ? ` SrTiO₃ is ${Math.round(100 * (G?.xi ?? 0))} % reduced (oxygen vacancies; ${S.gcGas === 'H2' || S.gcGas === 'CO' ? 'reducing gas' : S.gcGas === 'O2' ? 're-oxidising in oxygen' : 'an inert gas holds it'}): watch the O K edge.` : ' choose gold or SrTiO₃ to see sintering or reduction.'}`);
   else parts.push('Heat it (heating holder) to drive reactions: gold sinters, SrTiO₃ loses oxygen in H₂ and takes it back in O₂.');
-  if (sim.temp() > 500) parts.push(`[sintering and redox: ${KIN.LABEL_TEXT.trend}${S.gcGas === 'O2' && S.spec === 'au' ? '; the faster sintering in oxygen is established for platinum, unverified for gold' : ''}]`);
+  if (sim.temp() > 500) parts.push(`[sintering: ${KIN.LABEL_TEXT[KIN.PROCESS.sintering.label]}${KIN.P.sinter_A.label === 'calibrated' ? ` (${shortRef(KIN.CAL.profile?.datasets?.find((d) => d.id === KIN.CAL.profile.params.sinter_A?.dataset))})` : ''}; redox: ${KIN.LABEL_TEXT[KIN.PROCESS.redox.label]}${S.gcGas === 'O2' && S.spec === 'au' ? '; the faster sintering in oxygen is established for platinum, unverified for gold' : ''}]`);
   parts.push(`Tilt up to ±${ENVW.maxTilt(S)}°.`);
   return parts.join(' ');
 }
@@ -172,6 +173,86 @@ function renderObsPick(el) {
   el.dataset.sig = sig;
   el.innerHTML = `<div class="row"><label>Measure each frame</label></div><div class="obsgrid">${a.map((k) => `<label class="obsitem"><input type="checkbox" value="${k}"${sel.includes(k) ? ' checked' : ''}> ${OBSX.OBSERVABLES[k].label}${OBSX.OBSERVABLES[k].unit ? ` <small>(${OBSX.OBSERVABLES[k].unit})</small>` : ''}</label>`).join('')}</div>`;
   el.querySelectorAll('input').forEach((b) => b.addEventListener('change', () => { S.expObs = [...el.querySelectorAll('input:checked')].map((x) => x.value); renderObsPick(el); }));
+}
+// ---------------------------------------------------------------- calibration of the kinetics (insitu-cal.js)
+let calFit = null; // the last fit of the user's series: { rows, model, col, profile }
+const escH = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+const pct = (u) => { const v = 100 * u; return `${v < 1 ? v.toPrecision(1) : v.toFixed(0)} %`; };
+const shortRef = (d) => (d?.ref ? `${d.ref.split(',')[0].split(' ')[0]} ${d.ref.match(/(19|20)\d\d/)?.[0] ?? ''}`.trim() : d?.title ?? '');
+function pickFile(accept, then) {
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = accept;
+  inp.onchange = async () => { const f = inp.files?.[0]; if (f) then(await f.text(), f.name); };
+  inp.click();
+}
+function renderCalib(el) {
+  const prof = KIN.CAL.profile, user = KIN.isProfile(S.calibProfile) ? S.calibProfile : null;
+  const sig = [S.calib, prof?.name, prof?.created, user?.created, calFit?.profile?.created, S.envCell, S.lcPrecursor, S.lcMetal, S.bsOn].join('|');
+  if (el.dataset.sig === sig) return;
+  el.dataset.sig = sig;
+  const ds = Object.fromEntries((prof?.datasets ?? []).map((d) => [d.id, d]));
+  const cal = Object.entries(KIN.P).filter(([, e]) => e.label === 'calibrated');
+  const trend = Object.keys(KIN.P).filter((k) => KIN.P[k].label === 'trend');
+  const keys = el.dataset.keys ?? '';
+  el.innerHTML = `<div class="row"><label>Kinetics calibrated to</label></div>
+    <select class="calSel"><option value="published"${S.calib === 'published' ? ' selected' : ''}>Published in situ series (default)</option><option value="none"${S.calib === 'none' ? ' selected' : ''}>Nothing: the uncalibrated defaults</option><option value="user"${S.calib === 'user' ? ' selected' : ''}${user ? '' : ' disabled'}>${user ? `Mine: ${escH(user.name)}` : 'Mine (fit or load a profile first)'}</option></select>
+    ${cal.length ? `<table class="data caltab"><thead><tr><th>Parameter</th><th>Value</th><th>±</th><th>From</th></tr></thead><tbody>${cal.map(([k, e]) => { const d = ds[prof?.params?.[k]?.dataset]; return `<tr title="${escH(e.src)}"><td>${k}</td><td>${(+e.v).toPrecision(3)} ${escH(e.unit)}</td><td>${pct(e.unc)}</td><td>${escH(shortRef(d))}${d?.kind === 'user' ? ' (yours)' : ''}</td></tr>`; }).join('')}</tbody></table>` : '<p class="note">No calibrated parameters: every process runs on its literature or trend values.</p>'}
+    <p class="note">Still at trend, to calibrate with your own data: ${trend.join(', ')}.</p>
+    <div class="row"><label>Your own measurements (the digital twin)</label></div>
+    <p class="note">Set up the experiment as you ran it (cell, precursor, gas, holder, timeline), download the template, put your measured values in it (t_s and the observable columns; T_K, if present, drives the model), then fit.</p>
+    <div class="row"><label>Parameters to fit</label></div><input class="calKeys" type="text" placeholder="suggested from your columns, e.g. sinter_A, sinter_Ea" value="${escH(keys)}">
+    <div class="ctl buttons"><button class="btn calTpl">Template CSV</button><button class="btn calFit">Fit my series…</button><button class="btn calLoad">Load profile…</button>${user ? '<button class="btn calSave">Save my profile</button>' : ''}</div>
+    ${calFit ? `<canvas class="ivplot calplot" width="560" height="200" aria-label="Your measured series against the calibrated model"></canvas><p class="note">${calFitNote()}</p>` : ''}`;
+  el.querySelector('.calSel').addEventListener('change', (e) => { S.calib = e.target.value; ICAL.syncCalibration(S); sim.invalidate('env'); refreshControls(); });
+  el.querySelector('.calKeys').addEventListener('input', (e) => { el.dataset.keys = e.target.value; });
+  el.querySelector('.calTpl').addEventListener('click', () => download(new Blob([ICAL.templateCSV(S)], { type: 'text/csv' }), `tem-view-series-template-${stamp()}.csv`));
+  el.querySelector('.calLoad').addEventListener('click', () => pickFile('.json', (txt) => {
+    try { const o = JSON.parse(txt); if (!KIN.isProfile(o)) throw new Error('not a temview-calibration profile'); S.calibProfile = o; S.calib = 'user'; ICAL.syncCalibration(S); sim.invalidate('env'); el.dataset.sig = ''; refreshControls(); voice.flash(`<b>Calibration loaded</b><p>${escH(o.name)}: ${Object.keys(o.params).length} parameters.</p>`, 4000); }
+    catch (err) { voice.flash(`<b>Could not load the profile</b><p>${escH(err.message ?? err)}</p>`, 5000); }
+  }));
+  el.querySelector('.calSave')?.addEventListener('click', () => download(new Blob([JSON.stringify(user, null, 2)], { type: 'application/json' }), `tem-view-calibration-${stamp()}.json`));
+  el.querySelector('.calFit').addEventListener('click', () => pickFile('.csv,.tsv,.txt', (txt, name) => {
+    let ser;
+    try { ser = ICAL.parseSeriesCSV(txt); } catch (err) { voice.flash(`<b>Could not read ${escH(name)}</b><p>${escH(err.message ?? err)}</p>`, 5000); return; }
+    const cols = ICAL.seriesColumns(ser.rows), typed = (el.dataset.keys ?? '').split(/[\s,]+/).filter(Boolean);
+    const fitKeys = typed.length ? typed : ICAL.suggestFit(S, cols);
+    if (!cols.length || !fitKeys.length) { voice.flash(`<b>Nothing to fit</b><p>${cols.length ? 'Name the parameters to fit.' : `No observable columns (${ser.ignored.join(', ') || 'only time'}).`}</p>`, 5000); return; }
+    const bad = fitKeys.filter((k) => !KIN.P[k]);
+    if (bad.length) { voice.flash(`<b>Unknown parameters</b><p>${escH(bad.join(', '))}</p>`, 5000); return; }
+    voice.flash(`<b>Fitting</b><p>${fitKeys.join(', ')} to ${ser.rows.length} points of ${cols.join(', ')}…</p>`, 3000);
+    setTimeout(() => {
+      try {
+        const d = ICAL.userDataset(S, { rows: ser.rows, fitKeys, title: `${S.expName || 'My series'} (${name})` });
+        const base = S.calib === 'none' ? null : S.calib === 'user' && user ? user : ICAL.PUBLISHED;
+        const { profile } = ICAL.fit([d], { base, name: S.expName || `My calibration (${name})` });
+        S.calibProfile = profile; S.calib = 'user'; ICAL.syncCalibration(S); sim.invalidate('env');
+        const model = ICAL.simulateSeries(S, ser.rows.map((r) => r.t), { inputs: ser.rows });
+        calFit = { rows: ser.rows, model, col: cols[0], cols, keys: fitKeys, profile };
+        el.dataset.sig = ''; refreshControls();
+      } catch (err) { voice.flash(`<b>The fit failed</b><p>${escH(err.message ?? err)}</p>`, 6000); }
+    }, 30);
+  }));
+  const cv = el.querySelector('.calplot');
+  if (cv) drawCalFit(cv);
+}
+function calFitNote() {
+  const f = calFit.profile.fit, p = calFit.profile.params;
+  return `Fitted ${calFit.keys.map((k) => `${k} = ${(+p[k].v).toPrecision(3)} ± ${pct(p[k].unc)}`).join(', ')} to ${f.points} points (${calFit.cols.join(', ')}); reduced χ² ${f.reduced_chi2}${f.reduced_chi2 > 3 ? ': the model does not describe these data well (or the σ is too small)' : ''}. Applied as “Mine”; it saves with the session. Points: your data; line: the calibrated model.`;
+}
+function drawCalFit(cv) {
+  const g = cv.getContext('2d'), W = cv.width, H = cv.height, { rows, model, col } = calFit, pad = 34;
+  g.clearRect(0, 0, W, H); g.fillStyle = 'rgba(255,255,255,0.04)'; g.fillRect(0, 0, W, H);
+  const pts = rows.filter((r) => Number.isFinite(r[col])), vs = [...pts.map((r) => r[col]), ...model.map((r) => r[col]).filter(Number.isFinite)];
+  if (!pts.length) return;
+  const t0 = rows[0].t, t1 = rows.at(-1).t || 1, lo = Math.min(...vs), hi = Math.max(...vs), sp = hi - lo || 1;
+  const X = (t) => pad + ((t - t0) / (t1 - t0 || 1)) * (W - pad - 8), Y = (v) => H - 20 - ((v - lo) / sp) * (H - 34);
+  g.strokeStyle = '#6fd6ff'; g.lineWidth = 2; g.beginPath();
+  model.forEach((r, i) => { if (Number.isFinite(r[col])) (i ? g.lineTo : g.moveTo).call(g, X(r.t), Y(r[col])); }); g.stroke();
+  g.fillStyle = '#ffb45e';
+  for (const r of pts) { g.beginPath(); g.arc(X(r.t), Y(r[col]), 2.5, 0, 2 * Math.PI); g.fill(); }
+  g.fillStyle = '#c9d1d9'; g.font = '11px system-ui';
+  g.fillText(`${OBSX.OBSERVABLES[col]?.label ?? col} (${OBSX.OBSERVABLES[col]?.unit ?? ''}): ${lo.toPrecision(3)} – ${hi.toPrecision(3)}`, pad, 13);
+  g.fillText(`${t0.toFixed(0)} s`, pad, H - 5); g.fillText(`${t1.toFixed(0)} s`, W - 50, H - 5);
 }
 // the observables against time while the movie records (each scaled to its own range)
 const OBS_COLORS = ['#6fd6ff', '#ffb45e', '#b59bff', '#7ee08a', '#ff7a90', '#e9edf2'];
@@ -257,7 +338,11 @@ function liquidNote() {
   else parts.push(`Each window bows ${(c.w * 1e6).toFixed(2)} µm at its centre (stress ${(c.stress / 1e9).toFixed(2)} GPa; it bursts at ${(c.burstP / 1e5).toFixed(1)} bar). ${c.onWin ? `Liquid here: ${(c.thicknessA / 1e4).toFixed(2)} µm (spacer ${S.lcGap} nm + bulge).` : 'The stage is on the silicon frame: move onto the window.'}`);
   const rn = LIQ.radiolysisNow(S, S.kV, L?.res ?? 0), sat = rn.sat, thr = LIQ.bubbleThresholdGy(S, S.kV) / LIQ.doseRateGy(1, S.kV);
   const fill = LIQ.reservoirRate(S, S.kV, L?.res ?? 0, n?.tA), toSat = fill > 0 && (L?.res ?? 0) < sat ? (sat - (L?.res ?? 0)) / fill : Infinity;
-  parts.push(`Radiolysis (${(rn.D / 1e6).toPrecision(2)} MGy/s): H₂ in the beam ${(1e6 * rn.ss.H2).toPrecision(2)} µM, ${(100 * rn.ss.H2 / sat).toFixed(0)} % of its solubility; pH ${(-Math.log10(rn.ss.Hp)).toFixed(1)}, H₂O₂ ${(1e6 * rn.ss.H2O2).toPrecision(2)} µM.${c.pockets ? ' The pocket is closed: its products stay in it.' : ` The rest of the cell holds ${(1e6 * (L?.res ?? 0)).toPrecision(2)} µM H₂${S.lcClass === 'sinxFlow' ? ', flushed by the flow' : isFinite(toSat) ? `, saturated in ~${toSat > 120 ? `${(toSat / 60).toFixed(0)} min` : `${toSat.toFixed(0)} s`} at this dose rate` : ''}. Bubbles at once above ${thr.toPrecision(2)} e⁻/Å²/s.`}${(L?.ratio ?? 0) > 1 ? ` Supersaturated: bubbles form (${L?.bubbles.length ?? 0} in view).` : ''}${S.lcPrecursor ? ` The gold has grown ${(L?.grow ?? 0).toFixed(1)} Å.` : ''} [${KIN.LABEL_TEXT[KIN.PROCESS.radiolysis.label]}${S.lcPrecursor ? `; growth: ${KIN.LABEL_TEXT[KIN.PROCESS.growth.label]}` : ''}]`);
+  parts.push(`Radiolysis (${(rn.D / 1e6).toPrecision(2)} MGy/s): H₂ in the beam ${(1e6 * rn.ss.H2).toPrecision(2)} µM, ${(100 * rn.ss.H2 / sat).toFixed(0)} % of its solubility; pH ${(-Math.log10(rn.ss.Hp)).toFixed(1)}, H₂O₂ ${(1e6 * rn.ss.H2O2).toPrecision(2)} µM.${c.pockets ? ' The pocket is closed: its products stay in it.' : ` The rest of the cell holds ${(1e6 * (L?.res ?? 0)).toPrecision(2)} µM H₂${S.lcClass === 'sinxFlow' ? ', flushed by the flow' : isFinite(toSat) ? `, saturated in ~${toSat > 120 ? `${(toSat / 60).toFixed(0)} min` : `${toSat.toFixed(0)} s`} at this dose rate` : ''}. Bubbles at once above ${thr.toPrecision(2)} e⁻/Å²/s.`}${(L?.ratio ?? 0) > 1 ? ` Supersaturated: bubbles form (${L?.bubbles.length ?? 0} in view).` : ''}${S.lcPrecursor ? ` The particles have grown ${(L?.grow ?? 0).toFixed(1)} Å.` : ''} [${KIN.LABEL_TEXT[KIN.PROCESS.radiolysis.label]}${S.lcPrecursor ? `; growth: ${KIN.LABEL_TEXT[KIN.PROCESS.growth.label]}` : ''}]`);
+  if (S.lcPrecursor) {
+    const nt = LIQ.nucleationThreshold(S, S.kV), ind = LIQ.induction(S, S.kV), Mt = KIN.metalOf(S), [ck] = Mt.nuc;
+    parts.push(`Nucleation (${Mt.label.toLowerCase()}): none below ${isFinite(nt) ? `${nt.toPrecision(2)} e⁻/Å²/s` : 'any dose rate here'}; ${isFinite(ind.t_s) ? `at this dose rate after ${ind.t_s.toPrecision(2)} s (${ind.dose_e_A2.toPrecision(3)} e⁻/Å²)` : 'not at this dose rate'}. ${L?.nucleated != null ? `Nucleated at ${L.nucleated.toFixed(1)} s.` : `Reduced metal at ${(100 * (L?.supersat ?? 0)).toFixed(0)} % of what it takes.`} [${KIN.P[ck].label === 'calibrated' ? `calibrated: ${shortRef(KIN.CAL.profile?.datasets?.find((d) => d.id === KIN.CAL.profile.params[ck]?.dataset))}` : KIN.LABEL_TEXT.trend}]`);
+  }
   if (n?.tA > 0) {
     const tb = LIQ.temBlur(n.tA, n.below, S.kV, { Cc: (S.profile.Cc ?? 1.4) * 1e7, lambdaA: 10 * P.imfp(S.kV, 7.4) });
     parts.push(`Resolution: STEM ≈ ${Math.max(0.1, LIQ.stemBlur(n.above, S.kV)).toFixed(1)} nm (probe broadening above the particle), TEM ≈ ${S.lcFilter ? tb.elastic.toFixed(1) : Math.max(tb.elastic, tb.chromatic * tb.inelasticShare).toFixed(1)} nm (${S.lcFilter ? 'zero loss only' : `${Math.round(100 * tb.inelasticShare)} % of the electrons lost energy: chromatic blur`}). Tilt up to ±${ENVW.maxTilt(S)}°.`);
@@ -521,7 +606,8 @@ const CONTROLS = [
   { slider: 'lcPocket', label: 'Pocket size', min: 5, max: 500, log: true, fmt: (v) => `${Math.round(v)} nm`, show: () => S.envCell === 'liquid' && S.lcClass === 'graphene' },
   { slider: 'lcRate', label: 'Dose rate', min: 0.01, max: 1000, log: true, fmt: (v) => `${(+v).toPrecision(2)} e⁻/Å²/s · ${(LIQ.doseRateGy(+v, S.kV) / 1e6).toPrecision(2)} MGy/s`, show: () => S.envCell === 'liquid' },
   { chips: 'lcDepth', label: 'The particle sits', small: true, show: () => S.envCell === 'liquid', opts: [['top', 'On the entrance window'], ['middle', 'In the liquid'], ['bottom', 'On the exit window']] },
-  { toggles: [['lcPrecursor', 'Gold precursor in the liquid (particles grow)'], ['lcFilter', 'Energy filter (TEM: zero loss only)']], show: () => S.envCell === 'liquid' },
+  { toggles: [['lcPrecursor', 'Metal precursor in the liquid (particles grow; new ones nucleate)'], ['lcFilter', 'Energy filter (TEM: zero loss only)']], show: () => S.envCell === 'liquid' },
+  { chips: 'lcMetal', label: 'Precursor (1 mM)', small: true, show: () => S.envCell === 'liquid' && S.lcPrecursor, opts: Object.entries(KIN.METALS).map(([k, v]) => [k, v.label]) },
   // the gas cell / environmental column (gas.js)
   { chips: 'gcGeom', label: 'Gas geometry', small: true, show: () => S.envCell === 'gas', opts: [['windowed', 'Windowed cell (to ~1 bar)'], ['open', 'Open column (to 20 mbar)']] },
   { chips: 'gcGas', label: 'Gas', small: true, show: () => S.envCell === 'gas', opts: Object.entries(GASX.GASES).map(([k, v]) => [k, v.label]) },
@@ -560,6 +646,8 @@ const CONTROLS = [
   { buttons: [['movRec', 'Record movie'], ['movStop', 'Stop'], ['movDiscard', 'Discard movie']], modes: 'tem stem diff cbed ronch oah ltem lstem', show: () => S.movOn },
   { obsPlot: true, modes: 'tem stem diff cbed ronch oah ltem lstem', show: () => S.movOn && !!sim.movie?.meta.length },
   { pFn: () => movieNote(), modes: 'tem stem diff cbed ronch oah ltem lstem', show: () => S.movOn },
+  // the kinetics' calibration (insitu-cal.js): the published profile, the defaults, or the user's own data
+  { calib: true, show: () => S.envCell !== 'none' || S.bsOn || S.holder === 'heat' },
   { slider: 'tempSet', label: 'Temperature setpoint', dyn: () => { const H = HOLDERS[S.holder]; return { min: H.min, max: H.max, step: H.step, log: H.log }; }, fmt: (v) => fmtT(v), show: () => S.holder !== 'room' },
   { pFn: () => `Specimen at ${fmtT(sim.temp())}${S.holder === 'room' ? '' : ` (setpoint ${fmtT(S.tempSet)}; the grid runs ${S.holder === 'heat' ? 'about 1 % hotter than the reading' : 'warmer than the holder tip'} and fluctuates by ±${HOLDERS[S.holder].jitter} K)`}. Drift ${sim.driftSpeed().toFixed(2)} Å/s.` },
   { buttons: [['newGrid', 'Load a fresh grid']], modes: NOT_LOR, show: () => S.spec === 'bio' },
@@ -910,6 +998,10 @@ function build() {
     } else if (c.obsPick) {
       el = document.createElement('div');
       el.className = 'ctl obspick';
+      bound.push({ c, el });
+    } else if (c.calib) {
+      el = document.createElement('div');
+      el.className = 'ctl calib';
       bound.push({ c, el });
     } else if (c.obsPlot) {
       el = document.createElement('canvas');
@@ -2009,6 +2101,7 @@ function frame(now) {
     for (const b of bound) if (b.c.ivPlot && !b.el.hidden) drawIV(b.el);
     for (const b of bound) if (b.c.obsPlot) { const vis = (!b.el.dataset.modes || b.el.dataset.modes.split(' ').includes(S.mode)) && b.c.show(); b.el.hidden = !vis; if (vis) drawObs(b.el); }
     for (const b of bound) if (b.c.obsPick && !b.el.hidden) renderObsPick(b.el);
+    for (const b of bound) if (b.c.calib && !b.el.hidden) renderCalib(b.el);
     if (['eds', '4d', 'eels', 'stem', 'ronch', 'cbed', 'oah', 'ilh', 'ltem', 'lstem', 'ed3d', 'tomo', 'spa', 'ptychotomo'].includes(S.mode)) renderInfo();
     $('#status').textContent = `· ${fps} fps`;
   }

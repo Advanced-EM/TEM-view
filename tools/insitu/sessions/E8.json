@@ -1,6 +1,6 @@
 {
  "format": "tem-view-session/2",
- "saved": "2026-11-22T18:37:50.463Z",
+ "saved": "2026-11-22T21:24:57.620Z",
  "note": "TEM-view in situ experiment E8: Electrochemistry: deposit gold, then strip it. Load it, then press Record movie.",
  "technique": "tem",
  "mods": {},
@@ -27,6 +27,7 @@
   "lcRate": 0.05,
   "lcDepth": "middle",
   "lcPrecursor": true,
+  "lcMetal": "au",
   "lcFilter": false,
   "gcGeom": "windowed",
   "gcGas": "N2",
@@ -71,7 +72,9 @@
    "V_specimen",
    "echem_A_s",
    "radius_A"
-  ]
+  ],
+  "calib": "published",
+  "calibProfile": null
  },
  "state": {
   "mode": "tem",
@@ -173,6 +176,7 @@
   "lcRate": 0.05,
   "lcDepth": "middle",
   "lcPrecursor": true,
+  "lcMetal": "au",
   "lcFilter": false,
   "gcGeom": "windowed",
   "gcGas": "N2",
@@ -203,6 +207,8 @@
    "echem_A_s",
    "radius_A"
   ],
+  "calib": "published",
+  "calibProfile": null,
   "bsOn": true,
   "bsLayout": "two",
   "bsGap": 5,

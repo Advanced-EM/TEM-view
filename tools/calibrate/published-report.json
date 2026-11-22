@@ -1,0 +1,141 @@
+{
+  "format": "temview-calibration/1",
+  "name": "Published in situ series",
+  "created": "2026-11-22",
+  "datasets": [
+    {
+      "id": "woehl2012",
+      "title": "Ag nanocrystal nucleation from 1 mM AgNO₃ in liquid-cell STEM (200 kV, 800 nm liquid)",
+      "ref": "Woehl, Evans, Arslan, Ristenpart, Browning, ACS Nano 6, 8599 (2012)",
+      "kind": "published",
+      "caveats": "Silver, not gold: the gold parameters stay at trend. The induction time includes growing to the 5 nm detection limit, which k_n absorbs. The irradiated radius is the model’s beam_r (1 µm), close to the scanned field at 100 kx."
+    },
+    {
+      "id": "horwath2022",
+      "title": "Size change of 4 nm Au particles on a SiNₓ heating chip, 600–850 °C, ≥ 1 h per step",
+      "ref": "Horwath, Lehman-Chong, Vojvodic, Stach, arXiv:2209.15580 (2022)",
+      "kind": "published",
+      "caveats": "Measured in vacuum as evaporation (the particles shrink); the model coarsens (they grow) at the same thermally activated rate, in an inert gas. The factor for oxygen stays at trend."
+    }
+  ],
+  "params": {
+    "nuc_c_ag": {
+      "v": 17.8,
+      "unc": 0.32,
+      "dataset": "woehl2012"
+    },
+    "nuc_k_ag": {
+      "v": 0.02346,
+      "unc": 0.42,
+      "dataset": "woehl2012"
+    },
+    "sinter_A": {
+      "v": 669.9,
+      "unc": 4.9,
+      "dataset": "horwath2022"
+    },
+    "sinter_Ea": {
+      "v": 1.2,
+      "unc": 0.13,
+      "dataset": "horwath2022"
+    }
+  },
+  "fit": {
+    "chi2": 1.243e-10,
+    "points": 4,
+    "report": [
+      {
+        "id": "woehl2012",
+        "title": "Ag nanocrystal nucleation from 1 mM AgNO₃ in liquid-cell STEM (200 kV, 800 nm liquid)",
+        "ref": "Woehl, Evans, Arslan, Ristenpart, Browning, ACS Nano 6, 8599 (2012)",
+        "targets": [
+          {
+            "id": "threshold",
+            "what": "growth-threshold dose rate",
+            "value": 0.5,
+            "sigma": 0.1,
+            "unit": "e⁻/Å²/s",
+            "note": "no particles nucleated below 0.5 e⁻/Å²/s (< 7 pA); they did at 0.59",
+            "predicted": 0.5
+          },
+          {
+            "id": "induction",
+            "what": "induction dose at 3.37 e⁻/Å²/s",
+            "at": {
+              "lcRate": 3.37
+            },
+            "value": 27.8,
+            "sigma": 7.8,
+            "unit": "e⁻/Å²",
+            "note": "mean over beam current, dwell time and magnification; independent of them",
+            "predicted": 27.8
+          }
+        ],
+        "checks": [
+          {
+            "id": "dose_x2",
+            "what": "induction dose at 6.7 e⁻/Å²/s (measured: independent of the beam settings)",
+            "at": {
+              "lcRate": 6.7
+            },
+            "value": 27.8,
+            "sigma": 7.8,
+            "unit": "e⁻/Å²",
+            "predicted": 32.25
+          },
+          {
+            "id": "dose_near",
+            "what": "induction dose at 0.59 e⁻/Å²/s, just above the threshold",
+            "at": {
+              "lcRate": 0.59
+            },
+            "unit": "e⁻/Å²",
+            "predicted": 48.07
+          }
+        ],
+        "caveats": "Silver, not gold: the gold parameters stay at trend. The induction time includes growing to the 5 nm detection limit, which k_n absorbs. The irradiated radius is the model’s beam_r (1 µm), close to the scanned field at 100 kx."
+      },
+      {
+        "id": "horwath2022",
+        "title": "Size change of 4 nm Au particles on a SiNₓ heating chip, 600–850 °C, ≥ 1 h per step",
+        "ref": "Horwath, Lehman-Chong, Vojvodic, Stach, arXiv:2209.15580 (2022)",
+        "targets": [
+          {
+            "id": "Ea",
+            "what": "activation energy of the size change",
+            "key": "sinter_Ea",
+            "value": 1.2,
+            "sigma": 0.15,
+            "unit": "eV",
+            "note": "Arrhenius fit of the evaporation rate; no uncertainty reported (σ assumed)",
+            "predicted": 1.2
+          },
+          {
+            "id": "onset",
+            "what": "temperature at which the radius changes by 10 % in 1 h",
+            "frac": 0.1,
+            "hold": 3600,
+            "value": 998,
+            "sigma": 25,
+            "unit": "K",
+            "note": "little change below 700 °C, rapid at 750 °C: the onset bracketed between 973 and 1023 K",
+            "predicted": 998
+          }
+        ],
+        "checks": [
+          {
+            "id": "at800",
+            "what": "radius change in 10 min at 800 K (the old E3 onset)",
+            "T": 800,
+            "hold": 600,
+            "unit": "Å",
+            "predicted": 0.01107
+          }
+        ],
+        "caveats": "Measured in vacuum as evaporation (the particles shrink); the model coarsens (they grow) at the same thermally activated rate, in an inert gas. The factor for oxygen stays at trend."
+      }
+    ],
+    "dof": 1,
+    "reduced_chi2": 1.24e-10
+  }
+}

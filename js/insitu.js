@@ -22,6 +22,7 @@ export const PRESETS = [
   ['E1-static', 'E1 Radiolysis: bubbles in a static cell'], ['E1-flow', 'E1 Radiolysis: bubbles in a flow cell'], ['E2', 'E2 Gold growth against dose rate'],
   ['E3-O2', 'E3 Sintering in oxygen'], ['E3-N2', 'E3 Sintering in nitrogen'], ['E4', 'E4 How much gas can the image take?'], ['E5', 'E5 Redox cycling of SrTiO₃'],
   ['E6', 'E6 Helium bubbles in silicon on annealing'], ['E7', 'E7 The field across a biased gap'], ['E8', 'E8 Electrochemistry: deposit, then strip'],
+  ['E9-fresh', 'E9 Silver nucleation (fresh liquid)'], ['E9-predosed', 'E9 Silver nucleation after a sub-threshold dose'],
 ];
 export const MAX_FRAMES = 240; // kept in the browser; longer movies keep every k-th frame (the estimator sizes all)
 export const DRIFT_PER_KS = 0.05; // Å/s of drift per K/s of temperature ramp

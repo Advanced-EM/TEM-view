@@ -1,6 +1,6 @@
 {
  "format": "tem-view-session/2",
- "saved": "2026-11-22T18:37:05.798Z",
+ "saved": "2026-11-22T21:24:08.113Z",
  "note": "TEM-view in situ experiment E4: How much gas can the image take? A pressure ramp in an open column. Load it, then press Record movie.",
  "technique": "tem",
  "mods": {},
@@ -27,6 +27,7 @@
   "lcRate": 1,
   "lcDepth": "middle",
   "lcPrecursor": false,
+  "lcMetal": "au",
   "lcFilter": false,
   "gcGeom": "open",
   "gcGas": "N2",
@@ -64,7 +65,9 @@
   "expObs": [
    "contrast",
    "transmitted"
-  ]
+  ],
+  "calib": "published",
+  "calibProfile": null
  },
  "state": {
   "mode": "tem",
@@ -166,6 +169,7 @@
   "lcRate": 1,
   "lcDepth": "middle",
   "lcPrecursor": false,
+  "lcMetal": "au",
   "lcFilter": false,
   "gcGeom": "open",
   "gcGas": "N2",
@@ -189,6 +193,8 @@
    "contrast",
    "transmitted"
   ],
+  "calib": "published",
+  "calibProfile": null,
   "bsOn": false,
   "bsLayout": "two",
   "bsGap": 5,
