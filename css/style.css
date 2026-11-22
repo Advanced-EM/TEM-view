@@ -705,3 +705,10 @@ body.detStruct .detstruct { display: block; }
 .statuscard pre.code { background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; font: 12px/1.5 var(--mono); white-space: pre-wrap; }
 /* the biasing chip's I–V trace (bias.js) */
 canvas.ivplot { display: block; width: 100%; height: auto; aspect-ratio: 56 / 22; border-radius: 6px; margin: 4px 0 6px; }
+/* the in situ movie's timeline (insitu.js) */
+.timeline .tlRow { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12.5px; padding: 2px 0; }
+.timeline .tlRow .btn { flex: 0 0 auto; width: auto; padding: 2px 8px; }
+.timeline .tlRow span { flex: 1 1 auto; }
+.timeline .tlAddRow { display: grid; grid-template-columns: 1fr 72px 56px 56px; gap: 6px; margin-top: 6px; }
+.timeline .tlAddRow select, .timeline .tlAddRow input { min-width: 0; background: rgba(255,255,255,0.06); color: inherit; border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; padding: 4px 6px; font: inherit; font-size: 12.5px; }
+.timeline .tlAddRow .btn { grid-column: 1 / -1; }

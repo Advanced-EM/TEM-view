@@ -17,7 +17,7 @@ import { planFor, validPlanValue } from './footprint.js';
 
 export const SESSION_FORMAT = 'tem-view-session/2';
 export const ACQ_KEYS = ['kV', 'dose', 'camera', 'clarity']; // plus acq.plan (footprint.js overrides by technique)
-export const ENV_KEYS = ['holder', 'tempSet', 'envWin', 'envWinT', 'envCell', 'lcClass', 'lcA', 'lcB', 'lcGap', 'lcDP', 'lcFlow', 'lcPocket', 'lcRate', 'lcDepth', 'lcPrecursor', 'lcFilter', 'gcGeom', 'gcGas', 'gcP', 'gcGap', 'gcPath', 'bsOn', 'bsLayout', 'bsGap', 'bsMat', 'bsMode', 'bsWave', 'bsV', 'bsI', 'bsRate', 'bsLimit', 'bsRc', 'bsRs', 'bsLeak', 'bsEbd', 'bsStray'];
+export const ENV_KEYS = ['holder', 'tempSet', 'envWin', 'envWinT', 'envCell', 'lcClass', 'lcA', 'lcB', 'lcGap', 'lcDP', 'lcFlow', 'lcPocket', 'lcRate', 'lcDepth', 'lcPrecursor', 'lcFilter', 'gcGeom', 'gcGas', 'gcP', 'gcGap', 'gcPath', 'bsOn', 'bsLayout', 'bsGap', 'bsMat', 'bsMode', 'bsWave', 'bsV', 'bsI', 'bsRate', 'bsLimit', 'bsRc', 'bsRs', 'bsLeak', 'bsEbd', 'bsStray', 'movOn', 'movDur', 'movFps', 'timeline'];
 const MOD_IDS = new Set(MODIFIERS.map((m) => m.id));
 
 // modifiers in effect for a state. The Zernike plate still lives in the objective-aperture slot of the

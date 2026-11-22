@@ -45,6 +45,8 @@ jobs:
         run: node tools/gas-check.mjs
       - name: Biasing (holographic phase across the gap = the specimen's voltage; circuit, failures, heating, deflection)
         run: node tools/bias-check.mjs
+      - name: In situ time series (timeline per frame, drift measured = model, estimator volume = frames)
+        run: node tools/insitu-check.mjs
       - name: MCP server
         run: cd tools/temview-mcp && npm ci && node test.mjs
       - name: Collector Worker

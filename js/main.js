@@ -17,6 +17,7 @@ import * as ENVW from './environment.js';
 import * as LIQ from './liquid.js';
 import * as GASX from './gas.js';
 import * as BIASX from './bias.js';
+import * as INSITU from './insitu.js';
 import { evaluate, PROFILES, LIMIT_TEXT, capFor } from './resources.js';
 import { RemoteBackend } from './remote.js';
 import { buildBundle, readResults } from './bundle.js';
@@ -160,6 +161,23 @@ function gasNote() {
   else parts.push('Heat it (heating holder) to drive reactions: gold sinters, SrTiO₃ loses oxygen in H₂ and takes it back in O₂.');
   parts.push(`Tilt up to ±${ENVW.maxTilt(S)}°.`);
   return parts.join(' ');
+}
+// the movie's timeline: the ramps, each removable, and a row to add one
+function renderTimeline(el) {
+  const tl = S.timeline ?? [], q = Object.entries(INSITU.QUANTITIES);
+  el.innerHTML = `<div class="row"><label>Timeline (from the movie's start)</label></div>${tl.length ? tl.map((s, i) => `<div class="tlRow"><span>${INSITU.QUANTITIES[s.key].label} → ${s.to} ${INSITU.QUANTITIES[s.key].unit}, ${s.t0}–${s.t1} s</span><button class="btn tlDel" data-i="${i}" aria-label="Remove this ramp">✕</button></div>`).join('') : '<p class="note">No changes: the environment holds.</p>'}
+    <div class="tlAddRow"><select class="tlKey">${q.map(([k, v]) => `<option value="${k}">${v.label} (${v.unit})</option>`).join('')}</select><input class="tlTo" type="number" step="any" value="${q[0][1].def}" aria-label="Target value"><input class="tlT0" type="number" min="0" step="any" value="0" aria-label="Start (s)"><input class="tlT1" type="number" min="0" step="any" value="${Math.round(S.movDur / 2)}" aria-label="End (s)"><button class="btn" data-act="tlAdd">Add ramp</button></div>`;
+  el.querySelector('.tlKey').addEventListener('change', (e) => { el.querySelector('.tlTo').value = INSITU.QUANTITIES[e.target.value].def; });
+  el.querySelector('[data-act="tlAdd"]').addEventListener('click', (e) => action('tlAdd', e.target));
+  el.querySelectorAll('.tlDel').forEach((b) => b.addEventListener('click', () => { S.timeline = tl.filter((_, i) => i !== +b.dataset.i); renderTimeline(el); }));
+}
+// the movie: progress, what is kept, the environment and the drift now
+function movieNote() {
+  const M = sim.movie, p = INSITU.moviePlan(S.movDur, S.movFps);
+  const plan = `${p.frames} frames (${S.movDur} s at ${S.movFps} fps)${p.every > 1 ? `; the browser keeps every ${p.every}th (${p.kept}), the estimate covers all` : ''}. Timeline: ${INSITU.describe(S.timeline)}.${S.timeline?.some((x) => x.key === 'tempSet') && S.holder !== 'heat' ? ' Temperature ramps need the heating holder (or a cryo holder within its range).' : ''}`;
+  if (!M) return `${plan} Recording runs in simulated time, one frame interval per step; export it with Export data.`;
+  const m = M.meta.at(-1), d = m ? Math.hypot(...m.drift_A) : 0;
+  return `${M.rec ? 'Recording' : 'Recorded'} ${M.frames.length} of ${M.plan.kept} frames${m ? ` (t = ${m.t.toFixed(1)} s, ${m.T_K.toFixed(0)} K${S.envCell === 'gas' ? `, ${m.gcP.toPrecision(3)} mbar` : ''}${m.V_specimen !== undefined ? `, ${m.V_specimen.toFixed(2)} V on the specimen` : ''}; drifted ${d.toFixed(1)} Å, now ${m.drift_speed_A_s.toFixed(2)} Å/s)` : ''}. ${M.rec ? '' : 'Export data writes the frames with each frame\'s time, environment and true drift.'}`;
 }
 // the biasing chip (bias.js): operating point, where the source limits, failures, heating, the field at the beam
 const fmtA = (a) => { const v = Math.abs(a); return v === 0 ? '0 A' : v >= 1e-3 ? `${(a * 1e3).toPrecision(3)} mA` : v >= 1e-6 ? `${(a * 1e6).toPrecision(3)} µA` : v >= 1e-9 ? `${(a * 1e9).toPrecision(3)} nA` : `${(a * 1e12).toPrecision(3)} pA`; };
@@ -497,6 +515,13 @@ const CONTROLS = [
   { ivPlot: true, show: () => S.bsOn },
   { pFn: () => biasNote(), show: () => S.bsOn },
   { buttons: [['newChip', 'Load a new chip']], show: () => S.bsOn },
+  // an in situ movie (insitu.js): frames over time with drift, and a timeline of environment changes
+  { toggles: [['movOn', 'In situ movie (record a time series; the estimate covers the full movie)']], modes: 'tem stem diff cbed ronch oah ltem lstem' },
+  { slider: 'movDur', label: 'Movie length', min: 1, max: 600, log: true, fmt: (v) => `${Math.round(v)} s`, modes: 'tem stem diff cbed ronch oah ltem lstem', show: () => S.movOn },
+  { chips: 'movFps', label: 'Frames per second', small: true, modes: 'tem stem diff cbed ronch oah ltem lstem', show: () => S.movOn, opts: INSITU.FPS.map((f) => [f, `${f}`]) },
+  { timeline: true, modes: 'tem stem diff cbed ronch oah ltem lstem', show: () => S.movOn },
+  { buttons: [['movRec', 'Record movie'], ['movStop', 'Stop'], ['movDiscard', 'Discard movie']], modes: 'tem stem diff cbed ronch oah ltem lstem', show: () => S.movOn },
+  { pFn: () => movieNote(), modes: 'tem stem diff cbed ronch oah ltem lstem', show: () => S.movOn },
   { slider: 'tempSet', label: 'Temperature setpoint', dyn: () => { const H = HOLDERS[S.holder]; return { min: H.min, max: H.max, step: H.step, log: H.log }; }, fmt: (v) => fmtT(v), show: () => S.holder !== 'room' },
   { pFn: () => `Specimen at ${fmtT(sim.temp())}${S.holder === 'room' ? '' : ` (setpoint ${fmtT(S.tempSet)}; the grid runs ${S.holder === 'heat' ? 'about 1 % hotter than the reading' : 'warmer than the holder tip'} and fluctuates by ±${HOLDERS[S.holder].jitter} K)`}. Drift ${sim.driftSpeed().toFixed(2)} Å/s.` },
   { buttons: [['newGrid', 'Load a fresh grid']], modes: NOT_LOR, show: () => S.spec === 'bio' },
@@ -828,6 +853,11 @@ function build() {
       const ui = specimenUI();
       if (c.specGrid) ui.grid(el); else if (c.specView) ui.card(el); else ui.info(el);
       bound.push({ c, el });
+    } else if (c.timeline) {
+      el = document.createElement('div');
+      el.className = 'ctl timeline';
+      renderTimeline(el);
+      bound.push({ c, el });
     } else if (c.ivPlot) {
       el = document.createElement('canvas');
       el.className = 'ctl ivplot'; el.width = 560; el.height = 220;
@@ -1003,6 +1033,10 @@ function action(id, el) {
   if (id === 'abtem') openAbTEM({ S, sim, mainCv, download });
   if (id === 'connect') openConnect({ S, sim, download });
   if (id === 'status') return openStatus();
+  if (id === 'movRec') { sim.startMovie(); refreshControls(); return; }
+  if (id === 'movStop') { sim.stopMovie(); refreshControls(); return; }
+  if (id === 'movDiscard') { sim.discardMovie(); refreshControls(); return; }
+  if (id === 'tlAdd') { const r = el.closest('.timeline'), q = (s) => r.querySelector(s).value; const key = q('.tlKey'), t0 = Math.max(0, +q('.tlT0')), t1 = Math.max(t0, +q('.tlT1')), Q = INSITU.QUANTITIES[key]; const to = Math.min(Q.max, Math.max(Q.min, +q('.tlTo'))); if (isFinite(to)) S.timeline = [...(S.timeline ?? []), { key, t0, t1, to }].sort((a, b) => a.t0 - b.t0); renderTimeline(r); return; }
   if (id === 'newChip') { sim.resetBias(); refreshControls(); return; }
   if (id === 'newCell') { sim.resetLiquid(); sim.resetGas(); S.paused = false; refreshControls(); return; }
   if (id === 'exportProfile') download(new Blob([JSON.stringify(S.profile, null, 1)], { type: 'application/json' }), `instrument-profile-${S.profile.preset}.json`);

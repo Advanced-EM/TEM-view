@@ -109,6 +109,17 @@ export function collectData(sim, S) {
   } else if (sim.main) {
     arrays.image = A(sim.main.arr, [sim.main.h, sim.main.w], 'a.u.');
   }
+  // an in situ movie (insitu.js): the frames, their times, and each frame's environment and true drift
+  const M = sim.movie;
+  if (M?.frames.length) {
+    const [h, w] = M.shape, st = new Float32Array(M.frames.length * h * w);
+    M.frames.forEach((f, k) => st.set(f, k * h * w));
+    arrays.movie = A(st, [M.frames.length, h, w], `${M.mode} frames (a.u.)`);
+    arrays.movie_time = A(Float32Array.from(M.meta.map((m) => m.t)), [M.meta.length], 's from the start');
+    arrays.movie_drift = A(Float32Array.from(M.meta.flatMap((m) => m.drift_A)), [M.meta.length, 2], 'specimen drift (x, y), Å, the truth for drift correction');
+    arrays.movie_temperature = A(Float32Array.from(M.meta.map((m) => m.T_K)), [M.meta.length], 'K at the specimen');
+    cal.movie = { mode: M.mode, fps: M.plan.fps, duration_s: M.plan.duration_s, frames_planned: M.plan.frames, frames_kept: M.frames.length, every: M.plan.every, timeline: M.timeline, frame_meta: M.meta };
+  }
   const state = snapshot(S);
   const meta = {
     format: 'tem-view-data/1', generator: 'Seeing with Electrons (TEM-view)', created: new Date().toISOString(),

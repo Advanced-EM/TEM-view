@@ -18,6 +18,7 @@ import * as ENV from './environment.js';
 import * as LIQ from './liquid.js';
 import * as GAS from './gas.js';
 import * as BIAS from './bias.js';
+import * as INSITU from './insitu.js';
 import { buildStructure } from './structure.js';
 import { HOLDERS, specimenT, u2Ratio, thermalStrain, radiolysisFactor, iceSublimation, DEVITRIFY_K } from './holder.js';
 
@@ -167,7 +168,7 @@ export class Sim {
   // holder drift, Å/s: each holder's steady drift plus a kick (inserting, cooling, a temperature step) that settles
   driftSpeed() {
     const H = HOLDERS[this.S.holder] ?? HOLDERS.room, t = (this.clock || 0) - (this.kickT || 0);
-    return H.base + (this.kick || 0) * Math.exp(-t / H.tau);
+    return H.base + (this.kick || 0) * Math.exp(-t / H.tau) + (this.rampDrift || 0); // + thermal drift while a temperature ramp runs (insitu.js)
   }
   // a disturbance adds to whatever drift is left; a new holder (replace) starts settling from scratch
   kickDrift(v, replace = false) { this.kick = (replace ? 0 : this.driftSpeed() - (HOLDERS[this.S.holder]?.base ?? 0)) + v; this.kickT = this.clock || 0; }
@@ -217,7 +218,8 @@ export class Sim {
     // a specimen built around the stage position (the megalibrary) builds the particle under the beam first
     this.spec.locate?.(S.cx, S.cy, S.tiltX, S.tiltY);
     const extra = ENV.slices(S, this.liq); // the environment's layers in the beam path (windows, liquid with its bubbles)
-    const bx = this.liq ? Math.round(this.liq.bx * 2) / 2 : 0, by = this.liq ? Math.round(this.liq.by * 2) / 2 : 0; // Brownian offset in a liquid
+    // Brownian offset in a liquid, and the drift accumulated while a movie records (insitu.js)
+    const bx = (this.liq ? Math.round(this.liq.bx * 2) / 2 : 0) + (this.driftPos?.[0] ?? 0), by = (this.liq ? Math.round(this.liq.by * 2) / 2 : 0) + (this.driftPos?.[1] ?? 0);
     const key = [S.spec, this.spec.zoneKey ?? '', this.spec.ver ?? 0, JSON.stringify(extra), th.u2r, th.eps, Math.round(ice.t), ice.cryst ? 1 : 0, this.spec.damageVer ?? 0, (S.cx + bx).toFixed(2), (S.cy + by).toFixed(2), S.thick, S.tiltX, S.tiltY, opts.n, opts.dx.toFixed(4), !!opts.elements, !!opts.noTilt, opts.part ?? ''].join('|');
     let m = this.mapCache.get(key);
     if (!m) {
@@ -293,7 +295,7 @@ export class Sim {
     // a biased chip tilts the beam (bias.js): the image moves by Δf·β (in focus it does not)
     const bb = this.biasBeta();
     if (bb[0] || bb[1]) I = shiftImg(I, n, (this.dfA() * bb[0]) / dx, (this.dfA() * bb[1]) / dx);
-    this.motionBlur(I, n, dx, S.camera === 'ded' ? 0.1 : 1);
+    this.motionBlur(I, n, dx, S.camera === 'ded' ? 0.1 : 1, this.movie?.rec ? this.movie.plan.dt : 1); // a movie frame lasts 1/fps
     // Diffractogram: |FFT| of the (windowed) image shows the lens's transfer rings.
     const re = new Float64Array(n * n), im = new Float64Array(n * n);
     let mean = 0;
@@ -1688,7 +1690,47 @@ export class Sim {
     }
   }
 
+  // ------------------------------------------------------------ in situ movies (insitu.js)
+  // A movie records in simulated time: each update is one frame interval 1/fps. At each frame the timeline sets the
+  // environment, the processes advance, the specimen drifts by the holder's drift (plus thermal drift while the
+  // temperature ramps), and the frame is kept with its time, environment and true drift.
+  startMovie() {
+    const S = this.S, plan = INSITU.moviePlan(S.movDur, S.movFps);
+    const base = Object.fromEntries(Object.keys(INSITU.QUANTITIES).map((k) => [k, S[k]]));
+    this.movie = { plan, base, timeline: JSON.parse(JSON.stringify(S.timeline ?? [])), k: 0, rec: true, mode: S.mode, frames: [], meta: [], shape: null };
+    this.driftPos ??= [0, 0];
+    this.movie.drift0 = [...this.driftPos];
+    S.paused = false;
+  }
+  stopMovie() { if (this.movie) { this.movie.rec = false; this.rampDrift = 0; } }
+  discardMovie() { this.movie = null; this.driftPos = [0, 0]; this.rampDrift = 0; this.mapCache.clear(); this.invalidate('drift'); }
+  // before a frame: the timeline's values, the drift step, and the images to recompute; returns the frame's dt
+  movieBefore() {
+    const M = this.movie, S = this.S, p = M.plan, t = M.k * p.dt;
+    const env = INSITU.envAt(M.timeline, t, M.base);
+    for (const [k, v] of Object.entries(env)) if (M.timeline.some((s) => s.key === k) && S[k] !== v) { S[k] = v; if (k !== 'tempSet') this.invalidate(k); }
+    this.rampDrift = S.holder !== 'room' ? INSITU.DRIFT_PER_KS * Math.abs(INSITU.rateAt(M.timeline, 'tempSet', t, M.base.tempSet)) : 0;
+    if (M.k > 0) { const [ux, uy] = this.driftDir(), v = this.driftSpeed() * p.dt; this.driftPos[0] += ux * v; this.driftPos[1] += uy * v; }
+    M.keep = M.k % p.every === 0;
+    if (M.keep) { for (const k of ['tem', 'stem', 'diff']) this.stale[k] = 1; this.oah.stale = true; this.lor.stale = true; }
+    return M.k > 0 ? p.dt : 0;
+  }
+  movieAfter() {
+    const M = this.movie, S = this.S, p = M.plan;
+    if (M.keep && this.main?.arr) {
+      M.shape ??= [this.main.h, this.main.w];
+      M.frames.push(Float32Array.from(this.main.arr));
+      const env = Object.fromEntries(Object.keys(INSITU.QUANTITIES).map((k) => [k, S[k]]));
+      M.meta.push({ frame: M.k, t: +(M.k * p.dt).toFixed(6), T_K: this.temp(), ...env, drift_A: [this.driftPos[0] - M.drift0[0], this.driftPos[1] - M.drift0[1]], drift_speed_A_s: this.driftSpeed(),
+        ...(this.biasSt?.op ? { V_specimen: this.biasSt.op.Vspec, I_A: this.biasSt.op.I } : {}) });
+    }
+    M.k++;
+    if (M.k >= p.frames) this.stopMovie();
+  }
+
   update(dt) {
+    const rec = this.movie?.rec && !this.S.paused;
+    if (rec) dt = this.movieBefore() / (this.S.speed || 1);
     this.sputter(dt);
     this.radiolysis(dt);
     this.thermalStep(dt);
@@ -1760,5 +1802,6 @@ export class Sim {
       if ((this.raster * 224 | 0) !== (prev * 224 | 0)) this.version++;
     }
     if (this.single && !S.paused) this.stepSingle(dt * S.speed);
+    if (rec) this.movieAfter();
   }
 }

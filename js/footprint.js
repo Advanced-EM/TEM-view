@@ -242,7 +242,34 @@ export function contextFor(S, sim, extra = {}) {
     ...extra,
   };
 }
+// an in situ movie (insitu.js) of a single-image technique: the full-scale acquisition is frames = duration·fps of
+// the plan's frame, at the plan's dose rate (dose per frame = rate/fps); drift correction cross-correlates every
+// frame with the first (two FFTs each)
+export const MOVIE_MODES = ['tem', 'stem', 'diff', 'cbed', 'ronch', 'oah', 'ltem', 'lstem'];
+export function movieFootprint(technique, plan, ctx, { duration_s, fps }) {
+  const one = footprint(technique, { ...plan, ...(planFor(technique, plan).kind === 'camera' ? { frames: 1, exposure_s: 1 / fps } : { frames: 1 }) }, { ...ctx, dose: ctx.dose / (planFor(technique, plan).kind === 'camera' ? planFor(technique, plan).exposure_s * fps : 1) });
+  const F = Math.max(1, Math.round(duration_s * fps)), tFrame = one.time.acquire_s, f = { ...one, notes: [...one.notes] };
+  const n = one.shape.at(-1);
+  f.movie = { frames: F, fps, duration_s, frame_s: tFrame, frame_bytes: one.raw.bytes };
+  f.shape = [F, ...one.shape];
+  f.raw = { ...one.raw, bytes: one.raw.bytes * F };
+  f.compressed = { ...one.compressed, bytes: one.compressed.bytes.map((b) => b * F) };
+  f.time = { ...one.time, acquire_s: Math.max(duration_s, F * tFrame) };
+  f.dose = { ...one.dose, total: one.dose.per_image * F };
+  const wb = one.working.bytes + 2 * n * n * 8;
+  f.working = { ...one.working, bytes: wb, parts: [...one.working.parts, { name: 'drift correction (two frames, complex)', bytes: 2 * n * n * 8 }] };
+  const corr = (t) => (F * 3 * fftFlops(n)) / (t === 'browser' && ctx.webgpu ? RATE.webgpu : RATE[t]);
+  f.time.process_s = { browser: one.time.process_s.browser * F + corr('browser'), gpu: one.time.process_s.gpu * F + corr('gpu') };
+  if (ctx.Dc) { f.dose.Dc = ctx.Dc; f.dose.ratio = f.dose.total / ctx.Dc; f.notes = f.notes.filter((x) => !/critical dose/.test(x)); if (f.dose.ratio > 1) f.notes.push(`the movie's total dose ${f.dose.total.toPrecision(3)} e⁻/Å² is ${f.dose.ratio.toFixed(1)}× the critical dose: the structure is destroyed during the series`); }
+  f.badge = badge(f, ctx.vram_bytes, ctx.webgpu);
+  if (tFrame > 1 / fps) f.notes.push(`a frame takes ${fmtTime(tFrame)}, longer than 1/${fps} s: the movie runs at ${(1 / tFrame).toPrecision(2)} fps`);
+  f.notes.push(`in situ movie: ${F} frames over ${duration_s} s`);
+  return f;
+}
 export function footprintFor(S, sim, extra = {}) {
+  if (sim.movie?.plan || S.movOn) {
+    if (MOVIE_MODES.includes(S.mode)) return movieFootprint(S.mode, S.plan?.[S.mode] ?? {}, contextFor(S, sim, extra), { duration_s: S.movDur, fps: S.movFps });
+  }
   const plan = { ...(S.mode === 'ilh' ? { frames: S.nFocal } : {}), ...(S.plan?.[S.mode] ?? {}) };
   if (S.mode === 'ed3d') { // the series: frames, exposure per frame and the dose per frame from the 3D ED settings
     const p = sim.ed?.series?.plan;
