@@ -237,6 +237,7 @@ export function contextFor(S, sim, extra = {}) {
     dose: S.dose, current_pA: S.eelsCurrent, lambda_A: sim.lam, alpha_mrad: S.mode === '4d' ? S.alpha4d : S.alpha,
     Dc: sim.spec?.beamSensitive && !lor ? sim.critDose() : null,
     webgpu: S.gpu !== 'off' && !!sim.compute?.gpu, // the exhibit's worker has WebGPU (gpu.js)
+    vram_bytes: sim.remote?.desc?.resources?.gpus?.[0]?.memory_bytes ?? undefined, // a connected lab computer (Status, Tier 2)
     ...(() => { const b = beamThickness(S, sim); return { thickness_A: b.t_A, tau: b.tau }; })(), // along the beam, with the tilt
     ...extra,
   };

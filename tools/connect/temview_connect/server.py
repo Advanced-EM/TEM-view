@@ -6,10 +6,14 @@ Copyright © 2026 by Northwestern University. All Rights Reserved.
     GET  /state             the device's actual state (instruments)
     POST /state             {"token": ..., "set": {control: value, ...}} → the state reached   (instruments)
     POST /stop              blank the beam, abort the running job; always allowed, no token
-    POST /jobs              {"format": "temview-connect/1", "kind": "simulate" | "acquire", "mode": ..., ...}
-                            (acquire needs the token) → {"id": ...}; jobs run one at a time
-    GET  /jobs/<id>         {"status": queued | running | done | error, "progress": ..., "error": ...}
+    POST /jobs              {"format": "temview-connect/1", "kind": "simulate" | "acquire" | "reconstruct" |
+                            "simulate-series", "mode": ..., ...} (acquire needs the token) → {"id": ...}; jobs run one
+                            at a time; reconstruct jobs carry their data (protocol.decode_array)
+    GET  /jobs/<id>         {"status": queued | running | done | error, "progress": ..., "fraction": ..., "error": ...}
+    GET  /jobs/<id>/events  server-sent events: progress (message, fraction) as it happens, then done or error
+    GET  /jobs/<id>/preview the latest downsampled preview (a 2D slice) while it runs, as a protocol array
     GET  /jobs/<id>/result  TEM-view .npz
+    GET /describe also reports this computer's resources (CPUs, memory, GPUs) and the engines installed.
 
 Safety, for instruments that are driven:
 - it listens on 127.0.0.1 only, and answers browsers only from the exhibit's sites and localhost;
@@ -35,12 +39,51 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import numpy as np
 
-from .protocol import FORMAT, ProtocolError, validate_job
+from .protocol import FORMAT, ProtocolError, encode_array, validate_job
 
 ORIGINS = [o.strip() for o in os.environ.get("TEMVIEW_ORIGINS", "https://advanced-em.github.io").split(",") if o.strip()]
 LOCAL = re.compile(r"^https?://(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$")
-MAX_BODY = 20 * 1024 * 1024
+MAX_BODY = 300 * 1024 * 1024  # reconstruct jobs carry their data (base64)
 MIN_WRITE_INTERVAL_S = 0.1
+
+
+_RES = None
+
+
+def resources() -> dict:
+    """This computer, as far as Python can see it: CPUs, memory, GPUs (CuDA through CuPy or PyTorch, Apple MPS)."""
+    global _RES
+    if _RES is not None:
+        return _RES
+    import platform
+
+    r = {"cpus": os.cpu_count(), "memory_bytes": None, "gpus": [], "python": platform.python_version(), "numpy": np.__version__, "platform": platform.platform(terse=True)}
+    try:
+        r["memory_bytes"] = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
+    except (ValueError, OSError, AttributeError):
+        pass
+    try:
+        import cupy  # noqa: F401
+
+        for i in range(cupy.cuda.runtime.getDeviceCount()):
+            p = cupy.cuda.runtime.getDeviceProperties(i)
+            r["gpus"].append({"name": p["name"].decode() if isinstance(p["name"], bytes) else str(p["name"]), "memory_bytes": int(p["totalGlobalMem"]), "backend": "cuda (cupy)"})
+    except Exception:
+        pass
+    if not r["gpus"]:
+        try:
+            import torch
+
+            if torch.cuda.is_available():
+                for i in range(torch.cuda.device_count()):
+                    pr = torch.cuda.get_device_properties(i)
+                    r["gpus"].append({"name": pr.name, "memory_bytes": int(pr.total_memory), "backend": "cuda (torch)"})
+            elif getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
+                r["gpus"].append({"name": "Apple GPU (MPS)", "memory_bytes": r["memory_bytes"], "backend": "mps (torch)", "shared_memory": True})
+        except Exception:
+            pass
+    _RES = r
+    return r
 
 
 def npz_bytes(result: dict) -> bytes:
@@ -67,6 +110,7 @@ class Service:
         self.q: "queue.Queue[str]" = queue.Queue()
         self.last_write = 0.0
         self.write_lock = threading.Lock()
+        self.changed = threading.Condition()  # wakes the event streams
         threading.Thread(target=self._worker, daemon=True).start()
 
     # -- audit log
@@ -112,6 +156,7 @@ class Service:
             for j in self.jobs.values():
                 if j["status"] in ("queued", "running"):
                     j.update(status="error", error="stopped")
+                    self._event(j, "error", {"error": "stopped"})
             self.log("stop")
 
     # -- jobs
@@ -121,7 +166,8 @@ class Service:
             self.log("refused", reason="token", job=job.get("mode"))
             raise PermissionError("wrong or missing pairing token (shown in the connector's terminal)")
         jid = uuid.uuid4().hex
-        self.jobs[jid] = {"status": "queued", "progress": "queued", "job": {k: v for k, v in job.items() if k != "token"}, "created": time.time()}
+        self.jobs[jid] = {"status": "queued", "progress": "queued", "fraction": 0.0, "events": [], "preview": None,
+                          "job": {k: v for k, v in job.items() if k != "token"}, "created": time.time()}
         self.q.put(jid)
         self.log("job", id=jid, kind=job["kind"], mode=job["mode"])
         return jid
@@ -133,14 +179,33 @@ class Service:
             if j["status"] != "queued":
                 continue
             j.update(status="running", started=time.time())
+
+            def progress(message, fraction=None, preview=None, j=j):
+                # adapters call progress("text") or progress("text", fraction, preview=2D array)
+                j.update(progress=message)
+                if fraction is not None:
+                    j["fraction"] = float(fraction)
+                if preview is not None:
+                    j["preview"] = np.asarray(preview, dtype=np.float32)
+                self._event(j, "progress", {"message": message, "fraction": j["fraction"], "preview": preview is not None})
+
             try:
-                res = self.adapter.run(j["job"], lambda m: j.update(progress=m))
+                job = j["job"]
+                run = self.adapter.run_series if job["kind"] == "simulate-series" else self.adapter.run
+                res = run(job, progress)
                 if j["status"] == "running":
-                    j.update(status="done", result=(getattr(self.adapter, "to_npz", None) or npz_bytes)(res), seconds=round(time.time() - j["started"], 2), progress="done")
+                    j.update(status="done", result=(getattr(self.adapter, "to_npz", None) or npz_bytes)(res), seconds=round(time.time() - j["started"], 2), progress="done", fraction=1.0)
+                    self._event(j, "done", {"seconds": j["seconds"]})
             except Exception as e:  # report, keep serving
                 j.update(status="error", error=str(e) if isinstance(e, (ProtocolError, RuntimeError)) else f"{type(e).__name__}: {e}",
                          trace=traceback.format_exc()[-2000:])
+                self._event(j, "error", {"error": j["error"]})
             j.pop("job", None)
+
+    def _event(self, j, kind, data):
+        with self.changed:
+            j["events"].append((kind, data))
+            self.changed.notify_all()
 
 
 def make_handler(svc: Service):
@@ -185,18 +250,56 @@ def make_handler(svc: Service):
             if self._origin() == "":
                 return self._json(403, {"error": "origin not allowed"})
             if self.path == "/describe":
-                return self._json(200, svc.desc.to_json(armed=bool(svc.token)) | {"queued": svc.q.qsize()})
+                return self._json(200, svc.desc.to_json(armed=bool(svc.token)) | {"queued": svc.q.qsize(), "resources": resources()})
             if self.path == "/state":
                 return self._json(200, {"format": FORMAT, "state": svc.adapter.read_state()})
-            m = re.fullmatch(r"/jobs/([0-9a-f]{32})(/result)?", self.path)
+            m = re.fullmatch(r"/jobs/([0-9a-f]{32})(/result|/events|/preview)?", self.path)
             if not m or m.group(1) not in svc.jobs:
                 return self._json(404, {"error": "not found"})
             j = svc.jobs[m.group(1)]
+            if m.group(2) == "/events":
+                return self._events(j)
+            if m.group(2) == "/preview":
+                if j.get("preview") is None:
+                    return self._json(404, {"error": "no preview yet"})
+                return self._json(200, {"format": FORMAT, "preview": encode_array(j["preview"]), "fraction": j.get("fraction")})
             if m.group(2):
                 if j["status"] != "done":
                     return self._json(409, {"error": f"job is {j['status']}"})
                 return self._send(200, j["result"], "application/octet-stream")
-            self._json(200, {k: j.get(k) for k in ("status", "progress", "error", "seconds")} | {"queue": svc.q.qsize()})
+            self._json(200, {k: j.get(k) for k in ("status", "progress", "fraction", "error", "seconds")} | {"queue": svc.q.qsize()})
+
+        # server-sent events: every progress event since the job started, then the live ones, until done or error
+        # (REST + SSE passes through proxies and tunnels more easily than WebSockets)
+        def _events(self, j):
+            o = self._origin()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-store")
+            if o:
+                self.send_header("Access-Control-Allow-Origin", o)
+                self.send_header("Vary", "Origin")
+            self.end_headers()
+            sent, last = 0, time.time()
+            try:
+                while True:
+                    with svc.changed:
+                        while sent >= len(j["events"]) and j["status"] in ("queued", "running"):
+                            svc.changed.wait(timeout=10)
+                            if sent >= len(j["events"]) and time.time() - last > 10:
+                                break
+                        evs = j["events"][sent:]
+                    for kind, data in evs:
+                        self.wfile.write(f"event: {kind}\ndata: {json.dumps(data, default=str)}\n\n".encode())
+                    sent += len(evs)
+                    if not evs:
+                        self.wfile.write(b": keep-alive\n\n")
+                    self.wfile.flush()
+                    last = time.time()
+                    if j["status"] not in ("queued", "running") and sent >= len(j["events"]):
+                        return
+            except (BrokenPipeError, ConnectionResetError):
+                return
 
         def do_POST(self):
             if self._origin() == "":

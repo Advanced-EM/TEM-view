@@ -805,7 +805,7 @@ export class Sim {
     ph.name = st.name; ph.notes = st.notes; ph.empty = !ph.vol.some((v) => v > 0);
     return ph;
   }
-  tomoRecKey() { const S = this.S; return JSON.stringify([this.tomo?.acqKey, S.tomoRecon, S.tomoRecon === 'sirt' ? S.tomoIter : S.tomoFilter, S.tomoAlign, S.gpu]); }
+  tomoRecKey() { const S = this.S; return JSON.stringify([this.tomo?.acqKey, S.tomoRecon, S.tomoRecon === 'sirt' ? S.tomoIter : S.tomoFilter, S.tomoAlign, S.gpu, this.remote?.url ?? null]); }
   stepTomo(dt) {
     const S = this.S, phKey = JSON.stringify([this.spec.zoneKey ?? S.spec, S.tomoPhantom, S.tomoN, ...(S.tomoPhantom === 'beads' ? [] : [S.thick, S.fov, S.cx, S.cy, this.spec.damageVer ?? 0])]);
     let T = this.tomo;
@@ -833,7 +833,7 @@ export class Sim {
     if (T.running || T.ser.proj.length < F) return;
     if (T.recKey !== this.tomoRecKey()) this.reconstructTomo();
     if (T.task && !T.taskDone) {
-      if (T.task.error) { console.warn('compute:', T.task.error, '(running on the main thread)'); T.task = new InlineBackend().run(T.job, { out: T.rec }); }
+      if (T.task.error) { console.warn('compute:', T.task.error, T.task.b?.name === 'lab' ? '(the lab computer failed: running in the browser)' : '(running on the main thread)'); T.labError = T.task.b?.name === 'lab' ? T.task.error : null; T.task = (T.task.b?.name === 'lab' ? this.compute : new InlineBackend()).run(T.job, { out: T.rec }); }
       const before = T.rec.iter, x0 = T.rec.x;
       T.task.pump(S.paused ? 0 : 12);
       if (T.rec.iter !== before || T.rec.x !== x0) { this.tomoStats(); this.version++; }
@@ -859,7 +859,8 @@ export class Sim {
     T.rec = {}; T.recKey = this.tomoRecKey(); T.taskDone = false; T.stats = null;
     T.job = { kind: 'tomo', method: S.tomoRecon, filter: S.tomoFilter, iterations: S.tomoIter, ser, gpu: S.gpu !== 'off' };
     T.recT0 = now(); T.recMs = null;
-    T.task = (instant ? new InlineBackend() : this.compute).run(T.job, { out: T.rec });
+    // a lab computer connected for reconstructions (Status → Tier 2, remote.js) takes them; else the browser
+    T.task = (instant ? new InlineBackend() : this.remote?.takes('tomo') ? this.remote : this.compute).run(T.job, { out: T.rec });
     if (instant) { while (!T.task.finished) T.task.pump(Infinity); T.taskDone = true; T.recMs = now() - T.recT0; this.tomoStats(); }
     this.version++;
   }

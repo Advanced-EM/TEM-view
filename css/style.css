@@ -695,3 +695,16 @@ table.data.specinfo-t .warn { color: var(--warm); }
 body.detStruct .dbody > canvas { display: none; }
 body.detStruct .detstruct { display: block; }
 .dicons button#btnStruct { width: auto; padding: 0 8px 0 6px; gap: 4px; display: inline-flex; align-items: center; font: 600 10.5px var(--sans); }
+
+/* Status (bottom left): this computer's resources, the limits they set, lab computers (M11) */
+.statusbtn { position: fixed; left: 12px; bottom: 12px; z-index: 35; display: inline-flex; align-items: center; gap: 7px; padding: 6px 11px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--panel-solid); color: var(--text); font: 500 11px/1 var(--mono); letter-spacing: 0.02em; cursor: pointer; opacity: 0.85; }
+.statusbtn:hover { opacity: 1; border-color: var(--accent); }
+.statusbtn .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); }
+.statusbtn .dot.basic { background: var(--warm); } .statusbtn .dot.standard { background: var(--accent); } .statusbtn .dot.strong { background: #7be3a1; }
+.statuscard .stattab { width: 100%; border-collapse: collapse; margin: 6px 0 12px; font-size: 13px; }
+.statuscard .stattab th { text-align: left; font-weight: 500; color: var(--muted); padding: 4px 10px 4px 0; white-space: nowrap; width: 30%; }
+.statuscard .stattab td { padding: 4px 8px 4px 0; }
+.statuscard .stattab td.muted, .statuscard .muted { color: var(--muted); font-size: 12px; }
+.statuscard .labrow { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin: 6px 0; font-size: 13px; }
+.statuscard pre.code { background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; font: 12px/1.5 var(--mono); white-space: pre-wrap; }
+@media print { .statusbtn { display: none; } }

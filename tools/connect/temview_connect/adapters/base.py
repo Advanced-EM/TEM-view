@@ -28,5 +28,22 @@ class Adapter:
         """Simulate or acquire. Return {"arrays": {name: numpy array}, "meta": {...}}."""
         raise NotImplementedError
 
+    def run_series(self, job: dict, progress) -> dict:
+        """A simulate-series job: one simulation per tilt (job["angles_deg"]), the arrays stacked along a new first
+        axis. Adapters with a faster way (one model, many projections) override this."""
+        import numpy as np
+
+        out, meta, ang = {}, {}, job["angles_deg"]
+        for i, a in enumerate(ang):
+            sub = {**job, "kind": "simulate", "tilt_alpha_deg": a}
+            if isinstance(job.get("request"), dict):
+                sub["request"] = {**job["request"], "tilt_alpha_deg": a}
+            res = self.run(sub, lambda m, *x, **k: None)
+            for k, v in res["arrays"].items():
+                out.setdefault(k, []).append(np.asarray(v))
+            meta = res.get("meta", {})
+            progress(f"tilt {i + 1} of {len(ang)} ({a:+.1f}°)", (i + 1) / len(ang))
+        return {"arrays": {k: np.stack(v) for k, v in out.items()} | {"angles_deg": np.asarray(ang, dtype=np.float32)}, "meta": {**meta, "series": True}}
+
     def stop(self) -> None:
         """Make the device safe now: blank the beam, stop motion, abort an exposure. Must not raise."""

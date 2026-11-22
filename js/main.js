@@ -13,6 +13,9 @@ import { footprintFor, fmtBytes, fmtTime, PLAN_FIELDS, PLAN_KINDS } from './foot
 import { createSpecimenUI } from './specui.js';
 import { defaultBackend } from './compute.js';
 import { SAMPLES } from './spa.js';
+import { evaluate, PROFILES, LIMIT_TEXT, capFor } from './resources.js';
+import { RemoteBackend } from './remote.js';
+import { CONNECT } from './config.js';
 import { STANDARD_ZONES, hasZones, asBuilt, zoneLabel } from './zone.js';
 import * as ED from './ed3d.js';
 import * as TOMO from './tomo.js';
@@ -59,6 +62,85 @@ const sim = new Sim(S);
 // same cache-busting stamp as this module. Without workers they run on the main thread as before.
 sim.setCompute(defaultBackend(new URL(`./compute-worker.js${new URL(import.meta.url).search}`, import.meta.url)));
 sim.compute.onGpu = () => refreshControls(); // the worker reports whether it has WebGPU (gpu.js) a moment after start
+// ------------------------------------------------------------------ Status: local resources and the limits they set
+// The Status button (bottom left) measures this computer (resources.js): cores, memory, WebGPU, storage, an FFT
+// benchmark, and, when the panel opens, the compute connectors on this machine (Tier 2). The profile sets limits on
+// the heaviest simulations, which visitors can switch off. A lab computer can take the tomography reconstructions.
+let RES = null;
+const limitsOn = () => { try { return localStorage.getItem('temview-limits') !== 'off'; } catch { return true; } };
+function limitCap(key) { return limitsOn() ? capFor(RES, key) : Infinity; }
+async function checkResources({ probe = false } = {}) {
+  RES = await evaluate({ gpuLabel: sim.compute?.gpu ?? null, urls: probe ? CONNECT.urls : [] });
+  if (!probe && RES.connectors.length === 0 && sim.remote) RES.connectors = [{ url: sim.remote.url, desc: sim.remote.desc }];
+  applyLimits();
+  statusButton();
+  if ($('#statusModal')?.hidden === false) renderStatus();
+  refreshControls();
+}
+function applyLimits() {
+  if (!RES || !limitsOn()) return;
+  const lowered = [];
+  for (const [k, c] of Object.entries(RES.limits)) if (S[k] > c) { setState(S, sim, k, c, k); lowered.push(`${LIMIT_TEXT[k][0]} ${LIMIT_TEXT[k][1](c)}`); }
+  if (lowered.length) voice.flash(`<b>Set for this computer</b><p>${lowered.join(' · ')}. See Status (bottom left).</p>`, 4500);
+}
+function statusButton() {
+  let b = $('#statusBtn');
+  if (!b) { b = document.createElement('button'); b.id = 'statusBtn'; b.className = 'statusbtn'; b.title = 'This computer: resources, limits and lab computers'; b.addEventListener('click', openStatus); document.body.appendChild(b); }
+  const p = RES?.profile;
+  b.innerHTML = `<span class="dot ${p ?? 'unknown'}"></span>Status${p ? ` · ${PROFILES[p].label}` : ''}${sim.remote ? ' · lab' : ''}`;
+}
+function openStatus() {
+  let m = $('#statusModal');
+  if (!m) {
+    m = document.createElement('div'); m.id = 'statusModal'; m.className = 'modal'; m.hidden = true;
+    m.innerHTML = '<div class="card statuscard"><button class="close" aria-label="Close">×</button><div class="sBody"></div></div>';
+    m.addEventListener('click', (e) => { if (e.target === m || e.target.classList.contains('close')) m.hidden = true; });
+    document.body.appendChild(m);
+  }
+  m.hidden = false;
+  renderStatus(true);
+  checkResources({ probe: true }); // the panel looks for compute connectors on this computer only when opened
+}
+function renderStatus(checking = false) {
+  const m = $('#statusModal .sBody'), r = RES, gb = (x) => (x == null ? '—' : `${x < 10 ? x.toFixed(1) : Math.round(x)} GB`);
+  if (!m) return;
+  const row = (k, v, note = '') => `<tr><th>${k}</th><td>${v}</td><td class="muted">${note}</td></tr>`;
+  let f = null; try { f = footprintFor(S, sim); } catch { /* not every mode */ }
+  const lab = (r?.connectors ?? []).map((c) => {
+    const d = c.desc, res = d.resources ?? {}, eng = Object.entries(d.engines ?? {}).filter(([, v]) => v).map(([k, v]) => `${k} ${v}`).join(', ');
+    const using = sim.remote?.url === c.url, canTomo = (d.acquisitions ?? []).includes('reconstruct') && (d.modes ?? []).includes('tomo');
+    return `<div class="labrow"><b>${d.name}</b> <span class="muted">${c.url} · ${d.kind}</span><br>${res.cpus ? `${res.cpus} CPUs` : ''}${res.memory_bytes ? ` · ${gb(res.memory_bytes / 2 ** 30)}` : ''}${(res.gpus ?? []).map((g) => ` · ${g.name}${g.memory_bytes ? ` (${gb(g.memory_bytes / 2 ** 30)})` : ''}`).join('')}${eng ? `<br><span class="muted">engines: ${eng}</span>` : ''}
+      ${canTomo ? `<br><button class="chip ${using ? 'on' : ''}" data-lab="${c.url}">${using ? 'Taking tomography reconstructions · stop' : 'Use it for tomography reconstructions'}</button>` : ''}</div>`;
+  }).join('');
+  m.innerHTML = `<p class="eyebrow">Status</p><h2>This computer${r ? ` · <em>${PROFILES[r.profile].label}</em>` : ''}</h2>
+    ${r ? `<p class="muted">${PROFILES[r.profile].text}. Measured just now in this browser.</p>
+    <table class="stattab">${row('Processor', r.cores ? `${r.cores} logical cores` : '—', 'what the browser reports')}
+    ${row('Memory', r.memoryGB ? `${r.memoryGB >= 8 ? '≥ ' : ''}${r.memoryGB} GB` : '—', r.memoryGB ? (r.memoryGB === 8 ? 'most browsers report at most 8 GB' : 'as the browser reports it') : 'not reported by this browser')}
+    ${row('FFT benchmark', `${r.bench.ms.toFixed(1)} ms`, `a 256² complex FFT ≈ ${r.bench.gflops.toFixed(2)} GFLOP/s on one core`)}
+    ${row('WebGPU', r.webgpu ? r.webgpu.label : 'not available', r.webgpu ? `buffers up to ${gb(r.webgpu.maxBufferMB / 1024)}` : 'reconstructions and 4D-STEM run in JavaScript')}
+    ${row('Background thread', r.worker ? (sim.compute?.name === 'worker' ? 'running' : 'available') : 'no', 'heavy loops run off the page')}
+    ${row('Storage', r.storage ? `${gb(r.storage.quotaGB)} available` : '—', r.storage ? `${r.storage.usageMB.toFixed(0)} MB used by this site` : '')}
+    </table>
+    <p class="eyebrow">Limits</p>
+    <label class="tog ${limitsOn() ? 'on' : ''}" id="limTog"><span></span>Limit heavy simulations to this computer</label>
+    <table class="stattab">${Object.entries(r.limits).map(([k, v]) => row(LIMIT_TEXT[k][0], `up to ${LIMIT_TEXT[k][1](v)}`, '')).join('')}</table>
+    <p class="muted">${limitsOn() ? 'Settings above these are lowered.' : 'Off: every setting is available, and heavy ones may take minutes.'} Scripts and the Python package are not limited.</p>`
+    : '<p class="muted">Measuring…</p>'}
+    ${f ? `<p class="eyebrow">This technique at full scale</p><p><b>${f.badge.label}</b> · ${f.badge.reason}</p>` : ''}
+    <p class="eyebrow">Lab computers (Tier 2)</p>
+    ${lab || `<p class="muted">${checking ? 'Looking on this computer…' : 'None found on ports 8799–8801.'} To reconstruct on your own machine (NumPy, ASTRA or py4DSTEM, and its GPU):</p><pre class="code">pip install -e tools/connect\ntemview-connect serve --adapter recon --port 8800</pre>`}
+    <p><button class="chip" id="statRecheck">Check again</button></p>`;
+  m.querySelector('#limTog')?.addEventListener('click', () => { try { localStorage.setItem('temview-limits', limitsOn() ? 'off' : 'on'); } catch { /* private mode */ } applyLimits(); renderStatus(); refreshControls(); });
+  m.querySelector('#statRecheck')?.addEventListener('click', () => { renderStatus(true); checkResources({ probe: true }); });
+  m.querySelectorAll('[data-lab]').forEach((b) => b.addEventListener('click', () => {
+    const c = RES.connectors.find((x) => x.url === b.dataset.lab);
+    sim.remote = sim.remote?.url === c.url ? null : new RemoteBackend(c.url, c.desc);
+    RES.limits = { ...RES.limits, ...(sim.remote ? { tomoN: 256, tomoIter: 100 } : {}) };
+    if (!sim.remote) checkResources(); else { statusButton(); renderStatus(); refreshControls(); }
+  }));
+}
+setTimeout(() => checkResources(), 2500); // measure once the exhibit has settled (no connector probing until Status opens)
+
 // the ptychographic tomography status
 function ptNote() {
   const A = sim.pt, o = A?.out;
@@ -124,7 +206,7 @@ function exportSPA() {
 function computeNote(mode) {
   const g = sim.compute?.gpu;
   if (g === undefined) return '';
-  const where = (d) => (d && d !== 'cpu' ? `the GPU (${d})` : 'the CPU (JavaScript, in a background thread)');
+  const where = (d) => (d?.startsWith('lab') ? `your lab computer (${d.slice(6)})` : d && d !== 'cpu' ? `the GPU (${d})` : 'the CPU (JavaScript, in a background thread)');
   if (mode === 'tomo') {
     const T = sim.tomo, d = T?.rec?.device, t = T?.recMs;
     const done = d && T.taskDone ? `Reconstructed on ${where(d)} in ${t < 1000 ? `${t.toFixed(0)} ms` : `${(t / 1000).toFixed(1)} s`}. ` : d ? `Reconstructing on ${where(d)}… ` : '';
@@ -355,18 +437,18 @@ const CONTROLS = [
   { sec: 'Ptychographic tomography · browser preview', modes: 'ptychotomo' },
   { buttons: [['ptCollect', 'Scan the tilts and reconstruct'], ['ptExport', 'Export volumes + full-scale job']], modes: 'ptychotomo' },
   { chips: 'ptView', label: 'View', small: true, modes: 'ptychotomo', opts: [['xz', 'XZ (depth)'], ['xy', 'XY (top)'], ['slices', 'Per-tilt slices']] },
-  { chips: 'ptTilts', label: 'Tilts', small: true, modes: 'ptychotomo', opts: [[1, '1 (no tomography)'], [3, '3'], [5, '5'], [7, '7'], [9, '9']] },
+  { chips: 'ptTilts', label: 'Tilts', small: true, modes: 'ptychotomo', dynOpts: () => [[1, '1 (no tomography)'], [3, '3'], [5, '5'], [7, '7'], [9, '9']].filter(([v]) => v <= limitCap('ptTilts') || v === S.ptTilts) },
   { slider: 'ptMax', label: 'Maximum tilt', min: 10, max: 75, step: 1, fmt: (v) => `±${v}°`, modes: 'ptychotomo' },
   { slider: 'ptAlpha', label: 'Probe semi-angle α', min: 10, max: 20, step: 0.5, fmt: (v) => `${v} mrad · depth resolution of one view ≈ ${Math.round(P.wavelength(S.kV) / (v * 1e-3) ** 2)} Å`, modes: 'ptychotomo' },
   { slider: 'ptDose', label: 'Dose for all tilts', min: 1e3, max: 1e7, log: true, fmt: (v) => `${(+v).toExponential(1)} e⁻/Å²`, modes: 'ptychotomo' },
-  { slider: 'ptIters', label: 'MS-ePIE iterations per tilt', min: 2, max: 30, step: 1, fmt: (v) => `${v}`, modes: 'ptychotomo' },
+  { slider: 'ptIters', label: 'MS-ePIE iterations per tilt', min: 2, max: 30, step: 1, dyn: () => ({ max: Math.min(30, limitCap('ptIters')) }), fmt: (v) => `${v}`, modes: 'ptychotomo' },
   { chips: 'ptFusion', label: 'Fusion', small: true, modes: 'ptychotomo', opts: [['sirt', 'Joint SIRT on the slabs'], ['average', 'Average (back-projection)']] },
   { pFn: () => ptNote(), modes: 'ptychotomo' },
   { sec: 'Single-particle cryo-EM', modes: 'spa' },
   { buttons: [['spaCollect', 'Collect and process'], ['spaExport', 'Export maps + classes (.mrc)']], modes: 'spa' },
   { chips: 'spaSample', label: 'Particle', small: true, modes: 'spa', opts: [['apo', 'Apoferritin · 480 kDa, octahedral'], ['bgal', 'β-Galactosidase · 465 kDa, D2']] },
   { chips: 'spaView', label: 'View', small: true, modes: 'spa', opts: [['mic', 'Micrograph + picks'], ['ctf', 'CTF fit'], ['classes', '2D classes'], ['map', '3D map']] },
-  { slider: 'spaN', label: 'Particles', min: 100, max: 20000, log: true, fmt: (v) => `${Math.round(v).toLocaleString()}`, modes: 'spa', ends: ['a first look', '', 'a high-resolution data set'] },
+  { slider: 'spaN', label: 'Particles', min: 100, max: 20000, log: true, dyn: () => ({ max: Math.min(20000, limitCap('spaN')) }), fmt: (v) => `${Math.round(v).toLocaleString()}`, modes: 'spa', ends: ['a first look', '', 'a high-resolution data set'] },
   { slider: 'spaDose', label: 'Dose per micrograph', min: 2, max: 300, log: true, fmt: (v) => `${(+v).toFixed(0)} e⁻/Å²`, modes: 'spa', ends: ['too noisy', '', 'burnt'] },
   { slider: 'spaDf', label: 'Underfocus (mean)', min: 0, max: 4, step: 0.05, fmt: (v) => `${(+v).toFixed(2)} µm`, modes: 'spa' },
   { toggles: [['spaZpp', 'Zernike phase plate (use near focus)']], modes: 'spa' },
@@ -386,8 +468,8 @@ const CONTROLS = [
   { toggles: [['tomoAlign', 'Align the projections (centre of mass)']], modes: 'tomo' },
   { chips: 'tomoRecon', label: 'Reconstruction', small: true, modes: 'tomo', opts: [['wbp', 'WBP (filtered back-projection)'], ['sirt', 'SIRT (iterative)']] },
   { chips: 'tomoFilter', label: 'WBP filter', small: true, modes: 'tomo', opts: [['ramp', 'Ramp'], ['hann', 'Hann (less noise)']], show: () => S.tomoRecon === 'wbp' },
-  { slider: 'tomoIter', label: 'SIRT iterations', min: 1, max: 100, step: 1, fmt: (v) => `${v}`, modes: 'tomo', show: () => S.tomoRecon === 'sirt' },
-  { chips: 'tomoN', label: 'Volume', small: true, modes: 'tomo', dynOpts: () => [[64, '64³'], [96, '96³'], [128, '128³'], ...(sim.compute?.gpu || S.tomoN === 256 ? [[256, '256³ (GPU)']] : [])] },
+  { slider: 'tomoIter', label: 'SIRT iterations', min: 1, max: 100, step: 1, fmt: (v) => `${v}`, modes: 'tomo', show: () => S.tomoRecon === 'sirt', dyn: () => ({ max: Math.min(100, limitCap('tomoIter')) }) },
+  { chips: 'tomoN', label: 'Volume', small: true, modes: 'tomo', dynOpts: () => [[64, '64³'], [96, '96³'], [128, '128³'], ...(sim.compute?.gpu || sim.remote || S.tomoN === 256 ? [[256, sim.remote ? '256³' : '256³ (GPU)']] : [])].filter(([v]) => v <= limitCap('tomoN') || v === S.tomoN) },
   { chips: 'gpu', label: 'Compute on', small: true, modes: 'tomo 4d', opts: [['auto', 'GPU (WebGPU)'], ['off', 'CPU (JavaScript)']], show: () => !!sim.compute?.gpu },
   { pFn: () => computeNote('tomo'), modes: 'tomo' },
   { chips: 'tomoView', label: 'View', small: true, modes: 'tomo', opts: [['series', 'Tilt series'], ['xy', 'XY'], ['xz', 'XZ'], ['yz', 'YZ (across the axis)']] },
@@ -656,6 +738,9 @@ function refreshControls() {
 
 // ------------------------------------------------------------------ state changes
 function set(key, v, inv = key) {
+  // the Status limits (resources.js): heavy settings stay within what this computer handles
+  const c = limitCap(key);
+  if (typeof v === 'number' && v > c) { v = c; voice.flash(`<b>Limited to ${LIMIT_TEXT[key][1](c)}</b><p>The most this computer handles comfortably (Status, bottom left). Switch the limits off there.</p>`, 3500); }
   inv = setState(S, sim, key, v, inv);
   if (inv === null) return;
   refreshControls();

@@ -1,4 +1,4 @@
-"""temview-connect serve --adapter mock|abtem|module:Class [--port 8798] [--log audit.jsonl]
+"""temview-connect serve --adapter mock|abtem|recon|module:Class [--port 8798] [--log audit.jsonl]
 
 Copyright © 2026 by Northwestern University. All Rights Reserved.
 """
@@ -17,9 +17,13 @@ def load_adapter(name: str):
         from .adapters.abtem import AbTEMSimulator
 
         return AbTEMSimulator()
+    if name == "recon":
+        from .adapters.recon import ReconstructionService
+
+        return ReconstructionService()
     mod, _, cls = name.partition(":")  # your own adapter: package.module:ClassName
     if not cls:
-        raise SystemExit("--adapter is mock, abtem or package.module:ClassName")
+        raise SystemExit("--adapter is mock, abtem, recon or package.module:ClassName")
     return getattr(importlib.import_module(mod), cls)()
 
 
@@ -27,7 +31,7 @@ def main(argv=None):
     p = argparse.ArgumentParser(prog="temview-connect", description="Connect a simulator or an instrument to TEM-view (temview-connect/1).")
     sub = p.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("serve", help="run a connector on this computer")
-    s.add_argument("--adapter", default="mock", help="mock (test instrument), abtem, or package.module:ClassName")
+    s.add_argument("--adapter", default="mock", help="mock (test instrument), abtem, recon (reconstructions: numpy, ASTRA, py4DSTEM), or package.module:ClassName")
     s.add_argument("--port", type=int, default=8799)
     s.add_argument("--log", default="temview-connect-audit.jsonl", help="audit log of every write and stop ('' for none)")
     s.add_argument("--token", default=None, help="pairing token (default: a new random one, printed)")

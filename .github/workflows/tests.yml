@@ -30,6 +30,11 @@ jobs:
         run: python tools/temview-py/examples/quickstart.py
         env:
           MPLBACKEND: Agg
+      - name: temview-connect (protocol, Tier 2 compute) and the browser client against it
+        run: |
+          pip install -e tools/connect
+          pytest -q tools/connect/tests
+          node tools/remote-check.mjs
       - name: MCP server
         run: cd tools/temview-mcp && npm ci && node test.mjs
       - name: Collector Worker

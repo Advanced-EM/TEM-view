@@ -24,6 +24,7 @@ temview-connect serve --adapter …   ──▶   adapter   ──▶   abTEM / 
 pip install -e tools/connect            # add [abtem] for the abTEM simulator
 temview-connect serve --adapter mock    # a test instrument, no hardware (port 8799)
 temview-connect serve --adapter abtem --port 8800
+temview-connect serve --adapter recon --port 8800   # reconstructions on this computer (numpy; ASTRA, py4DSTEM if installed)
 temview-connect serve --adapter mypkg.scope:MyAdapter   # your own adapter
 ```
 
@@ -38,7 +39,12 @@ The exhibit looks on ports 8799–8801 when **Connections…** opens, and more a
 | `POST /state` `{"token", "set": {…}}` | Drives the device and returns the state reached |
 | `POST /stop` | Blanks the beam and aborts jobs. Always allowed, no token |
 | `POST /jobs` `{"format": "temview-connect/1", "kind": "simulate"\|"acquire", "mode", …}` | Starts a job. An acquire needs the token |
-| `GET /jobs/<id>`, `GET /jobs/<id>/result` | Job status, and the result as `.npz` (one `.npy` per array plus `metadata.json`) |
+| `POST /jobs` `{"kind": "reconstruct" \| "simulate-series", …}` | A compute job: data travel in the job as `arrays` ({dtype, shape, b64}); see below |
+| `GET /jobs/<id>`, `GET /jobs/<id>/result` | Job status (with `fraction`), and the result as `.npz` (one `.npy` per array plus `metadata.json`) |
+| `GET /jobs/<id>/events` | Server-sent events: `progress` (message, fraction) as it happens, then `done` or `error` |
+| `GET /jobs/<id>/preview` | The latest downsampled preview (a 2D slice) while it runs |
+
+`GET /describe` also reports the computer's **resources** (CPUs, memory, GPUs through CuPy or PyTorch) and, for compute connectors, the **engines** installed.
 
 **Controls** use one instrument-neutral vocabulary in explicit units (`protocol.CONTROLS`):
 - `mode`, `ht_kV`, `beam_blanked`, `defocus_nm`, `fov_nm`;
@@ -49,6 +55,20 @@ The exhibit looks on ports 8799–8801 when **Connections…** opens, and more a
 A connector exposes the subset it supports. For each control it declares whether it is writable, its min and max (or its choices), and the largest single step allowed for stage moves and tilts.
 
 **abTEM** offers the modes a multislice code can do: TEM, STEM, 4D-STEM, SAED and CBED. It has no Lorentz optics, spectrometer or X-ray detector. Its jobs carry the `temview-abtem/1` request (`tools/abtem-bridge`).
+
+## Compute connectors (Tier 2)
+
+`--adapter recon` runs reconstructions for the exhibit, Python and agents on your own computer (a lab GPU box):
+
+- `reconstruct`, mode `tomo`: `arrays.tilt_series` [tilts, N, N] (tilt axis along x), `angles_deg`, `method` wbp | sirt,
+  `iterations`, `filter`, `engine` auto | numpy | astra → `reconstruction` [z, y, x];
+- `reconstruct`, mode `4d`: `arrays.data` [N², n4, n4], `arrays.probe` (complex64), `geom` → `object` (ePIE);
+- `simulate-series`, mode `tomo`: `arrays.volume` and `angles_deg` → `tilt_series`.
+
+The numpy engine uses the same discretisation as the browser (`js/tomo.js`), so results agree to ~10⁻⁷
+(`node tools/remote-check.mjs`). ASTRA is used for SIRT when installed, after its angle convention is checked against
+the numpy projector. In the exhibit, **Status** (bottom left) lists the connectors it finds on this computer and can
+send the tomography reconstructions to one. From Python: `Client(url).reconstruct_tomo(series, angles, "sirt")`.
 
 ## Safety when an instrument is driven
 
