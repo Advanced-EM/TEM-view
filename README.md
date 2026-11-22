@@ -12,7 +12,7 @@ An interactive transmission electron microscope in the browser, built as a small
 
 - **3D cutaway column:** gun, condensers, scan coils, objective, apertures, projector, fluorescent screen, direct electron detector, ADF/BF detectors, EDS detector, EELS prism. The beam path reconfigures for each mode.
 - **Six specimens:** gold nanoparticles on carbon, a Si/SiO₂ interface, a SrTiO₃ Σ5 grain boundary, the metal–organic framework **UiO-66**, and **graphene** (monolayer with a hole, a single Si dopant, a Stone–Wales defect, vacancies and a 5° twisted-bilayer moiré). Above ~86 kV the beam knocks carbon atoms out of graphene in TEM/STEM: watch holes nucleate and grow, then compare 60–80 kV. **UiO-66** (Zr₆ clusters + BDC linkers, Fm3̄m, a = 20.7 Å, viewed along [110], with a missing-cluster defect patch) is destroyed by radiolysis: the dose accumulates while the beam is on, the critical dose (~12 e⁻/Å² at 300 kV) falls as β² at lower voltage, and high-order diffraction spots fade first. It opens with low-dose settings and a *Move to a fresh area* button. **Proteins in ice**: apoferritin and ferritin (with its iron-oxide core) and a lipid vesicle in vitreous ice across a hole in a carbon film, set up as for single-particle cryo-EM (300 kV, no corrector, ~1.5 µm underfocus, ~30 e⁻/Å²). The proteins are weak phase objects, radiolysis destroys their finest detail after ~20 e⁻/Å² when cold, and the ice sublimes if the holder is warmed. **Specimens that change with temperature:** *helium bubbles in silicon* (as implanted, stable below ~400 °C; on heating the bubbles coalesce, then the helium escapes and leaves faceted voids that finally shrink; the He 1s→2p peak near 22 eV in low-loss EELS tracks the helium density); *SrTiO₃* turns tetragonal below 105 K (octahedral rotations double the cell, seen as a half-order Laue zone in CBED); and *CsPbBr₃ perovskite nanocubes*, orthorhombic below 361 K, tetragonal to 403 K and cubic above, whose twin walls appear on cooling through each transition and vanish on heating (½-order superlattice spots in diffraction), and which radiolysis turns into Pb nanoparticles. *MAPbBr₃ nanocubes*, the hybrid (methylammonium) perovskite, are cubic at room temperature with tumbling cations; on the liquid-nitrogen holder they turn tetragonal (I4/mcm, out-of-phase rotations) below ~237 K, pass a narrow second tetragonal phase at ~150–155 K and become orthorhombic below ~145 K, where the cations order; twin walls form and vanish with each transition, and the specimen is far more beam-sensitive than CsPbBr₃.
-- **Twelve modes:** TEM, STEM, 4D-STEM, SAED, CBED/LACBED, EDS, EELS, Ronchigram/corrector tuning, off-axis and in-line electron holography, and Lorentz TEM and Lorentz STEM for magnetic materials. Each detector image is computed from a real atomic model: phase-object wave optics with a full contrast-transfer function, aberrated probes, CBED patterns per probe position, Bragg diffraction with Kikuchi lines, Fano-limited X-ray spectra, and Drude plasmons with core-loss edges.
+- **Sixteen techniques in six groups:** TEM, STEM, 4D-STEM, SAED, CBED/LACBED, EDS, EELS, Ronchigram/corrector tuning, off-axis and in-line electron holography, Lorentz TEM and Lorentz STEM for magnetic materials, and (see *3D, cryo and in situ* below) 3D ED / MicroED, tomography, single-particle cryo-EM and ptychographic tomography. Each detector image is computed from a real atomic model: phase-object wave optics with a full contrast-transfer function, aberrated probes, CBED patterns per probe position, Bragg diffraction with Kikuchi lines, Fano-limited X-ray spectra, and Drude plasmons with core-loss edges.
 - **Direct electron detector:** record images and patterns in counting mode instead of on the phosphor screen, and synthesize virtual BF/ABF/ADF/dark-field, **DPC**, **center-of-mass**, and live **ePIE ptychography** from the 4D dataset. The 4D data are simulated multislice (3 slices with Fresnel propagation), so single-slice ptychography shows thick-specimen artifacts, while **multislice ptychography** (MS-ePIE) fits them and reconstructs each slice in depth.
 - **Aberration correction:** a Ronchigram computed from the aberrated probe on amorphous carbon; tune C1, A1, B2, A2, C3, A3 by hand (with a π/4 flat-phase readout) or run Auto-tune. Residual aberrations propagate to every probe and image.
 - **CBED / LACBED:** two-beam dynamical disks with a live Kossel–Möllenstedt thickness fit, HOLZ lines that shift with lattice strain and voltage, and large-angle patterns whose lines break across the grain boundary.
@@ -110,6 +110,43 @@ An interactive transmission electron microscope in the browser, built as a small
   - **Educators** ([`kids/educators/`](kids/educators/guide.html)): a printable worksheet in five languages with an answer key, and a field-trip guide with a 45-minute plan, discussion questions and the NGSS alignment.
 - **Experiments:** *One electron at a time* (watch the pattern build from single electron arrivals) and *Fly down the column*.
 
+## 3D, cryo, compute and in situ
+
+One technique registry ([`js/registry.js`](js/registry.js)) feeds the exhibit, scripts, the headless runner, the MCP server and the Python package, so they always list the same techniques. Modifiers attach by capability instead of adding modes: **precession** works with SAED, CBED and 4D-STEM (SPED, with orientation and phase maps), and the **Zernike phase plate** with phase-contrast imaging. Sessions (format v2) store the technique, its modifiers, the acquisition plan and the environment, and still read v1 files.
+
+- **3D ED / MicroED:** continuous-rotation or stepped series, or precession-assisted (PEDT). Frames are indexed, merged with Friedel or Laue symmetry, and reported with completeness and the missing wedge.
+- **Tomography:** HAADF or bright-field tilt series (linear or Saxton schemes), with dose per projection, tilt jitter and alignment. Reconstruction by weighted back-projection or SIRT, with the elongation the missing wedge causes, predicted and measured.
+- **Single-particle cryo-EM:** apoferritin (octahedral, about 480 kDa) and β-galactosidase (a tetramer of about 465 kDa). Low-dose micrographs with CTF and damage; particles are picked with a matched filter, classified and averaged in 3D. Resolution comes from the FSC of two half maps; a directional FSC shows preferred orientation.
+- **Ptychographic tomography (browser preview):** multislice ePIE at several tilts, fused into one volume. The panel prefills the full-scale job for a lab computer or a cluster.
+- **Data, dose and compute estimator** ([`js/footprint.js`](js/footprint.js)): for each technique's real acquisition plan it gives the raw and compressed data size, acquisition time, dose against the specimen's critical dose, analysis memory, and where the analysis can run (browser, local GPU or HPC). It also sizes in situ movies.
+- **Compute path:**
+  - In the browser, Web Workers and WebGPU kernels ([`js/gpu.js`](js/gpu.js): FFT, multislice, WBP, SIRT) run, with a JavaScript fallback.
+  - A **Status** section at the end of the controls measures the local resources and limits the heaviest simulations to them.
+  - **Tier 2:** a lab computer running [`temview-connect`](tools/connect/) (jobs, live progress over SSE, previews; reconstruct and simulate-series job kinds).
+  - **Tier 3:** a `temview-job/1` bundle with a Slurm template, run by [`tools/hpc/run_job.py`](tools/hpc/). The runner writes .npz, OME-Zarr and HDF5. The exhibit loads .npz and OME-Zarr results back into its viewers with their provenance; HDF5 opens in Python.
+- **In situ environments, under every technique:** holders, cells and chips are described by their physics only (window material and thickness, window size, gap, pressure, electrode layout, limits), never by product names.
+  - *Windows* ([`js/environment.js`](js/environment.js)): amorphous SiNₓ, graphene or amorphous carbon membranes above and below the specimen add phase noise, diffuse rings, plural scattering, EELS edges and EDS lines. Each holder sets its tilt range, and so the missing wedge.
+  - *Liquid cell* ([`js/liquid.js`](js/liquid.js)):
+    - SiNₓ static or flow cells, or graphene pockets;
+    - the windows bulge (Vlassak–Nix) and burst at their fracture stress;
+    - resolution falls with liquid thickness, with the top–bottom effect between TEM and STEM;
+    - radiolysis makes bubbles above a dose-rate threshold; gold particles grow from a precursor and move by hindered Brownian motion.
+  - *Gas cell and ETEM* ([`js/gas.js`](js/gas.js)):
+    - a windowed cell (to about 1 bar) or an open differentially pumped column (to 20 mbar);
+    - image contrast falls as exp(−nσL), with a diffuse background in diffraction;
+    - gas-phase EELS edges with their π* peaks, and gas lines in EDS;
+    - with the heating chip, gold sinters and SrTiO₃ is reduced in H₂ and re-oxidised in O₂.
+  - *Biasing* ([`js/bias.js`](js/bias.js)):
+    - two- or four-terminal electrodes or a tip facing a plane, with a 2D potential solver and the stray field in the vacuum around the chip;
+    - a circuit with contact and series resistance, leakage and compliance, swept or DC;
+    - breakdown, contact burn-out and electromigration;
+    - Joule heating and an I–V trace;
+    - the field appears in off-axis holography (the phase across the gap returns the specimen's voltage), Lorentz, 4D-STEM centre of mass and DPC, and shifts patterns and defocused images;
+    - with the liquid cell, the electrode potential deposits or dissolves gold.
+  - *In situ movies* ([`js/insitu.js`](js/insitu.js)): a timeline of temperature, pressure, bias and dose-rate ramps; frames recorded in simulated time with the holder's drift (and thermal drift during ramps); each frame exported with its time, environment and true drift.
+
+Each of these has a check in [`tools/`](tools/) (`*-check.mjs`) that CI runs. For example, `bias-check` integrates the holographic phase across a biased gap and recovers the applied voltage, and `insitu-check` measures drift from the frames and compares it with the model.
+
 ## Run
 
 ES modules need to be served over HTTP (not opened as `file://`):
@@ -169,6 +206,15 @@ Drag the column to orbit and scroll to zoom. Keys `1`–`9` and `0` switch modes
 | `js/explain.js` | Plain-English explanations and instrument readout |
 | `js/narration.js` | Narration scripts and audio playback |
 | `tools/narrate.mjs` | Generates the narration clips with ElevenLabs |
+| `js/registry.js`, `js/session.js` | The technique registry (groups, families, capabilities, modifiers) and session format v2 |
+| `js/footprint.js` | Data, dose and compute estimator |
+| `js/eels.js` | EELS engine: edges and ELNES, plural scattering, Fourier-ratio deconvolution, background fits |
+| `js/compute.js`, `js/compute-worker.js`, `js/kernels.js`, `js/gpu.js` | Compute backends: inline, Web Worker, WebGPU kernels |
+| `js/ed3d.js`, `js/zone.js` | 3D ED / MicroED rotation series; zone-axis single-crystal slabs |
+| `js/tomo.js`, `js/spa.js`, `js/ptychotomo.js` | Tomography, single-particle cryo-EM, ptychographic tomography |
+| `js/remote.js`, `js/resources.js`, `js/bundle.js`, `tools/connect/`, `tools/hpc/` | Tier 2 (temview-connect), local resources and limits, Tier 3 job bundles and their runner |
+| `js/environment.js`, `js/liquid.js`, `js/gas.js`, `js/bias.js`, `js/insitu.js` | In situ: holders and windows, liquid cell, gas cell / ETEM, biasing, time series |
+| `js/structure.js`, `js/specview.js`, `js/lattice.js` | Specimen structures in 3D, the structure viewer, lattice finding for uploaded atoms |
 | `js/main.js` | State, controls, interaction, render loop |
 | `ruska/` | Ruska 1933 exhibit: `optics.js` (lenses, blur budget, brightness, heating), `specimens.js`, `screen.js` (phosphor-screen shader), `scene.js` (3D column), `main.js` (state, panel, missions, plates), `texts.js`, `i18n.js` (English/German), `console.js` (TEM-view Console and keyboard) |
 | `scanning/` | Scanning 1938–2002 exhibit: `optics.js` (probe model: brightness, flat-region core and halo, Ronchigram), `specimens.js` (ZnO crystals, U atoms on C, Si [112]), `scene.js` (three schematic columns, the HB501 inverted), `main.js` (state, panel, scan, missions, recordings), `texts.js`, `ui.js`, `test.mjs` |
