@@ -15,6 +15,8 @@ import { defaultBackend } from './compute.js';
 import { SAMPLES } from './spa.js';
 import { evaluate, PROFILES, LIMIT_TEXT, capFor } from './resources.js';
 import { RemoteBackend } from './remote.js';
+import { buildBundle, readResults } from './bundle.js';
+import { abtemRequest } from './abtem.js';
 import { CONNECT } from './config.js';
 import { STANDARD_ZONES, hasZones, asBuilt, zoneLabel } from './zone.js';
 import * as ED from './ed3d.js';
@@ -143,6 +145,48 @@ function renderStatus(checking = false) {
 }
 setTimeout(() => checkResources(), 2500); // measure once the exhibit has settled (no connector probing until Status opens)
 
+// ------------------------------------------------------------------ Tier 3: job bundles and results (bundle.js)
+async function exportBundle() {
+  try {
+    const runner = await fetch(new URL('../tools/hpc/run_job.py', import.meta.url)).then((r) => (r.ok ? r.text() : ''));
+    const v = new URL(import.meta.url).searchParams.get('v') ?? 'dev';
+    const { files, job } = await buildBundle(S, sim, { runner, abtemRequest, version: v });
+    const { zip } = await import('./npy.js');
+    download(new Blob([zip(files)], { type: 'application/zip' }), `tem-view-job-${S.mode}-${stamp()}.zip`);
+    voice.flash(`<b>HPC bundle</b><p>${job.technique}: ${job.engine.name}${job.data ? ', with the recorded tilt series' : ''}. Unzip on the cluster, build the image once, then <code>sbatch run.slurm</code>. Load results/result.npz back here.</p>`, 6000);
+  } catch (e) { voice.flash(`<b>No bundle</b><p>${String(e.message ?? e)}</p>`, 5000); }
+}
+let lastImport = null;
+function pickResults() {
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = '.npz,.zip';
+  inp.onchange = async () => { const f = inp.files?.[0]; if (f) loadResults(await f.arrayBuffer(), f.name); };
+  inp.click();
+}
+async function loadResults(buf, name) {
+  try {
+    const r = await readResults(buf), pv = r.meta.provenance ?? {};
+    const vol = Object.entries(r.arrays).find(([, a]) => a.shape.length === 3 && a.shape[0] === a.shape[1] && a.shape[1] === a.shape[2]);
+    lastImport = { name, kind: r.kind, technique: r.meta.technique ?? null, provenance: pv, arrays: Object.fromEntries(Object.entries(r.arrays).map(([k, a]) => [k, a.shape])) };
+    if (vol) {
+      if (S.mode !== 'tomo') setMode('tomo');
+      const res = sim.importVolume(vol[1].data, vol[1].shape[0], r.meta);
+      lastImport.shown = `${vol[0]} in the tomography viewer${res.resampled ? ` (resampled to ${res.N}³)` : ''}`;
+    } else lastImport.shown = 'no volume to show (2D results: open them in Python)';
+    // does the result come from this session?
+    const mine = pv.session_sha256 ? await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(toSession(S), null, 1))).then((h) => [...new Uint8Array(h)].map((b) => b.toString(16).padStart(2, '0')).join('')) : null;
+    lastImport.sameSession = mine && mine === pv.session_sha256;
+    refreshControls();
+    voice.flash(`<b>Results loaded</b><p>${name}: ${lastImport.shown}. ${pv.engine ? `Engine ${pv.engine}` : ''}${pv.host ? ` on ${pv.host}` : ''}${pv.seconds != null ? `, ${pv.seconds} s` : ''}.</p>`, 6000);
+  } catch (e) { voice.flash(`<b>Could not load ${name}</b><p>${String(e.message ?? e)}</p>`, 6000); }
+}
+function importNote() {
+  if (!lastImport) return 'A bundle carries the session, the specimen, the full-scale parameters, a Slurm script and an Apptainer recipe; results (result.npz or result.zarr.zip) load back with their provenance.';
+  const p = lastImport.provenance;
+  return `Loaded ${lastImport.name} (${lastImport.kind === 'npz' ? 'TEM-view .npz' : 'OME-Zarr'}): ${lastImport.shown}. Made by ${p.engine ?? '?'}${p.host ? ` on ${p.host}` : ''}${p.finished ? ` (${p.finished})` : ''}${p.temview ? `, TEM-view ${p.temview}` : ''}; ${lastImport.sameSession ? 'from this session' : p.session_sha256 ? 'from a different session than the current one' : 'no session recorded'}.`;
+}
+document.addEventListener('drop', (e) => { const f = e.dataTransfer?.files?.[0]; if (f && /\.(npz|zip)$/i.test(f.name) && /result/i.test(f.name)) { e.preventDefault(); f.arrayBuffer().then((b) => loadResults(b, f.name)); } });
+
 // the ptychographic tomography status
 function ptNote() {
   const A = sim.pt, o = A?.out;
@@ -157,7 +201,7 @@ function ptNote() {
   return parts.join(' ');
 }
 // the preview's volumes as MRC files, and the full-scale job (Tier 2/3) with its parameters prefilled
-function exportPT() {
+async function exportPT() {
   const A = sim.pt, o = A?.out;
   if (!o?.fused) { $('#change').hidden = false; $('#change').innerHTML = '<small>Nothing to export</small><p>Scan the tilts and reconstruct first.</p>'; return; }
   const N = o.N, files = [];
@@ -173,6 +217,7 @@ function exportPT() {
   };
   files.push({ name: 'ptychotomo-job.json', bytes: new TextEncoder().encode(JSON.stringify(job, null, 2)) });
   files.push({ name: 'README.txt', bytes: new TextEncoder().encode(`TEM-view ptychographic tomography (browser preview)\n${o.tilts} tilts to ±${S.ptMax}°, ${S.kV} kV, α = ${S.ptAlpha} mrad, ${S.ptDose.toExponential(1)} e⁻/Å² in all\nfused.mrc: the volume from all tilts (${S.ptFusion}); single-tilt.mrc: the 0° view alone; object.mrc: the test object (phase per voxel), ${N}³ voxels of ${o.dx} Å\nptychotomo-job.json: the full-scale job (Tier 2/3) with the session's parameters.\nSimulated, qualitative data for teaching and pipeline tests.\n`) });
+  const { zip } = await import('./npy.js');
   download(new Blob([zip(files)], { type: 'application/zip' }), `tem-view-ptychotomo-${stamp()}.zip`);
 }
 // the SPA status and what the numbers mean
@@ -191,7 +236,7 @@ function spaNote() {
   return parts.join(' ');
 }
 // the SPA result as MRC files (RELION, cryoSPARC, ChimeraX): the map, the two half maps, the class averages, the FSC
-function exportSPA() {
+async function exportSPA() {
   const o = sim.spa?.out;
   if (!o?.maps) { $('#change').hidden = false; $('#change').innerHTML = '<small>Nothing to export</small><p>Collect and process the particles first.</p>'; return; }
   const N = o.N, files = [];
@@ -202,6 +247,7 @@ function exportSPA() {
   files.push({ name: 'fsc.txt', bytes: new TextEncoder().encode(fscTxt) });
   const p = sim.spa.o, readme = `TEM-view simulated single-particle cryo-EM (${SAMPLES[p.sample].name}, ${SAMPLES[p.sample].kDa} kDa; no symmetry imposed)\n${o.accepted} particles kept of ${o.made} (+${o.junkMade} false picks), ${p.dose} e⁻/Å² per micrograph, underfocus ${p.df} µm${p.zpp ? ', Zernike phase plate' : ''}, ${p.kV} kV\nbox ${N} px of ${o.px} Å; preferred orientation ${Math.round(p.pref * 100)} %, alignment error ${p.angErr}° rms\nresolution ${o.fsc.res.toFixed(2)} Å at FSC 0.143 (masked); along z ${o.fscZ.res.toFixed(2)} Å, across ${o.fscXY.res.toFixed(2)} Å\nOrientations come from the simulation plus the alignment error. Simulated data for teaching and pipeline tests.\n`;
   files.push({ name: 'README.txt', bytes: new TextEncoder().encode(readme) });
+  const { zip } = await import('./npy.js');
   download(new Blob([zip(files)], { type: 'application/zip' }), `tem-view-spa-${stamp()}.zip`);
 }
 // where the heavy loops of this mode ran (M8: WebGPU where the browser has it, else the JS kernels in the worker)
@@ -535,6 +581,9 @@ const CONTROLS = [
   { p: 'What this acquisition would be on a real instrument: data size, time, dose, the memory its analysis needs, and where that analysis can run. Choose the scan, detector and timing; the estimate updates with every setting and is written into exported data.' },
   ...['scan', 'det', 'bits', 'dwell_us', 'current_pA', 'exposure_s', 'frames', 'format', 'analysis'].map((k) => ({ chips: `plan.${k}`, label: PLAN_LABEL[k], small: true, get: () => curPlan()[k], dynOpts: () => planOpts(k), show: () => k in curPlan() && planOpts(k).length > 1 })),
   { footprint: true },
+  // Tier 3 (bundle.js): a job bundle for a cluster, and its results back into the viewers
+  { buttons: [['hpcBundle', 'Export HPC bundle (Slurm, Apptainer)'], ['loadResults', 'Load results…']] },
+  { pFn: () => importNote() },
   { sec: 'Digital twin' },
   { p: 'The instrument profile holds what belongs to one particular microscope (energy spread, Cc, Cs, illumination). Calibrate it from your own data, save the whole session, and export what the detectors record.' },
   { chips: 'profile', label: 'Instrument profile', get: () => S.profile.preset, dynOpts: () => Object.entries(PRESETS).map(([k, v]) => [k, v.name.split(',')[0]]) },
@@ -822,6 +871,8 @@ function action(id, el) {
   if (id === 'saveSession') saveSession();
   if (id === 'loadSession') $('#fileSession').click();
   if (id === 'exportData') exportData();
+  if (id === 'hpcBundle') return exportBundle();
+  if (id === 'loadResults') return pickResults();
   if (id === 'abtem') openAbTEM({ S, sim, mainCv, download });
   if (id === 'connect') openConnect({ S, sim, download });
   if (id === 'status') return openStatus();

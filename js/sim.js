@@ -840,6 +840,31 @@ export class Sim {
       if (T.task.finished && !T.task.queue?.length) { T.taskDone = true; T.recMs = now() - T.recT0; }
     }
   }
+  // a volume computed elsewhere (a cluster job's result, Tier 3: bundle.js) shown in the tomography viewer, resampled
+  // to the nearest volume size the viewer offers; meta: the result's provenance
+  importVolume(vol, n, meta = {}) {
+    const S = this.S, sizes = [64, 96, 128, 256], N = sizes.reduce((a, b) => (Math.abs(b - n) < Math.abs(a - n) ? b : a));
+    let x = vol;
+    if (N !== n) { // trilinear resampling onto N³
+      x = new Float32Array(N ** 3);
+      const f = (n - 1) / (N - 1), at = (i, j, k) => vol[Math.min(n - 1, i) + n * (Math.min(n - 1, j) + n * Math.min(n - 1, k))];
+      for (let k = 0; k < N; k++) for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+        const X = i * f, Y = j * f, Z = k * f, i0 = Math.floor(X), j0 = Math.floor(Y), k0 = Math.floor(Z), a = X - i0, b = Y - j0, c = Z - k0;
+        x[i + N * (j + N * k)] = (1 - c) * ((1 - b) * ((1 - a) * at(i0, j0, k0) + a * at(i0 + 1, j0, k0)) + b * ((1 - a) * at(i0, j0 + 1, k0) + a * at(i0 + 1, j0 + 1, k0)))
+          + c * ((1 - b) * ((1 - a) * at(i0, j0, k0 + 1) + a * at(i0 + 1, j0, k0 + 1)) + b * ((1 - a) * at(i0, j0 + 1, k0 + 1) + a * at(i0 + 1, j0 + 1, k0 + 1)));
+      }
+    }
+    S.tomoN = N;
+    if (S.tomoView === 'series') S.tomoView = 'yz';
+    this.stepTomo(0);
+    const T = this.tomo, pv = meta.provenance ?? {};
+    T.task?.cancel();
+    Object.assign(T, { task: null, taskDone: true, recMs: (pv.seconds ?? 0) * 1000, imported: { ...meta, n, N }, rec: { x, method: 'imported', iter: 1, iterations: 1, resid: [], device: `imported · ${pv.engine ?? 'cluster'}${pv.host ? ` on ${pv.host}` : ''}` } });
+    T.recKey = this.tomoRecKey();
+    this.tomoStats();
+    this.version++;
+    return { N, resampled: N !== n };
+  }
   tomoSeries() { const T = this.tomo, o = T.o; return TOMO.seriesInit({ ph: T.ph, angles: T.angles, signal: o.signal, dosePerImage: o.dose / T.angles.length, Dc: o.Dc ?? Infinity, jitter: o.jitter, seed: 7 + (T.runs ?? 0) }); }
   // record the series (instant: at once, for scripts, agents and tests)
   startTomo({ instant = false } = {}) {

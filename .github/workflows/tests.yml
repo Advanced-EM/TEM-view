@@ -35,6 +35,8 @@ jobs:
           pip install -e tools/connect
           pytest -q tools/connect/tests
           node tools/remote-check.mjs
+      - name: Tier 3 job bundle, run with its own runner and read back
+        run: node tools/bundle-check.mjs
       - name: MCP server
         run: cd tools/temview-mcp && npm ci && node test.mjs
       - name: Collector Worker

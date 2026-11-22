@@ -7,68 +7,69 @@
 <title>Seeing with Electrons</title>
 <meta name="description" content="An interactive transmission electron microscope: TEM, STEM, 4D-STEM, diffraction, EDS and EELS, computed from wave optics in your browser.">
 <link rel="stylesheet" href="fonts/fonts.css">
-<link rel="stylesheet" href="css/style.css?v=202611221031">
+<link rel="stylesheet" href="css/style.css?v=202611221042">
 <script type="importmap">
 {
  "imports": {
   "three": "./vendor/three@0.160.0/build/three.module.js",
   "three/addons/": "./vendor/three@0.160.0/examples/jsm/",
-  "./js/abtem.js": "./js/abtem.js?v=202611221031",
-  "./js/acquire.js": "./js/acquire.js?v=202611221031",
-  "./js/agent.js": "./js/agent.js?v=202611221031",
-  "./js/align.js": "./js/align.js?v=202611221031",
-  "./js/analyze.js": "./js/analyze.js?v=202611221031",
-  "./js/calibrate.js": "./js/calibrate.js?v=202611221031",
-  "./js/calibui.js": "./js/calibui.js?v=202611221031",
-  "./js/components.js": "./js/components.js?v=202611221031",
-  "./js/compute-worker.js": "./js/compute-worker.js?v=202611221031",
-  "./js/compute.js": "./js/compute.js?v=202611221031",
-  "./js/config.js": "./js/config.js?v=202611221031",
-  "./js/connect.js": "./js/connect.js?v=202611221031",
-  "./js/drive.js": "./js/drive.js?v=202611221031",
-  "./js/ed3d.js": "./js/ed3d.js?v=202611221031",
-  "./js/eels.js": "./js/eels.js?v=202611221031",
-  "./js/explain.js": "./js/explain.js?v=202611221031",
-  "./js/export.js": "./js/export.js?v=202611221031",
-  "./js/footprint.js": "./js/footprint.js?v=202611221031",
-  "./js/gpu.js": "./js/gpu.js?v=202611221031",
-  "./js/holder.js": "./js/holder.js?v=202611221031",
-  "./js/holography.js": "./js/holography.js?v=202611221031",
-  "./js/ide.js": "./js/ide.js?v=202611221031",
-  "./js/kernels.js": "./js/kernels.js?v=202611221031",
-  "./js/lattice.js": "./js/lattice.js?v=202611221031",
-  "./js/lorentz.js": "./js/lorentz.js?v=202611221031",
-  "./js/main.js": "./js/main.js?v=202611221031",
-  "./js/megalibrary.js": "./js/megalibrary.js?v=202611221031",
-  "./js/narration.js": "./js/narration.js?v=202611221031",
-  "./js/npy.js": "./js/npy.js?v=202611221031",
-  "./js/ops.js": "./js/ops.js?v=202611221031",
-  "./js/panel.js": "./js/panel.js?v=202611221031",
-  "./js/physics.js": "./js/physics.js?v=202611221031",
-  "./js/profile.js": "./js/profile.js?v=202611221031",
-  "./js/ptychotomo.js": "./js/ptychotomo.js?v=202611221031",
-  "./js/registry.js": "./js/registry.js?v=202611221031",
-  "./js/remote.js": "./js/remote.js?v=202611221031",
-  "./js/render2d.js": "./js/render2d.js?v=202611221031",
-  "./js/resources.js": "./js/resources.js?v=202611221031",
-  "./js/scenarios.js": "./js/scenarios.js?v=202611221031",
-  "./js/scene3d.js": "./js/scene3d.js?v=202611221031",
-  "./js/scripting.js": "./js/scripting.js?v=202611221031",
-  "./js/session.js": "./js/session.js?v=202611221031",
-  "./js/sim.js": "./js/sim.js?v=202611221031",
-  "./js/spa.js": "./js/spa.js?v=202611221031",
-  "./js/specui.js": "./js/specui.js?v=202611221031",
-  "./js/specview.js": "./js/specview.js?v=202611221031",
-  "./js/state.js": "./js/state.js?v=202611221031",
-  "./js/structure.js": "./js/structure.js?v=202611221031",
-  "./js/techniques.js": "./js/techniques.js?v=202611221031",
-  "./js/telemetry.js": "./js/telemetry.js?v=202611221031",
-  "./js/tomo.js": "./js/tomo.js?v=202611221031",
-  "./js/usage.js": "./js/usage.js?v=202611221031",
-  "./js/voice.js": "./js/voice.js?v=202611221031",
-  "./js/vpanel.js": "./js/vpanel.js?v=202611221031",
-  "./js/vr.js": "./js/vr.js?v=202611221031",
-  "./js/zone.js": "./js/zone.js?v=202611221031"
+  "./js/abtem.js": "./js/abtem.js?v=202611221042",
+  "./js/acquire.js": "./js/acquire.js?v=202611221042",
+  "./js/agent.js": "./js/agent.js?v=202611221042",
+  "./js/align.js": "./js/align.js?v=202611221042",
+  "./js/analyze.js": "./js/analyze.js?v=202611221042",
+  "./js/bundle.js": "./js/bundle.js?v=202611221042",
+  "./js/calibrate.js": "./js/calibrate.js?v=202611221042",
+  "./js/calibui.js": "./js/calibui.js?v=202611221042",
+  "./js/components.js": "./js/components.js?v=202611221042",
+  "./js/compute-worker.js": "./js/compute-worker.js?v=202611221042",
+  "./js/compute.js": "./js/compute.js?v=202611221042",
+  "./js/config.js": "./js/config.js?v=202611221042",
+  "./js/connect.js": "./js/connect.js?v=202611221042",
+  "./js/drive.js": "./js/drive.js?v=202611221042",
+  "./js/ed3d.js": "./js/ed3d.js?v=202611221042",
+  "./js/eels.js": "./js/eels.js?v=202611221042",
+  "./js/explain.js": "./js/explain.js?v=202611221042",
+  "./js/export.js": "./js/export.js?v=202611221042",
+  "./js/footprint.js": "./js/footprint.js?v=202611221042",
+  "./js/gpu.js": "./js/gpu.js?v=202611221042",
+  "./js/holder.js": "./js/holder.js?v=202611221042",
+  "./js/holography.js": "./js/holography.js?v=202611221042",
+  "./js/ide.js": "./js/ide.js?v=202611221042",
+  "./js/kernels.js": "./js/kernels.js?v=202611221042",
+  "./js/lattice.js": "./js/lattice.js?v=202611221042",
+  "./js/lorentz.js": "./js/lorentz.js?v=202611221042",
+  "./js/main.js": "./js/main.js?v=202611221042",
+  "./js/megalibrary.js": "./js/megalibrary.js?v=202611221042",
+  "./js/narration.js": "./js/narration.js?v=202611221042",
+  "./js/npy.js": "./js/npy.js?v=202611221042",
+  "./js/ops.js": "./js/ops.js?v=202611221042",
+  "./js/panel.js": "./js/panel.js?v=202611221042",
+  "./js/physics.js": "./js/physics.js?v=202611221042",
+  "./js/profile.js": "./js/profile.js?v=202611221042",
+  "./js/ptychotomo.js": "./js/ptychotomo.js?v=202611221042",
+  "./js/registry.js": "./js/registry.js?v=202611221042",
+  "./js/remote.js": "./js/remote.js?v=202611221042",
+  "./js/render2d.js": "./js/render2d.js?v=202611221042",
+  "./js/resources.js": "./js/resources.js?v=202611221042",
+  "./js/scenarios.js": "./js/scenarios.js?v=202611221042",
+  "./js/scene3d.js": "./js/scene3d.js?v=202611221042",
+  "./js/scripting.js": "./js/scripting.js?v=202611221042",
+  "./js/session.js": "./js/session.js?v=202611221042",
+  "./js/sim.js": "./js/sim.js?v=202611221042",
+  "./js/spa.js": "./js/spa.js?v=202611221042",
+  "./js/specui.js": "./js/specui.js?v=202611221042",
+  "./js/specview.js": "./js/specview.js?v=202611221042",
+  "./js/state.js": "./js/state.js?v=202611221042",
+  "./js/structure.js": "./js/structure.js?v=202611221042",
+  "./js/techniques.js": "./js/techniques.js?v=202611221042",
+  "./js/telemetry.js": "./js/telemetry.js?v=202611221042",
+  "./js/tomo.js": "./js/tomo.js?v=202611221042",
+  "./js/usage.js": "./js/usage.js?v=202611221042",
+  "./js/voice.js": "./js/voice.js?v=202611221042",
+  "./js/vpanel.js": "./js/vpanel.js?v=202611221042",
+  "./js/vr.js": "./js/vr.js?v=202611221042",
+  "./js/zone.js": "./js/zone.js?v=202611221042"
  }
 }
 </script>
@@ -176,6 +177,7 @@
       <li><b>Training</b> (button at the top of the controls, or <kbd>T</kbd>) hide a misalignment for you to fix, ask how good you think the result is, then reveal the truth. With your consent the session is recorded locally (no personal data, nothing sent anywhere) and can be downloaded or replayed.</li>
       <li><b>Acquire</b> (camera button above the detector, or <kbd>I</kbd>) records an exposure into the acquisitions gallery, to download as PNG or data.</li>
       <li><b>Ronchigram:</b> press Scramble, then null the aberrations with the sliders (watch the π/4 circle grow), or press Auto-tune. <b>CBED:</b> thicken the sample to read thickness from the fringes; drag strain to move HOLZ lines.</li>
+      <li><b>HPC bundle</b> (Data, dose and compute): export a job for a cluster (the session, the specimen, the full-scale parameters, a Slurm script, an Apptainer recipe and a runner that needs only NumPy), run it with <code>sbatch run.slurm</code>, then drop <code>results/result.npz</code> or <code>result.zarr.zip</code> on the exhibit to view it with its provenance.</li>
       <li><b>Status</b> (the last section of the controls) measures this computer (cores, memory, WebGPU, a quick FFT benchmark) and limits the heaviest simulations to what it handles; switch the limits off there. It also finds lab computers running <code>temview-connect serve --adapter recon</code> and can send tomography reconstructions to them.</li>
       <li><b>Digital twin</b> (bottom of the controls): choose or edit an instrument profile, then calibrate it from your own data in any mode: Thon rings (TEM), a crystal lattice (magnification, STEM scan distortion), a ring standard (camera length, ellipticity), a vacuum disk (4D-STEM angles), known EDS peaks, the EELS zero-loss peak, or a vacuum hologram. Save and load sessions, and export the recorded data as NumPy <code>.npz</code>.</li>
       <li><b>Proteins in ice:</b> try TEM at −1.5 µm defocus, then move to focus and select the <b>Zernike phase plate</b>. Warm the <b>cryo holder</b> past 140 K and then 170 K to see the ice crystallize and then sublime.</li>
@@ -198,6 +200,6 @@
 <div id="connect" class="modal connect" hidden><div class="card"><button class="close" aria-label="Close">×</button><div class="cnBody"></div></div></div>
 <div id="abtem" class="modal abtem" hidden><div class="card"><button class="close" aria-label="Close">×</button><div class="abBody"></div></div></div>
 
-<script type="module" src="js/main.js?v=202611221031"></script>
+<script type="module" src="js/main.js?v=202611221042"></script>
 </body>
 </html>
