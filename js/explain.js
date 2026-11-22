@@ -297,6 +297,10 @@ export function changeText(key, S, sim) {
       return ['Pristine again', 'All sputtered atoms are back. At 60–80 kV the lattice survives indefinitely; above the ~86 kV knock-on threshold, holes nucleate at defects and grow from their edges, where atoms have fewer bonds and a lower displacement threshold.'];
     case 'damage': return null;
     case 'holder': case 'tempSet': return holderText(S, sim);
+    case 'envCell': case 'lcClass': {
+      if (S.envCell !== 'liquid') return ['No cell', 'The specimen sits on an ordinary grid in vacuum.'];
+      return ['Liquid cell', `The specimen is sealed in a thin layer of liquid between two windows, ${S.lcClass === 'graphene' ? 'sheets of <b>graphene</b> that trap pockets of liquid a few nanometres thick: the sharpest view, and graphene mops up radicals' : 'silicon nitride membranes on chips. The vacuum outside makes them <b>bulge</b> by about a micrometre, so the liquid is thicker in the middle of the window than at its edge, and too much pressure <b>bursts</b> them'}. The beam splits water into radicals and hydrogen: above a dose rate the hydrogen exceeds its solubility and <b>bubbles</b> form; hydrated electrons reduce gold ions so particles <b>grow</b>. Resolution falls with liquid thickness, and differently by mode: <b>STEM</b> sees particles on the entrance window sharpest (the probe broadens below), <b>TEM</b> those on the exit window (the image is formed after the liquid).`];
+    }
     case 'envWin': case 'envWinT': {
       if (S.envWin === 'none') return ['No windows', 'The beam meets only the specimen and its own support, as on an ordinary grid.'];
       const w = { sinx: 'amorphous silicon nitride', graphene: 'graphene', carbon: 'amorphous carbon' }[S.envWin];

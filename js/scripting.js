@@ -35,6 +35,7 @@ const SETTINGS = {
   lorentz_fov_um: 'field of view in µm (Lorentz modes)', film_thickness_nm: 'magnetic film thickness', field_mT: 'objective-lens field along the beam',
   divergence_urad: 'illumination divergence (ltem)', foucault: '+x, -x, +y, -y: the deflection the Foucault aperture passes', dpc_view: 'color, x, y, sum (lstem)',
   probe_urad: 'Lorentz-STEM probe semi-angle',
+  cell: 'none or liquid', liquid_class: 'sinx, sinxFlow or graphene', liquid_gap_nm: 'spacer, nm', liquid_pressure_bar: 'pressure difference, bar', liquid_dose_rate: 'e⁻/Å²/s', liquid_depth: 'top, middle or bottom (where the particle sits)',
   windows: 'none, sinx, graphene or carbon: membranes above and below the specimen', window_thickness: 'per window, nm (graphene: layers)',
   pt_tilts: '1, 3, 5, 7 or 9', pt_max_tilt_deg: 'maximum tilt, 10–75°', pt_alpha_mrad: 'probe semi-angle, 10–20 mrad', pt_dose: 'e⁻/Å² for all tilts', pt_iterations: 'MS-ePIE iterations per tilt', pt_fusion: 'sirt or average', pt_view: 'xz, xy or slices',
   spa_sample: 'apo (apoferritin, 480 kDa, octahedral) or bgal (β-galactosidase, 465 kDa, D2)', spa_particles: 'particles to average, 100–20000', spa_dose: 'e⁻/Å² per micrograph', spa_defocus_um: 'mean underfocus, µm', spa_zernike: 'True: Zernike phase plate', spa_preferred: 'fraction lying in one orientation, 0–0.95', spa_alignment_error_deg: 'rms orientation error, °', spa_binning: '1 (3.2 Å pixels) or 2 (6.4 Å)', spa_view: 'mic, ctf, classes or map',
@@ -83,6 +84,11 @@ export function settingsToOps(a) {
   // 3D ED
   const edMap = { ed_method: 'edMethod', ed_speed_deg_s: 'edSpeed', ed_fps: 'edFps', ed_step_deg: 'edStep', ed_exposure_s: 'edExp', ed_dose_rate: 'edDoseRate', ed_axis_deg: 'edAxis', ed_merge: 'edMerge' };
   for (const [k, key] of Object.entries(edMap)) if (a[k] !== undefined) ops.push({ op: 'set', k: key, v: typeof a[k] === 'string' ? a[k] : +a[k] });
+  // the liquid cell (liquid.js)
+  if (a.cell !== undefined) ops.push({ op: 'chip', k: 'envCell', v: String(a.cell) });
+  if (a.liquid_class !== undefined) ops.push({ op: 'chip', k: 'lcClass', v: String(a.liquid_class) });
+  for (const [k, key] of [['liquid_gap_nm', 'lcGap'], ['liquid_pressure_bar', 'lcDP'], ['liquid_dose_rate', 'lcRate']]) if (a[k] !== undefined) ops.push({ op: 'set', k: key, v: +a[k] });
+  if (a.liquid_depth !== undefined) ops.push({ op: 'set', k: 'lcDepth', v: String(a.liquid_depth) });
   // the environment's windows (environment.js)
   if (a.windows !== undefined) ops.push({ op: 'chip', k: 'envWin', v: String(a.windows) });
   if (a.window_thickness !== undefined) ops.push({ op: 'set', k: 'envWinT', v: +a.window_thickness });

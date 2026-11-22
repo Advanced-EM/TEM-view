@@ -39,6 +39,8 @@ jobs:
         run: node tools/bundle-check.mjs
       - name: Environment registry (holders as before, windows in every technique)
         run: node tools/env-check.mjs
+      - name: Liquid cell (bulge, burst, resolution, top-bottom effect, bubbles)
+        run: node tools/liquid-check.mjs
       - name: MCP server
         run: cd tools/temview-mcp && npm ci && node test.mjs
       - name: Collector Worker

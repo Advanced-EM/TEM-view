@@ -15,6 +15,7 @@ import * as TOMO from './tomo.js';
 import * as SPA from './spa.js';
 import * as PT from './ptychotomo.js';
 import * as ENV from './environment.js';
+import * as LIQ from './liquid.js';
 import { buildStructure } from './structure.js';
 import { HOLDERS, specimenT, u2Ratio, thermalStrain, radiolysisFactor, iceSublimation, DEVITRIFY_K } from './holder.js';
 
@@ -201,13 +202,14 @@ export class Sim {
     const th = this.thermal(), ice = this.ice();
     // a specimen built around the stage position (the megalibrary) builds the particle under the beam first
     this.spec.locate?.(S.cx, S.cy, S.tiltX, S.tiltY);
-    const extra = ENV.slices(S); // the environment's layers in the beam path (window membranes)
-    const key = [S.spec, this.spec.zoneKey ?? '', this.spec.ver ?? 0, JSON.stringify(extra), th.u2r, th.eps, Math.round(ice.t), ice.cryst ? 1 : 0, this.spec.damageVer ?? 0, S.cx.toFixed(2), S.cy.toFixed(2), S.thick, S.tiltX, S.tiltY, opts.n, opts.dx.toFixed(4), !!opts.elements, !!opts.noTilt, opts.part ?? ''].join('|');
+    const extra = ENV.slices(S, this.liq); // the environment's layers in the beam path (windows, liquid with its bubbles)
+    const bx = this.liq ? Math.round(this.liq.bx * 2) / 2 : 0, by = this.liq ? Math.round(this.liq.by * 2) / 2 : 0; // Brownian offset in a liquid
+    const key = [S.spec, this.spec.zoneKey ?? '', this.spec.ver ?? 0, JSON.stringify(extra), th.u2r, th.eps, Math.round(ice.t), ice.cryst ? 1 : 0, this.spec.damageVer ?? 0, (S.cx + bx).toFixed(2), (S.cy + by).toFixed(2), S.thick, S.tiltX, S.tiltY, opts.n, opts.dx.toFixed(4), !!opts.elements, !!opts.noTilt, opts.part ?? ''].join('|');
     let m = this.mapCache.get(key);
     if (!m) {
       const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
       m = P.projectMaps(this.spec, {
-        cx: S.cx, cy: S.cy, n: opts.n, dx: opts.dx, thick: S.thick * 10,
+        cx: S.cx + bx, cy: S.cy + by, n: opts.n, dx: opts.dx, thick: S.thick * 10,
         tiltX: (S.tiltX * Math.PI) / 180, tiltY: (S.tiltY * Math.PI) / 180, elements: opts.elements, noTilt: opts.noTilt, part: opts.part,
         T: th.T, u2r: th.u2r, eps: th.eps, iceT: ice.t, iceCryst: ice.cryst, extra,
       });
@@ -292,6 +294,7 @@ export class Sim {
         const i = y * n + x, j = ((y + n / 2) % n) * n + ((x + n / 2) % n);
         F[j] = Math.log(1 + Math.sqrt(re[i] * re[i] + im[i] * im[i]));
       }
+    this.liquidTEM(I, n, dx);
     this.tem = { img: cropArr(I, n, c), c, dx, fft: F, n, apK, apCenter, kmax: 1 / (2 * dx) };
     this.main = { arr: this.tem.img, w: c, h: c };
   }
@@ -390,6 +393,7 @@ export class Sim {
     }
     // finite effective source size (~0.7 Å FWHM) blurs every real STEM image a little
     blur(img, n, S.profile.sourceSize / 2.355 / dx);
+    this.liquidSTEM(img, n, dx);
     this.scanDrift(img, n, dx);
     this.scanDistort(img, n);
     this.stemImg = { img: cropArr(img, n, c), c, dx, type };
@@ -972,9 +976,61 @@ export class Sim {
   }
   // the environment (environment.js) for engines with their own models: the windows' elastically scattered fraction
   // (diffraction background) and their inelastic t/λ
-  envScatter() { return ENV.scatteredFraction(this.S); }
-  envTau() { return ENV.inelastic(this.S).reduce((a, c) => a + c.tau, 0); }
+  envScatter() { return ENV.scatteredFraction(this.S, this.S.kV, this.liq); }
+  envTau() { return ENV.inelastic(this.S, this.S.kV, this.liq).reduce((a, c) => a + c.tau, 0); }
   envWindowMass() { const W = ENV.windowsOf(this.S); return W ? W.w.dens * W.total : 0; } // atoms per Å² in the windows
+  // ------------------------------------------------------------ the liquid cell (liquid.js)
+  // processes (bubbles, gold growth, Brownian motion) advance with the clock; a burst blanks the beam
+  liquidNow() {
+    const S = this.S, c = LIQ.cellOf(S);
+    if (!c) return null;
+    const t = ENV.liquidA(S, this.liq), z = LIQ.depthOf(S);
+    return { cell: c, tA: t, above: z * t, below: (1 - z) * t };
+  }
+  stepLiquid(dt) {
+    const S = this.S, c = LIQ.cellOf(S);
+    if (!c) { if (this.liq) { this.liq = null; if (SP.au.grownBy) { P.regrowGold(0); this.mapCache.clear(); } this.invalidate('env'); } return; }
+    this.liq ??= { t: 0, bubbles: [], grow: 0, bx: 0, by: 0, rng: P.mulberry32(4711), shown: 0, grown: 0, burst: null, events: [] };
+    const L = this.liq;
+    if (c.burst && !L.burst) { // the window gives way: the column protection blanks the beam, the event is logged
+      L.burst = { t: L.t, dP_bar: S.lcDP, burst_bar: c.burstP / 1e5 };
+      L.events.push({ event: 'burst', ...L.burst });
+      S.paused = true;
+      this.invalidate('env');
+      return;
+    }
+    if (L.burst || S.paused || !(dt > 0)) return;
+    LIQ.step(L, S, S.kV, dt * S.speed, L.rng, this.fovA(), c.thicknessA);
+    // refresh the images in place when the cell has visibly changed (bubbles by ~5 Å, motion by 1 Å): at most every
+    // 0.4 s, and every 2 s in scanning modes, where a refresh restarts the raster
+    const sig = `${L.bubbles.map((b) => `${Math.round(b.x / 20)},${Math.round(b.y / 20)},${Math.round(b.r / 5)}`).join(';')}|${Math.round(L.bx)}|${Math.round(L.by)}`;
+    const every = ['stem', '4d', 'eds', 'eels', 'lstem'].includes(S.mode) ? 2 : 0.4;
+    if (sig !== L.sig && L.t - L.shown > every) {
+      L.shown = L.t; L.sig = sig;
+      this.invalidate('damage');
+    }
+    if (S.spec === 'au' && !S.zone && L.grow - L.grown >= 0.5) { L.grown = L.grow; P.regrowGold(Math.round(L.grow * 2) / 2); this.mapCache.clear(); this.invalidate('damage'); }
+  }
+  resetLiquid() { if (SP.au.grownBy) P.regrowGold(0); this.liq = null; this.mapCache.clear(); this.invalidate('env'); }
+  // TEM: electrons that lost energy in the liquid are blurred by chromatic aberration (their share e^(−t/λ) is
+  // not); the liquid below the particle adds a smaller elastic blur (the top–bottom effect)
+  liquidTEM(I, n, dx) {
+    const L = this.liquidNow();
+    if (!L || !(L.tA > 0)) return;
+    const b = LIQ.temBlur(L.tA, L.below, this.S.kV, { Cc: (this.S.profile.Cc ?? 1.4) * 1e7, lambdaA: 10 * P.imfp(this.S.kV, 7.4) });
+    if (this.S.lcFilter) b.inelasticShare = 0; // an energy filter removes the inelastic electrons
+    if (b.inelasticShare > 0) {
+      const B = Float32Array.from(I);
+      blur(B, n, (b.chromatic * 10) / 2.355 / dx);
+      for (let i = 0; i < I.length; i++) I[i] = (1 - b.inelasticShare) * I[i] + b.inelasticShare * B[i];
+    }
+    if (b.elastic > 0) blur(I, n, (b.elastic * 10) / 2.355 / dx);
+  }
+  // STEM: the probe broadens in the liquid above the particle
+  liquidSTEM(img, n, dx) {
+    const L = this.liquidNow();
+    if (L && L.above > 0) blur(img, n, (LIQ.stemBlur(L.above, this.S.kV) * 10) / 2.355 / dx);
+  }
   spaKey(o = this.spaParams()) { const { dmgScale, ...rest } = o; return JSON.stringify(rest); }
   // collect and process (instant: at once, for scripts, agents and tests)
   startSPA({ instant = false } = {}) {
@@ -1100,7 +1156,7 @@ export class Sim {
     const compSym = {};
     for (const e of si.els) compSym[e.sym] = (compSym[e.sym] || 0) + si.comp[e.key];
     // the environment's windows: their atoms against the specimen's (atoms per Å² along the beam), as extra lines
-    const wa = ENV.windowAtoms(S), specAtoms = (si.totN.reduce((a, b) => a + b, 0) / si.totN.length) / (si.dx * si.dx) * 1.45;
+    const wa = ENV.windowAtoms(S, this.liq), specAtoms = (si.totN.reduce((a, b) => a + b, 0) / si.totN.length) / (si.dx * si.dx) * 1.45;
     for (const [el, a] of Object.entries(wa)) compSym[el] = (compSym[el] || 0) + a / Math.max(specAtoms, 1e-3);
     let zMean = 0;
     for (const e of si.els) zMean += si.comp[e.key] * P.EL[e.idx].Z;
@@ -1170,7 +1226,7 @@ export class Sim {
     const edges = [];
     for (const ed of P.EDGES) { const c = site.comp[ed.key]; if (c) edges.push({ edge: ed, w: tau * c, peaks: spec.elnes?.[ed.key]?.(ctx) }); }
     const m = { tau, plasmons: spec.plasmon, edges, extraLoss: spec.extraLoss ? (E, r) => spec.extraLoss(E, r) : null, kV: S.kV, beta: S.eelsBeta, zlp: this.zlp(), realistic: S.clarity === 'real', bg: { amp: 0.012, s: 3.1 } };
-    return EELS.addInelasticComponents(m, [...ENV.inelastic(S), ...(this.inelastic ?? [])]); // the environment's windows, then any other layers
+    return EELS.addInelasticComponents(m, [...ENV.inelastic(S, S.kV, this.liq), ...(this.inelastic ?? [])]); // the environment's windows, then any other layers
   }
   // In situ hook (M13–M15): extra inelastic layers in the beam path, e.g. windows, water, gas:
   // [{ label, tau, plasmons: [{Ep, G, frac}], edges: [{ key, frac, name? }] }]
@@ -1545,6 +1601,7 @@ export class Sim {
     if (m === 'tomo') this.stepTomo(dt);
     if (m === 'spa') this.stepSPA();
     if (m === 'ptychotomo') this.stepPT();
+    this.stepLiquid(dt);
     if (m === 'oah' && this.oah.stale) { this.oah.compute(); this.version++; }
     if (m === 'oah') this.main = this.oah.disp ? { arr: this.oah.disp.holo, w: this.oah.disp.c, h: this.oah.disp.c } : null;
     if (m === 'ilh') {

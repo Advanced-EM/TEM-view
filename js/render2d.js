@@ -7,6 +7,7 @@ import { drawLTEM, drawLSTEM } from './lorentz.js';
 import { edgeStats, fourierRatio } from './eels.js';
 import * as ED from './ed3d.js';
 import * as TOMO from './tomo.js';
+import * as LIQX from './liquid.js';
 
 const C = {
   accent: '#6fd6ff', warm: '#ffb45e', text: '#e9edf2', muted: '#8a94a3', dim: '#566070',
@@ -184,6 +185,7 @@ export function draw(sim, S, mainCv, secCv, hover) {
   const fn = { ptychotomo: drawPT, spa: drawSPA, tomo: drawTomo, ed3d: drawED3D, tem: drawTEM, stem: drawSTEM, diff: drawDiff, '4d': draw4D, eds: drawEDS, eels: drawEELS, ronch: drawRonch, cbed: drawCBED, oah: drawOAH, ilh: drawILH, ltem: drawLTEM, lstem: drawLSTEM }[S.mode];
   fn(sim, S, m, s, performance.now() / 1000);
   cryoLabel(m.ctx, sim, S, m.W, m.H, m.dpr);
+  liquidInset(m.ctx, sim, S, m.W, m.H, m.dpr);
   if (sim.single?.hits && sim.single.count && !['4d', 'eds', 'eels', 'ilh', 'ltem', 'lstem'].includes(S.mode)) {
     m.ctx.fillStyle = C.bg; m.ctx.fillRect(0, 0, m.W, m.H);
     drawHits(m.ctx, sim.single, [0, 0, m.W, m.H], m.dpr);
@@ -195,6 +197,33 @@ export function draw(sim, S, mainCv, secCv, hover) {
 }
 
 const real = (S) => S.clarity === 'real';
+
+// liquid cell overlay (liquid.js): the window seen from above with its bulge (liquid thickness, colour) and where
+// the stage is; a burst window blanks the image
+function liquidInset(ctx, sim, S, W, H, dpr) {
+  if (S.envCell !== 'liquid' || typeof LIQX === 'undefined') return;
+  const c = LIQX.cellOf(S);
+  if (!c) return;
+  if (sim.liq?.burst) {
+    ctx.fillStyle = 'rgba(6,8,11,0.86)'; ctx.fillRect(0, 0, W, H);
+    label(ctx, 'WINDOW BURST · beam blanked', W / 2, H / 2 - 10 * dpr, dpr, { color: C.warm, align: 'center', size: 11 });
+    label(ctx, 'liquid in the column: load a new cell', W / 2, H / 2 + 12 * dpr, dpr, { color: C.muted, align: 'center', size: 9 });
+    return;
+  }
+  if (c.pockets) return;
+  const iw = 70 * dpr, ih = Math.min(iw * (S.lcB / S.lcA), 90 * dpr), x0 = W - iw - 10 * dpr, y0 = 40 * dpr, n = 24;
+  ctx.fillStyle = 'rgba(5,7,10,0.7)'; ctx.fillRect(x0 - 4 * dpr, y0 - 4 * dpr, iw + 8 * dpr, ih + 30 * dpr);
+  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+    const u = (i + 0.5) / n * 2 - 1, v = (j + 0.5) / n * 2 - 1, f = (1 - u * u) * (1 - v ** 8), t = c.gap + 2 * c.w * f, k = Math.min(1, t / (c.gap + 2 * c.w || 1));
+    const col = LUT.ice, q = Math.round(k * 255) * 3;
+    ctx.fillStyle = `rgb(${col[q]},${col[q + 1]},${col[q + 2]})`;
+    ctx.fillRect(x0 + (i * iw) / n, y0 + (j * ih) / n, iw / n + 0.5, ih / n + 0.5);
+  }
+  const sx = x0 + iw / 2 + (S.cx / 1e4 / (S.lcA / 2)) * (iw / 2), sy = y0 + ih / 2 + (S.cy / 1e4 / (S.lcB / 2)) * (ih / 2);
+  ctx.strokeStyle = C.warm; ctx.lineWidth = 1.5 * dpr; ctx.beginPath(); ctx.arc(Math.max(x0, Math.min(x0 + iw, sx)), Math.max(y0, Math.min(y0 + ih, sy)), 3 * dpr, 0, 2 * Math.PI); ctx.stroke();
+  label(ctx, `bulge ${(c.w * 1e6).toFixed(2)} µm`, x0, y0 + ih + 10 * dpr, dpr, { color: C.muted, size: 7 });
+  label(ctx, c.onWin ? `liquid ${(c.thicknessA / 1e4).toFixed(2)} µm` : 'on the frame', x0, y0 + ih + 22 * dpr, dpr, { color: c.onWin ? C.accent : C.warm, size: 7 });
+}
 
 // shared overlay: specimen temperature, a holder that is still drifting, and what heat has done to ice
 function cryoLabel(ctx, sim, S, W, H, dpr) {

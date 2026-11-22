@@ -246,7 +246,7 @@ function fillLattice(A, { a1, a2, basis, angle, origin = [0, 0], R = 260, inside
       }
 }
 
-function makeGold() {
+function makeGold(grow = 0) {
   const A = new AtomList();
   const a = 4.078, ax = a / Math.SQRT2, ay = a;
   const rng = mulberry32(20240917);
@@ -262,6 +262,7 @@ function makeGold() {
     const p = { x: (rng() * 2 - 1) * 200, y: (rng() * 2 - 1) * 200, r: 7 + rng() * 22, rot: rng() * Math.PI };
     if (parts.every((q) => Math.hypot(p.x - q.x, p.y - q.y) > p.r + q.r + 7)) parts.push(p);
   }
+  if (grow) for (const p of parts) p.r += grow; // grown in a liquid cell (liquid.js): the same particles, larger
   const basis = [[0, 0, [EI.Au]], [0.5, 0.5, [EI.Au]]];
   parts.forEach((p, gi) => {
     fillLattice(A, {
@@ -1203,6 +1204,14 @@ const makeMAPbBr3 = () => makeHalide({
   ],
 });
 
+// gold particles grown by `dr` Å (liquid cell radiolysis, liquid.js): rebuilds the specimen in place
+export function regrowGold(dr) {
+  const g = makeGold(dr);
+  for (const gr of g.grains) gr.b = reciprocal(gr.a1, gr.a2);
+  g.grownBy = dr; g.damageVer = (SPECIMENS.au.damageVer ?? 0) + 1;
+  SPECIMENS.au = g;
+  return g;
+}
 export const SPECIMENS = { au: makeGold(), si: makeSilicon(), sto: addSTOPhase(makeSTO()), gr: makeGraphene(), mof: makeUiO66(), bio: makeBio(), lib: makeLibrary(), hesi: makeHeSi(), cspb: makeCsPbBr3(), mapb: makeMAPbBr3() };
 for (const s of Object.values(SPECIMENS)) {
   for (const g of s.grains) g.b = reciprocal(g.a1, g.a2);
@@ -1349,13 +1358,18 @@ export function projectMaps(spec, { cx, cy, n, dx, thick, tiltX = 0, tiltY = 0, 
   // the environment's layers (environment.js slices(): window membranes), under every specimen: amorphous, so a
   // pseudo-atom texture (only ~1/√N strong through a thick film) on a smooth mass-conserving continuum, seeded per
   // cell so it stays put as the stage moves
-  for (const [mat, t] of extra) {
+  for (const [mat, t0, holes] of extra) {
     const M = MAT[mat], cell = M?.cell;
-    if (!M || !(t > 0)) continue;
+    if (!M || !(t0 > 0)) continue;
     const i0 = Math.floor(x0 / cell) - 1, i1 = Math.floor((x0 + n * dx) / cell) + 1, j0 = Math.floor(y0 / cell) - 1, j1 = Math.floor((y0 + n * dx) / cell) + 1;
-    const tex = Math.min(1, 1.5 / Math.sqrt(M.dens * cell * cell * t)), sC = (0.6 * cell) / dx, sC2 = sC * sC;
+    const sC = (0.6 * cell) / dx, sC2 = sC * sC;
     for (let j = j0; j <= j1; j++)
       for (let i = i0; i <= i1; i++) {
+        // holes (bubbles in a liquid): each removes a chord of its sphere at this cell
+        let t = t0;
+        if (holes?.length) for (const h of holes) { const d2 = ((i + 0.5) * cell - h.x) ** 2 + ((j + 0.5) * cell - h.y) ** 2; if (d2 < h.r * h.r) t -= 2 * Math.sqrt(h.r * h.r - d2); }
+        if (t <= 0) continue;
+        const tex = Math.min(1, 1.5 / Math.sqrt(M.dens * cell * cell * t));
         const rng = mulberry32(hash2(i, j, 131));
         for (let k = 0, cnt = rng() < 0.45 ? 2 : 1; k < cnt; k++) {
           const x = (i + rng()) * cell, y = (j + rng()) * cell, e = M.pick(rng()), N = ((M.dens * cell * cell * t) / 1.45) * (0.75 + 0.5 * rng()) * tex;

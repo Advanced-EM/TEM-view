@@ -14,6 +14,7 @@ import { createSpecimenUI } from './specui.js';
 import { defaultBackend } from './compute.js';
 import { SAMPLES } from './spa.js';
 import * as ENVW from './environment.js';
+import * as LIQ from './liquid.js';
 import { evaluate, PROFILES, LIMIT_TEXT, capFor } from './resources.js';
 import { RemoteBackend } from './remote.js';
 import { buildBundle, readResults } from './bundle.js';
@@ -146,6 +147,24 @@ function renderStatus(checking = false) {
 }
 setTimeout(() => checkResources(), 2500); // measure once the exhibit has settled (no connector probing until Status opens)
 
+// the window type in effect: the liquid cell's own, else the chosen one (sinx when none is chosen, for the slider)
+function winKey() { return ENVW.windowsOf(S)?.key ?? 'sinx'; }
+// the liquid cell's state: bulge, burst margin, the liquid here, radiolysis, resolution (liquid.js)
+function liquidNote() {
+  const c = LIQ.cellOf(S), L = sim.liq, n = sim.liquidNow();
+  if (!c) return '';
+  if (L?.burst) return `The window burst at ${L.burst.dP_bar.toFixed(2)} bar (it holds ${L.burst.burst_bar.toFixed(2)} bar): the column protection blanked the beam and the event is logged. Load a new cell.`;
+  const parts = [];
+  if (c.pockets) parts.push(`Graphene traps the liquid in pockets ~${S.lcPocket} nm across and ~${Math.round(S.lcPocket / 4)} nm high: ${c.inPocket ? `${(c.thicknessA / 10).toFixed(0)} nm of liquid here` : 'no pocket here: move the stage to find one'}. No bulging; the best resolution, and graphene scavenges radicals.`);
+  else parts.push(`Each window bows ${(c.w * 1e6).toFixed(2)} µm at its centre (stress ${(c.stress / 1e9).toFixed(2)} GPa; it bursts at ${(c.burstP / 1e5).toFixed(1)} bar). ${c.onWin ? `Liquid here: ${(c.thicknessA / 1e4).toFixed(2)} µm (spacer ${S.lcGap} nm + bulge).` : 'The stage is on the silicon frame: move onto the window.'}`);
+  const r = LIQ.h2Ratio(S, S.kV);
+  parts.push(`Radiolysis: H₂ at ${(100 * r * r).toFixed(0)} % of its solubility${r > 1 ? ` — bubbles form (${L?.bubbles.length ?? 0} in view)` : ''}${S.lcPrecursor ? `; the gold has grown ${(L?.grow ?? 0).toFixed(1)} Å` : ''}.`);
+  if (n?.tA > 0) {
+    const tb = LIQ.temBlur(n.tA, n.below, S.kV, { Cc: (S.profile.Cc ?? 1.4) * 1e7, lambdaA: 10 * P.imfp(S.kV, 7.4) });
+    parts.push(`Resolution: STEM ≈ ${Math.max(0.1, LIQ.stemBlur(n.above, S.kV)).toFixed(1)} nm (probe broadening above the particle), TEM ≈ ${S.lcFilter ? tb.elastic.toFixed(1) : Math.max(tb.elastic, tb.chromatic * tb.inelasticShare).toFixed(1)} nm (${S.lcFilter ? 'zero loss only' : `${Math.round(100 * tb.inelasticShare)} % of the electrons lost energy: chromatic blur`}). Tilt up to ±${ENVW.maxTilt(S)}°.`);
+  }
+  return parts.join(' ');
+}
 // the environment in one line: holder, windows and what they add (environment.js)
 function envNote() {
   const W = ENVW.windowsOf(S), e = ENVW.envOf(S);
@@ -385,10 +404,24 @@ const CONTROLS = [
   { buttons: [['libRand', 'Random particle'], ['libAuCo', 'Au–Co, phase-separated'], ['libChip', 'Whole chip']], modes: NOT_LOR, show: () => S.spec === 'lib' },
   { chips: 'holder', label: 'Specimen holder', opts: Object.entries(HOLDERS).map(([k, v]) => [k, v.short]) },
   // the environment (environment.js): window membranes above and below the specimen, seen by every technique
-  { chips: 'envWin', label: 'Windows (one above, one below the specimen)', small: true, opts: Object.entries(ENVW.WINDOWS).map(([k, v]) => [k, v.label]) },
-  { slider: 'envWinT', label: 'Window thickness, each', show: () => S.envWin !== 'none', dyn: () => { const w = ENVW.WINDOWS[S.envWin] ?? ENVW.WINDOWS.sinx; return { min: w.range[0], max: w.range[1], step: 1 }; },
-    fmt: (v) => (S.envWin === 'graphene' ? `${Math.round(v)} layer${Math.round(v) > 1 ? 's' : ''} (${(Math.round(v) * 0.335).toFixed(2)} nm)` : `${(+v).toFixed(0)} nm`) },
-  { pFn: () => envNote() },
+  { chips: 'envCell', label: 'Cell around the specimen', small: true, opts: [['none', 'None (grid)'], ['liquid', 'Liquid cell']] },
+  { chips: 'envWin', label: 'Windows (one above, one below the specimen)', small: true, opts: Object.entries(ENVW.WINDOWS).map(([k, v]) => [k, v.label]), show: () => S.envCell === 'none' },
+  { slider: 'envWinT', label: 'Window thickness, each', show: () => S.envCell === 'liquid' || S.envWin !== 'none', dyn: () => { const w = ENVW.WINDOWS[winKey()]; return { min: w.range[0], max: w.range[1], step: 1 }; },
+    fmt: (v) => (winKey() === 'graphene' ? `${Math.round(v)} layer${Math.round(v) > 1 ? 's' : ''} (${(Math.round(v) * 0.335).toFixed(2)} nm)` : `${(+v).toFixed(0)} nm`) },
+  { pFn: () => envNote(), show: () => S.envCell === 'none' },
+  // the liquid cell (liquid.js)
+  { chips: 'lcClass', label: 'Liquid cell', small: true, show: () => S.envCell === 'liquid', opts: [['sinx', 'SiNₓ static'], ['sinxFlow', 'SiNₓ flow'], ['graphene', 'Graphene pockets']] },
+  { slider: 'lcA', label: 'Window short side', min: 10, max: 500, step: 5, fmt: (v) => `${v} µm`, show: () => S.envCell === 'liquid' && S.lcClass !== 'graphene' },
+  { slider: 'lcB', label: 'Window long side', min: 10, max: 2000, step: 10, fmt: (v) => `${v} µm`, show: () => S.envCell === 'liquid' && S.lcClass !== 'graphene' },
+  { slider: 'lcGap', label: 'Spacer (liquid at the window edge)', min: 20, max: 5000, log: true, fmt: (v) => `${Math.round(v)} nm`, show: () => S.envCell === 'liquid' && S.lcClass !== 'graphene' },
+  { slider: 'lcDP', label: 'Pressure difference (liquid − vacuum)', min: 0, max: 30, step: 0.05, fmt: (v) => `${(+v).toFixed(2)} bar`, show: () => S.envCell === 'liquid' && S.lcClass !== 'graphene', ends: ['', 'atmosphere', 'burst?'] },
+  { slider: 'lcFlow', label: 'Flow', min: 0, max: 5, step: 0.05, fmt: (v) => `${(+v).toFixed(2)} µL/min`, show: () => S.envCell === 'liquid' && S.lcClass === 'sinxFlow' },
+  { slider: 'lcPocket', label: 'Pocket size', min: 5, max: 500, log: true, fmt: (v) => `${Math.round(v)} nm`, show: () => S.envCell === 'liquid' && S.lcClass === 'graphene' },
+  { slider: 'lcRate', label: 'Dose rate', min: 0.01, max: 1000, log: true, fmt: (v) => `${(+v).toPrecision(2)} e⁻/Å²/s · ${(LIQ.doseRateGy(+v, S.kV) / 1e6).toPrecision(2)} MGy/s`, show: () => S.envCell === 'liquid' },
+  { chips: 'lcDepth', label: 'The particle sits', small: true, show: () => S.envCell === 'liquid', opts: [['top', 'On the entrance window'], ['middle', 'In the liquid'], ['bottom', 'On the exit window']] },
+  { toggles: [['lcPrecursor', 'Gold precursor in the liquid (particles grow)'], ['lcFilter', 'Energy filter (TEM: zero loss only)']], show: () => S.envCell === 'liquid' },
+  { buttons: [['newCell', 'Load a new cell']], show: () => S.envCell === 'liquid' },
+  { pFn: () => liquidNote(), show: () => S.envCell === 'liquid' },
   { slider: 'tempSet', label: 'Temperature setpoint', dyn: () => { const H = HOLDERS[S.holder]; return { min: H.min, max: H.max, step: H.step, log: H.log }; }, fmt: (v) => fmtT(v), show: () => S.holder !== 'room' },
   { pFn: () => `Specimen at ${fmtT(sim.temp())}${S.holder === 'room' ? '' : ` (setpoint ${fmtT(S.tempSet)}; the grid runs ${S.holder === 'heat' ? 'about 1 % hotter than the reading' : 'warmer than the holder tip'} and fluctuates by ±${HOLDERS[S.holder].jitter} K)`}. Drift ${sim.driftSpeed().toFixed(2)} Å/s.` },
   { buttons: [['newGrid', 'Load a fresh grid']], modes: NOT_LOR, show: () => S.spec === 'bio' },
@@ -890,6 +923,7 @@ function action(id, el) {
   if (id === 'abtem') openAbTEM({ S, sim, mainCv, download });
   if (id === 'connect') openConnect({ S, sim, download });
   if (id === 'status') return openStatus();
+  if (id === 'newCell') { sim.resetLiquid(); S.paused = false; refreshControls(); return; }
   if (id === 'exportProfile') download(new Blob([JSON.stringify(S.profile, null, 1)], { type: 'application/json' }), `instrument-profile-${S.profile.preset}.json`);
   if (id === 'restore') { sim.restoreSpecimen(); explainChange('restore'); }
   if (id === 'lorReset') {
