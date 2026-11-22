@@ -1,6 +1,6 @@
 {
  "format": "tem-view-session/2",
- "saved": "2026-11-22T17:44:52.544Z",
+ "saved": "2026-11-22T18:37:29.197Z",
  "note": "TEM-view in situ experiment E6: Helium bubbles in silicon: coarsening, escape and voids on annealing. Load it, then press Record movie.",
  "technique": "tem",
  "mods": {},
@@ -58,6 +58,15 @@
     "t1": 220,
     "to": 1100
    }
+  ],
+  "expName": "E6: Helium bubbles in silicon: coarsening, escape and voids on annealing",
+  "expGoal": "In what order, and at what temperatures, do implanted helium bubbles coarsen, lose their helium and become voids?",
+  "expObs": [
+   "T_K",
+   "cavities",
+   "cavity_d_nm",
+   "he_density",
+   "drift_A"
   ]
  },
  "state": {
@@ -176,6 +185,15 @@
     "t1": 220,
     "to": 1100
    }
+  ],
+  "expName": "E6: Helium bubbles in silicon: coarsening, escape and voids on annealing",
+  "expGoal": "In what order, and at what temperatures, do implanted helium bubbles coarsen, lose their helium and become voids?",
+  "expObs": [
+   "T_K",
+   "cavities",
+   "cavity_d_nm",
+   "he_density",
+   "drift_A"
   ],
   "bsOn": false,
   "bsLayout": "two",

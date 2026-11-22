@@ -41,6 +41,8 @@ jobs:
         run: node tools/env-check.mjs
       - name: Liquid cell (bulge, burst, resolution, top-bottom effect, bubbles)
         run: node tools/liquid-check.mjs
+      - name: Kinetics (sourced parameters, radiolysis network against an analytic solution, charge balance)
+        run: node tools/kinetics-check.mjs
       - name: Gas cell and ETEM (contrast follows exp(-n sigma L), spectra, burst, reactions)
         run: node tools/gas-check.mjs
       - name: Biasing (holographic phase across the gap = the specimen's voltage; circuit, failures, heating, deflection)

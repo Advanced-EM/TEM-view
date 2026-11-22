@@ -99,6 +99,23 @@ const record = (S, sim) => { sim.startMovie(); for (let i = 0; i < 5000 && sim.m
   ok(worst < 1e-6, `a bias ramp 0 → 8 V over 4 s: each frame records the specimen voltage the timeline sets (worst ${worst.toExponential(1)} V)`);
 }
 
+// ---- your own design: name, question, observables, a gas switch in the timeline; all saved and exported
+{
+  const { toSession, readSession } = await import('../js/session.js');
+  const OBS = await import('../js/observables.js');
+  const S = defaultState(); S.mode = 'tem'; S.spec = 'sto'; S.clarity = 'edu';
+  const sim = new Sim(S); chipState(S, sim, 'holder', 'heat'); chipState(S, sim, 'envCell', 'gas'); S.gcGas = 'H2'; S.tempSet = 800; sim.update(0.02);
+  Object.assign(S, { expName: 'STO redox, my design', expGoal: 'How fast does it re-oxidise?', expObs: ['T_K', 'xi', 'transmitted'], movDur: 20, movFps: 1, timeline: [{ key: 'gcGas', t0: 10, t1: 10, to: 'O2' }] });
+  const applic = OBS.applicable(S);
+  ok(['xi', 'transmitted', 'T_K'].every((k) => applic.includes(k)) && !applic.includes('bubbles') && !applic.includes('V_specimen'), `the designer offers what applies: ${applic.length} observables for SrTiO₃ in a gas cell (no liquid or bias ones)`);
+  const back = readSession(JSON.parse(JSON.stringify(toSession(S)))).state;
+  ok(back.expName === S.expName && back.expGoal === S.expGoal && back.expObs.join() === 'T_K,xi,transmitted' && back.timeline[0].to === 'O2', 'the design (name, question, observables, the gas switch) is saved in the session and reads back');
+  const M = record(S, sim), before = M.meta.filter((m) => m.t < 10), after = M.meta.filter((m) => m.t >= 10);
+  ok(before.every((m) => m.gcGas === 'H2') && after.every((m) => m.gcGas === 'O2') && after.at(-1).obs.xi < before.at(-1).obs.xi, `the timeline switches the gas at 10 s (H₂ → O₂): ξ ${before.at(-1).obs.xi.toFixed(2)} → ${after.at(-1).obs.xi.toFixed(2)}`);
+  const d = collectData(sim, S);
+  ok(d.arrays.obs_xi?.shape[0] === 20 && d.arrays.obs_transmitted && d.meta.calibration.experiment.name === S.expName && d.meta.kinetics?.redox?.label === 'trend' && d.meta.kinetics.sintering.parameters.sinter_O2.source.includes('Pt'), `export: one array per observable, the design, and the kinetics behind it with sources and labels (redox: ${d.meta.kinetics?.redox?.label})`);
+}
+
 // ---- the estimator: the movie's volume
 {
   const S = defaultState(); S.mode = 'tem'; S.movOn = true; S.movDur = 60; S.movFps = 25; const sim = new Sim(S);

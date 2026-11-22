@@ -712,3 +712,8 @@ canvas.ivplot { display: block; width: 100%; height: auto; aspect-ratio: 56 / 22
 .timeline .tlAddRow { display: grid; grid-template-columns: 1fr 72px 56px 56px; gap: 6px; margin-top: 6px; }
 .timeline .tlAddRow select, .timeline .tlAddRow input { min-width: 0; background: rgba(255,255,255,0.06); color: inherit; border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; padding: 4px 6px; font: inherit; font-size: 12.5px; }
 .timeline .tlAddRow .btn { grid-column: 1 / -1; }
+/* the in situ experiment designer (observables.js) */
+.expdesign select, .expdesign input, .expdesign textarea { width: 100%; box-sizing: border-box; background: rgba(255,255,255,0.06); color: inherit; border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; padding: 5px 7px; font: inherit; font-size: 12.5px; margin-bottom: 6px; }
+.obspick .obsgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 10px; font-size: 12.5px; }
+.obspick .obsitem { display: flex; gap: 6px; align-items: baseline; font-weight: 400; color: inherit; }
+@media (max-width: 600px) { .obspick .obsgrid { grid-template-columns: 1fr; } }

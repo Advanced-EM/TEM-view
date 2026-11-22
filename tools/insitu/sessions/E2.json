@@ -1,6 +1,6 @@
 {
  "format": "tem-view-session/2",
- "saved": "2026-11-22T17:42:44.015Z",
+ "saved": "2026-11-22T18:35:17.446Z",
  "note": "TEM-view in situ experiment E2: Gold growth from a precursor: growth rate against dose rate, below the bubble threshold. Load it, then press Record movie.",
  "technique": "tem",
  "mods": {},
@@ -58,6 +58,13 @@
     "t1": 31,
     "to": 2
    }
+  ],
+  "expName": "E2: Gold growth from a precursor: growth rate against dose rate, below the bubble threshold",
+  "expGoal": "How does the growth rate of gold particles depend on the dose rate?",
+  "expObs": [
+   "radius_A",
+   "bubbles",
+   "h2_cell_uM"
   ]
  },
  "state": {
@@ -176,6 +183,13 @@
     "t1": 31,
     "to": 2
    }
+  ],
+  "expName": "E2: Gold growth from a precursor: growth rate against dose rate, below the bubble threshold",
+  "expGoal": "How does the growth rate of gold particles depend on the dose rate?",
+  "expObs": [
+   "radius_A",
+   "bubbles",
+   "h2_cell_uM"
   ],
   "bsOn": false,
   "bsLayout": "two",

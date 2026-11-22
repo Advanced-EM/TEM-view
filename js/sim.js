@@ -19,6 +19,7 @@ import * as LIQ from './liquid.js';
 import * as GAS from './gas.js';
 import * as BIAS from './bias.js';
 import * as INSITU from './insitu.js';
+import * as OBS from './observables.js';
 import { buildStructure } from './structure.js';
 import { HOLDERS, specimenT, u2Ratio, thermalStrain, radiolysisFactor, iceSublimation, DEVITRIFY_K } from './holder.js';
 
@@ -1722,7 +1723,8 @@ export class Sim {
       M.frames.push(Float32Array.from(this.main.arr));
       const env = Object.fromEntries(Object.keys(INSITU.QUANTITIES).map((k) => [k, S[k]]));
       M.meta.push({ frame: M.k, t: +(M.k * p.dt).toFixed(6), T_K: this.temp(), ...env, drift_A: [this.driftPos[0] - M.drift0[0], this.driftPos[1] - M.drift0[1]], drift_speed_A_s: this.driftSpeed(),
-        ...(this.biasSt?.op ? { V_specimen: this.biasSt.op.Vspec, I_A: this.biasSt.op.I } : {}) });
+        ...(this.biasSt?.op ? { V_specimen: this.biasSt.op.Vspec, I_A: this.biasSt.op.I } : {}),
+        obs: OBS.read(S.expObs?.length ? S.expObs : OBS.suggested(S), this, S) }); // the design's observables (observables.js)
     }
     M.k++;
     if (M.k >= p.frames) this.stopMovie();

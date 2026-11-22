@@ -17,10 +17,12 @@
 // the liquid above the particle, d ≈ 1.5 nm·(t_above / 1 µm)^1.5 at 200 kV (de Jonge's calibration). Hence the
 // top–bottom effect: STEM images particles on the entrance (top) window sharpest, TEM those on the exit window.
 //
-// Radiolysis (Schneider et al. 2014): the steady-state H₂ concentration grows as √(dose rate); above the dose rate
-// where it exceeds its solubility (~0.8 mM), bubbles nucleate and grow. Flow refreshes the liquid and raises that
-// threshold; graphene scavenges radicals and raises it more. Hydrated electrons reduce gold ions (with a precursor
-// in the liquid), so gold particles grow.
+// Radiolysis (Schneider et al. 2014; the network in kinetics.js): the beam's products react and diffuse out of the
+// irradiated disc into the rest of the cell's liquid. Bubbles nucleate where H₂ exceeds its solubility: in the beam
+// at high dose rates, and anywhere once a static cell's liquid has filled with H₂; flow flushes it. Hydrated
+// electrons reduce gold ions (with a precursor in the liquid), so gold particles grow.
+
+import * as K from './kinetics.js';
 
 export const CELLS = {
   sinx: { label: 'SiNₓ static liquid cell', windows: 'sinx', flow: false },
@@ -84,33 +86,72 @@ export function temBlur(tTotA, tBelowA, kV, { Cc = 1.4e7, alpha = 0.01, meanLoss
   return { chromatic: dc, inelasticShare: 1 - Math.exp(-tTotA / lambdaA), elastic: 0.3 * stemBlur(tBelowA, kV) };
 }
 
-// ---------------------------------------------------------------- radiolysis
+// ---------------------------------------------------------------- radiolysis (kinetics.js)
 // dose rate in water (Gy/s) for a current density j (e⁻/Å²/s): j·10¹⁶ cm⁻² · S/ρ (≈ 2.8 MeV cm²/g at 200 kV,
 // ∝ 1/β²) · 1.602·10⁻¹⁹ J/eV · 10³ g/kg
 export function doseRateGy(j, kV) {
   const b2 = (kv) => { const g = 1 + kv / 511; return 1 - 1 / (g * g); };
   return j * 1e16 * 2.8e6 * (b2(200) / b2(kV)) * 1.602e-19 * 1e3;
 }
-// the dose rate above which H₂ exceeds its solubility; flow and graphene raise it
-export function bubbleThresholdGy(S) {
-  const C = CELLS[S.lcClass] ?? CELLS.sinx;
-  return 3e7 * (1 + (C.flow ? S.lcFlow / 0.5 : 0)) * (C.pockets ? 10 : 1);
+// The beam makes radiolysis products in the irradiated disc (radius r_b, the liquid's thickness); they react (the
+// network in kinetics.js) and diffuse out into the rest of the cell's liquid, the reservoir: in a static SiNₓ cell
+// the wetted chip (area × gap), which slowly fills with H₂; a flow cell sweeps it. Graphene pockets are closed and
+// their graphene scavenges radicals. Bubbles nucleate where H₂ exceeds its solubility at the liquid's pressure.
+const cellGeom = (S, tLiqA) => {
+  const C = CELLS[S.lcClass] ?? CELLS.sinx, rb = K.p('beam_r'), t = Math.max(1e-9, (tLiqA ?? S.lcGap * 10) * 1e-10);
+  const Virr = Math.PI * rb * rb * t * 1e3, Vres = C.pockets ? Virr : K.p('chip_area') * S.lcGap * 1e-9 * 1e3; // L
+  const kFlush = C.flow ? (S.lcFlow * 1e-6 / 60) * K.p('flow_bypass') / Vres : 0; // 1/s
+  return { C, rb, Virr, Vres, kFlush };
+};
+export const h2Sat = (S) => K.p('H2_sat') * Math.max(0.05, S.lcDP ?? 1) / 1.01325; // M at the liquid's pressure (bar)
+// steady state in the beam for the reservoir's H₂ (M); gold precursor when on
+export function radiolysisNow(S, kV, resH2 = 0) {
+  const C = CELLS[S.lcClass] ?? CELLS.sinx, D = doseRateGy(S.lcRate, kV);
+  const bulk = { O2: K.p('O2_air'), H2: resH2, ...(S.lcPrecursor ? { Au: K.p('Au_bulk') } : {}) };
+  const ss = K.steadyState(D, C.pockets ? { closed: true, scav: K.p('k_scav_gr'), bulk } : { bulk });
+  return { D, ss, ratio: ss.H2 / h2Sat(S), sat: h2Sat(S) };
 }
-// steady-state H₂ relative to its solubility (> 1: bubbles)
-export function h2Ratio(S, kV) { return Math.sqrt(doseRateGy(S.lcRate, kV) / bubbleThresholdGy(S)); }
+// steady-state H₂ in the beam relative to its solubility (> 1: bubbles), for an empty reservoir unless given
+export function h2Ratio(S, kV, resH2 = 0) { return radiolysisNow(S, kV, resH2).ratio; }
+// the dose rate (Gy/s) at which H₂ in the beam reaches its solubility with an empty reservoir (bisection in log D)
+export function bubbleThresholdGy(S, kV = 200) {
+  const g1 = doseRateGy(1, kV);
+  let lo = Math.log(1e3), hi = Math.log(1e11);
+  for (let i = 0; i < 40; i++) { const m = (lo + hi) / 2; if (h2Ratio({ ...S, lcRate: Math.exp(m) / g1 }, kV) > 1) hi = m; else lo = m; }
+  return Math.exp((lo + hi) / 2);
+}
+// how the reservoir's H₂ changes (M/s) at a dose rate, net of flushing: > 0, it fills
+export function reservoirRate(S, kV, resH2, tLiqA) {
+  const g = cellGeom(S, tLiqA), r = radiolysisNow(S, kV, resH2);
+  if (g.C.pockets) return 0;
+  const efflux = K.p('D_H2') * (2.405 / g.rb) ** 2 * (r.ss.H2 - resH2) * g.Virr; // mol/s
+  return efflux / g.Vres - g.kFlush * resH2;
+}
+// gold deposited on each particle (Å/s of radius at radius rA): reduced gold atoms in the column of liquid above the
+// particle's share of the area, the fraction η that reaches existing particles, spread over its surface
+export function growthRate(S, kV, resH2, tLiqA, rA) {
+  if (!S.lcPrecursor || !(tLiqA > 0)) return 0;
+  const r = radiolysisNow(S, kV, resH2), red = K.p('k_Au_e') * r.ss.eaq * r.ss.Au / 3; // M/s of gold atoms
+  const atoms = red * 6.022e-4 * tLiqA * 3500; // per s, per particle (3500 Å² each), 6.022·10⁻⁴ atoms/Å³ per M
+  return (K.p('Au_eta') * atoms * 16.96) / (4 * Math.PI * rA * rA);
+}
 
-// one step of the processes (dt s): bubbles nucleate and grow when H₂ is supersaturated, gold grows from hydrated
-// electrons (with a precursor), particles move by hindered Brownian motion. st: { t, bubbles: [{x, y, r}], grow,
-// bx, by }; rng seeded by the caller; fov (Å) and the stage (cx, cy, Å) place the new bubbles in view
+// one step of the processes (dt s): the reservoir fills (or is flushed), bubbles nucleate and grow where H₂ is
+// supersaturated, gold grows from hydrated electrons (with a precursor), particles move by hindered Brownian motion.
+// st: { t, res, bubbles: [{x, y, r}], grow, bx, by }; rng seeded by the caller; fov (Å) and the stage (cx, cy, Å)
+// place the new bubbles in view
 export function step(st, S, kV, dt, rng, fovA, tLiqA) {
   st.t += dt;
-  const ratio = h2Ratio(S, kV), excess = ratio - 1;
+  st.res = Math.max(0, (st.res ?? 0) + reservoirRate(S, kV, st.res ?? 0, tLiqA) * dt);
+  if (st.bubbles.length && st.res > h2Sat(S)) st.res -= (st.res - h2Sat(S)) * Math.min(1, dt / 10); // bubbles take up the excess (degassing, ~10 s)
+  const now = radiolysisNow(S, kV, st.res), ratio = Math.max(now.ratio, st.res / now.sat), excess = ratio - 1;
+  st.h2 = now.ss.H2; st.ratio = ratio; st.pH = -Math.log10(now.ss.Hp);
   if (excess > 0 && tLiqA > 0) {
     if (rng() < Math.min(1, 0.6 * excess * dt) && st.bubbles.length < 12) st.bubbles.push({ x: S.cx + (rng() - 0.5) * fovA * 0.8, y: S.cy + (rng() - 0.5) * fovA * 0.8, r: 5 });
     for (const b of st.bubbles) b.r = Math.min(tLiqA * 0.5 + fovA * 0.15, b.r + 40 * Math.sqrt(excess) * dt);
   } else for (const b of st.bubbles) b.r = Math.max(0, b.r - 15 * dt); // undersaturated: they dissolve
   st.bubbles = st.bubbles.filter((b) => b.r > 0);
-  if (S.lcPrecursor && tLiqA > 0) st.grow = Math.min(15, st.grow + 0.4 * Math.sqrt(doseRateGy(S.lcRate, kV) / 3e7) * dt); // Å of radius
+  if (S.lcPrecursor && tLiqA > 0) st.grow = Math.min(15, st.grow + growthRate(S, kV, st.res, tLiqA, 21 + st.grow) * dt); // Å of radius
   // hindered Brownian motion: free diffusion is far too fast to image; particles stuck near a window barely move
   const D = (depthOf(S) < 0.1 || depthOf(S) > 0.9 ? 0.5 : 6) * (tLiqA > 0 ? 1 : 0); // Å²/s
   const s = Math.sqrt(2 * D * dt), g = () => Math.sqrt(-2 * Math.log(1 - rng())) * Math.cos(2 * Math.PI * rng());

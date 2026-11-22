@@ -63,15 +63,21 @@ function image(mode, set) {
   const gr = image('tem', (S) => { S.lcClass = 'graphene'; S.lcPocket = 60; S.cx = 30; S.cy = 30; });
   ok(gr > image('tem', set('middle')), `a graphene pocket (nm of liquid) images far sharper than a SiNₓ cell (${gr.toFixed(3)})`);
 }
-// ---- radiolysis: bubbles only above the dose-rate threshold
+// ---- radiolysis (the network in kinetics.js): bubbles where H₂ exceeds its solubility
 {
-  const S0 = defaultState(); S0.envCell = 'liquid'; S0.lcClass = 'sinx';
+  const S0 = defaultState(); S0.envCell = 'liquid'; S0.lcClass = 'sinxFlow'; S0.lcFlow = 2;
   const thrJ = LIQ.bubbleThresholdGy(S0) / LIQ.doseRateGy(1, S0.kV);
-  const run = (j) => { const S = defaultState(); S.mode = 'tem'; const sim = new Sim(S); chipState(S, sim, 'envCell', 'liquid'); S.lcRate = j; for (let i = 0; i < 300; i++) sim.update(0.1); return sim.liq.bubbles.length; };
+  const run = (j, cls = 'sinxFlow', secs = 30) => { const S = defaultState(); S.mode = 'tem'; const sim = new Sim(S); chipState(S, sim, 'envCell', 'liquid'); S.lcClass = cls; S.lcFlow = 2; S.lcRate = j; for (let i = 0; i < secs * 10; i++) sim.update(0.1); return sim.liq; };
   const lo = run(0.5 * thrJ), hi = run(4 * thrJ);
-  ok(lo === 0 && hi > 0, `bubbles: none at ${(0.5 * thrJ).toFixed(1)} e⁻/Å²/s after 30 s, ${hi} at ${(4 * thrJ).toFixed(1)} e⁻/Å²/s (threshold ${thrJ.toFixed(1)} e⁻/Å²/s ≈ ${(LIQ.bubbleThresholdGy(S0) / 1e6).toFixed(0)} MGy/s, where H₂ exceeds its solubility)`);
-  const Sf = { ...S0, lcClass: 'sinxFlow', lcFlow: 2 }, Sg = { ...S0, lcClass: 'graphene' };
-  ok(LIQ.bubbleThresholdGy(Sf) > LIQ.bubbleThresholdGy(S0) && LIQ.bubbleThresholdGy(Sg) > LIQ.bubbleThresholdGy(Sf), 'flow raises the threshold, graphene (radical scavenging) more');
+  ok(lo.bubbles.length === 0 && hi.bubbles.length > 0, `flow cell: no bubbles at ${(0.5 * thrJ).toFixed(0)} e⁻/Å²/s after 30 s, ${hi.bubbles.length} at ${(4 * thrJ).toFixed(0)} e⁻/Å²/s (H₂ in the beam reaches its solubility at ${thrJ.toFixed(0)} e⁻/Å²/s ≈ ${(LIQ.bubbleThresholdGy(S0) / 1e6).toFixed(0)} MGy/s)`);
+  // a static cell's liquid fills with H₂ from the beam: below the beam's threshold, bubbles come after a delay
+  const j = 0.3 * thrJ, Ss = { ...defaultState(), envCell: 'liquid', lcClass: 'sinx', lcRate: j }, fill = LIQ.reservoirRate(Ss, 200, 0, Ss.lcGap * 10), tPred = LIQ.h2Sat(Ss) / fill;
+  const st = run(j, 'sinx', Math.ceil(1.5 * tPred)), fl = run(j, 'sinxFlow', Math.ceil(1.5 * tPred));
+  ok(st.bubbles.length > 0 && st.res > 0.5 * LIQ.h2Sat(Ss) && fl.bubbles.length === 0, `static cell at ${j.toFixed(0)} e⁻/Å²/s (below the beam's threshold): its liquid fills with H₂ (${(1e6 * st.res).toFixed(0)} µM after ${Math.ceil(1.5 * tPred)} s; saturation predicted at ~${tPred.toFixed(0)} s) and bubbles form; a flow cell flushes it (${(1e6 * fl.res).toFixed(1)} µM, no bubbles)`);
+  const Sg = { ...S0, lcClass: 'graphene' }, thrG = LIQ.bubbleThresholdGy(Sg) / LIQ.doseRateGy(1, 200);
+  ok(thrG < 0.1 * thrJ, `a graphene pocket is closed: its products stay in it, so H₂ saturates above ${thrG.toPrecision(2)} e⁻/Å²/s`);
+  const r = LIQ.radiolysisNow({ ...S0, lcRate: 10 }, 200);
+  ok(r.ss.H2O2 > r.ss.H2 && -Math.log10(r.ss.Hp) < 6, `at 10 e⁻/Å²/s the beam makes ${(1e6 * r.ss.H2).toFixed(0)} µM H₂ and ${(1e6 * r.ss.H2O2).toFixed(0)} µM H₂O₂ and acidifies the water to pH ${(-Math.log10(r.ss.Hp)).toFixed(1)} (Schneider et al. 2014)`);
 }
 // ---- spectra, growth, motion
 {

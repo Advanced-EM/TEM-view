@@ -3,6 +3,8 @@
 import { npy, zip, jsonBytes } from './npy.js';
 import { snapshot, activeMods } from './session.js';
 import { footprintFor, summary as fpSummary } from './footprint.js';
+import { OBSERVABLES } from './observables.js';
+import * as KIN from './kinetics.js';
 
 const A = (data, shape, units) => ({ data, shape, units });
 
@@ -118,9 +120,14 @@ export function collectData(sim, S) {
     arrays.movie_time = A(Float32Array.from(M.meta.map((m) => m.t)), [M.meta.length], 's from the start');
     arrays.movie_drift = A(Float32Array.from(M.meta.flatMap((m) => m.drift_A)), [M.meta.length, 2], 'specimen drift (x, y), Å, the truth for drift correction');
     arrays.movie_temperature = A(Float32Array.from(M.meta.map((m) => m.T_K)), [M.meta.length], 'K at the specimen');
+    // the design's observables, one array each (observables.js)
+    for (const k of Object.keys(M.meta[0]?.obs ?? {})) arrays[`obs_${k}`] = A(Float32Array.from(M.meta.map((m) => m.obs?.[k] ?? NaN)), [M.meta.length], `${OBSERVABLES[k].label}${OBSERVABLES[k].unit ? ` (${OBSERVABLES[k].unit})` : ''}`);
+    cal.experiment = { name: S.expName || null, question: S.expGoal || null, observables: Object.keys(M.meta[0]?.obs ?? {}) };
     cal.movie = { mode: M.mode, fps: M.plan.fps, duration_s: M.plan.duration_s, frames_planned: M.plan.frames, frames_kept: M.frames.length, every: M.plan.every, timeline: M.timeline, frame_meta: M.meta };
   }
   const state = snapshot(S);
+  // the kinetics behind the in situ processes in play, with each parameter's source and label (kinetics.js)
+  const procs = [...(S.envCell === 'liquid' ? ['radiolysis', 'bubbles', ...(S.lcPrecursor ? ['growth'] : [])] : []), ...(S.envCell === 'gas' && S.holder === 'heat' ? ['sintering', 'redox'] : []), ...(S.bsOn && S.envCell === 'liquid' ? ['electrochemistry'] : [])];
   const meta = {
     format: 'tem-view-data/1', generator: 'Seeing with Electrons (TEM-view)', created: new Date().toISOString(),
     simulated: true, mode: m, technique: m, mods: activeMods(S), specimen: sim.spec.name, calibration: cal,
@@ -128,6 +135,7 @@ export function collectData(sim, S) {
     optics: { wavelength_A: sim.lam, focal_spread_A: sim.focalSpread(), information_limit_A: sim.infoLimit(), Cs_A: sim.CsA() },
     arrays: Object.fromEntries(Object.entries(arrays).map(([k, v]) => [k, { shape: v.shape, units: v.units }])),
     footprint: fpSummary(footprintFor(S, sim)),
+    ...(procs.length ? { kinetics: KIN.provenance(procs) } : {}),
     state,
   };
   return { arrays, meta };

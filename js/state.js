@@ -65,6 +65,8 @@ export const defaultState = () => ({
   // (MV/m), whether the stray field in the vacuum above and below the chip is included
   // an in situ movie (insitu.js): duration (s), frames per second, and the timeline of ramps { key, t0, t1, to }
   movOn: false, movDur: 30, movFps: 5, timeline: [],
+  // the experiment's design (observables.js): its name, the question it answers, what to measure each frame
+  expName: '', expGoal: '', expObs: [],
   bsOn: false, bsLayout: 'two', bsGap: 5, bsMat: 'semi', bsMode: 'V', bsWave: 'dc', bsV: 0, bsI: 0, bsRate: 1, bsLimit: 100, bsRc: 100, bsRs: 50, bsLeak: 1e9, bsEbd: 30, bsStray: true,
   // where the 4D-STEM scan and tomography run in a browser with WebGPU: 'auto' (the GPU, gpu.js) | 'off' (JS)
   gpu: 'auto',
@@ -82,7 +84,7 @@ export const SESSION_KEYS = [
   'eelsSource', 'eelsBeta', 'eelsDet', 'eelsYScale', 'eelsFit', 'eelsPre', 'eelsDeconv', 'eelsPx', 'eelsLine',
   'pedOn', 'pedPhi', 'pedSteps', 'pedDescan', 'zone',
   'edMethod', 'edStart', 'edEnd', 'edSpeed', 'edFps', 'edStep', 'edExp', 'edDoseRate', 'edAxis', 'edMerge', 'edSlice', 'edLayer',
-  'tomoPhantom', 'tomoN', 'tomoSignal', 'tomoScheme', 'tomoMax', 'tomoStep', 'tomoDose', 'tomoJitter', 'tomoAlign', 'tomoRecon', 'tomoFilter', 'tomoIter', 'tomoView', 'tomoDepth', 'envWin', 'envWinT', 'envCell', 'lcClass', 'lcA', 'lcB', 'lcGap', 'lcDP', 'lcFlow', 'lcPocket', 'lcRate', 'lcDepth', 'lcPrecursor', 'lcFilter', 'gcGeom', 'gcGas', 'gcP', 'gcGap', 'gcPath', 'movOn', 'movDur', 'movFps', 'timeline', 'bsOn', 'bsLayout', 'bsGap', 'bsMat', 'bsMode', 'bsWave', 'bsV', 'bsI', 'bsRate', 'bsLimit', 'bsRc', 'bsRs', 'bsLeak', 'bsEbd', 'bsStray', 'ptTilts', 'ptMax', 'ptAlpha', 'ptDose', 'ptIters', 'ptFusion', 'ptView', 'spaSample', 'spaN', 'spaDose', 'spaDf', 'spaZpp', 'spaPref', 'spaAngErr', 'spaBin', 'spaView', 'ab', 'ronchAp', 'cbedKind', 'alphaCB', 'alphaLA', 'strain', 'holz',
+  'tomoPhantom', 'tomoN', 'tomoSignal', 'tomoScheme', 'tomoMax', 'tomoStep', 'tomoDose', 'tomoJitter', 'tomoAlign', 'tomoRecon', 'tomoFilter', 'tomoIter', 'tomoView', 'tomoDepth', 'envWin', 'envWinT', 'envCell', 'lcClass', 'lcA', 'lcB', 'lcGap', 'lcDP', 'lcFlow', 'lcPocket', 'lcRate', 'lcDepth', 'lcPrecursor', 'lcFilter', 'gcGeom', 'gcGas', 'gcP', 'gcGap', 'gcPath', 'movOn', 'movDur', 'movFps', 'timeline', 'expName', 'expGoal', 'expObs', 'bsOn', 'bsLayout', 'bsGap', 'bsMat', 'bsMode', 'bsWave', 'bsV', 'bsI', 'bsRate', 'bsLimit', 'bsRc', 'bsRs', 'bsLeak', 'bsEbd', 'bsStray', 'ptTilts', 'ptMax', 'ptAlpha', 'ptDose', 'ptIters', 'ptFusion', 'ptView', 'spaSample', 'spaN', 'spaDose', 'spaDf', 'spaZpp', 'spaPref', 'spaAngErr', 'spaBin', 'spaView', 'ab', 'ronchAp', 'cbedKind', 'alphaCB', 'alphaLA', 'strain', 'holz',
   'biprism', 'sbR', 'numCorr', 'holoView', 'nFocal', 'focalStep', 'ilhView', 'holder', 'tempSet', 'profile', 'mis',
   'magSpec', 'lorThick', 'lorFov', 'lorDf', 'lorDiv', 'lorView', 'lorFouc', 'lorApR', 'lorField', 'lorChir', 'lorPol', 'lstemView', 'lorAlpha',
 ];

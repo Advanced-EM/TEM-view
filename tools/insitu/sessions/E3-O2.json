@@ -1,6 +1,6 @@
 {
  "format": "tem-view-session/2",
- "saved": "2026-11-22T17:43:16.607Z",
+ "saved": "2026-11-22T18:35:51.452Z",
  "note": "TEM-view in situ experiment E3 (O2): Sintering of gold nanoparticles: oxygen versus nitrogen. Load it, then press Record movie.",
  "technique": "tem",
  "mods": {},
@@ -58,6 +58,14 @@
     "t1": 60,
     "to": 800
    }
+  ],
+  "expName": "E3 (O2): Sintering of gold nanoparticles: oxygen versus nitrogen",
+  "expGoal": "At what temperature do the particles start to coarsen, and does oxygen speed it up?",
+  "expObs": [
+   "T_K",
+   "radius_A",
+   "sinter_A",
+   "drift_A"
   ]
  },
  "state": {
@@ -176,6 +184,14 @@
     "t1": 60,
     "to": 800
    }
+  ],
+  "expName": "E3 (O2): Sintering of gold nanoparticles: oxygen versus nitrogen",
+  "expGoal": "At what temperature do the particles start to coarsen, and does oxygen speed it up?",
+  "expObs": [
+   "T_K",
+   "radius_A",
+   "sinter_A",
+   "drift_A"
   ],
   "bsOn": false,
   "bsLayout": "two",

@@ -1,7 +1,7 @@
 {
  "format": "tem-view-session/2",
- "saved": "2026-11-22T17:41:11.852Z",
- "note": "TEM-view in situ experiment E1 (static): Radiolysis threshold: when do bubbles form?. Load it, then press Record movie.",
+ "saved": "2026-11-22T18:32:33.867Z",
+ "note": "TEM-view in situ experiment E1 (static): Radiolysis: bubbles from the beam, or from a cell that fills with H₂?. Load it, then press Record movie.",
  "technique": "tem",
  "mods": {},
  "acq": {
@@ -21,10 +21,10 @@
   "lcA": 50,
   "lcB": 200,
   "lcGap": 500,
-  "lcDP": 0.5,
+  "lcDP": 1,
   "lcFlow": 0,
   "lcPocket": 60,
-  "lcRate": 0.5,
+  "lcRate": 10,
   "lcDepth": "middle",
   "lcPrecursor": false,
   "lcFilter": false,
@@ -49,15 +49,23 @@
   "bsEbd": 30,
   "bsStray": true,
   "movOn": true,
-  "movDur": 90,
-  "movFps": 2,
+  "movDur": 300,
+  "movFps": 1,
   "timeline": [
    {
     "key": "lcRate",
-    "t0": 10,
-    "t1": 70,
-    "to": 80
+    "t0": 240,
+    "t1": 300,
+    "to": 200
    }
+  ],
+  "expName": "E1 (static): Radiolysis: bubbles from the beam, or from a cell that fills with H₂?",
+  "expGoal": "Below the dose rate at which the beam itself supersaturates H₂, do bubbles still form in a static cell, and does flow prevent them?",
+  "expObs": [
+   "bubbles",
+   "h2_beam_uM",
+   "h2_cell_uM",
+   "pH"
   ]
  },
  "state": {
@@ -154,10 +162,10 @@
   "lcA": 50,
   "lcB": 200,
   "lcGap": 500,
-  "lcDP": 0.5,
+  "lcDP": 1,
   "lcFlow": 0,
   "lcPocket": 60,
-  "lcRate": 0.5,
+  "lcRate": 10,
   "lcDepth": "middle",
   "lcPrecursor": false,
   "lcFilter": false,
@@ -167,15 +175,23 @@
   "gcGap": 5,
   "gcPath": 2,
   "movOn": true,
-  "movDur": 90,
-  "movFps": 2,
+  "movDur": 300,
+  "movFps": 1,
   "timeline": [
    {
     "key": "lcRate",
-    "t0": 10,
-    "t1": 70,
-    "to": 80
+    "t0": 240,
+    "t1": 300,
+    "to": 200
    }
+  ],
+  "expName": "E1 (static): Radiolysis: bubbles from the beam, or from a cell that fills with H₂?",
+  "expGoal": "Below the dose rate at which the beam itself supersaturates H₂, do bubbles still form in a static cell, and does flow prevent them?",
+  "expObs": [
+   "bubbles",
+   "h2_beam_uM",
+   "h2_cell_uM",
+   "pH"
   ],
   "bsOn": false,
   "bsLayout": "two",

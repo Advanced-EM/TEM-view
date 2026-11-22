@@ -32,29 +32,29 @@ function slopeX(ph, c, dx, mask) {
 
 export const EXPERIMENTS = [
   {
-    id: 'E1', kind: 'liquid', title: 'Radiolysis threshold: when do bubbles form?',
-    setup(S, sim) { S.mode = 'tem'; S.spec = 'au'; S.fov = 40; chipState(S, sim, 'envCell', 'liquid'); S.lcClass = 'sinx'; S.lcGap = 500; S.lcDP = 0.5; S.lcRate = 0.5; },
-    timeline: [{ key: 'lcRate', t0: 10, t1: 70, to: 80 }], dur: 90, fps: 2,
+    id: 'E1', kind: 'liquid', title: 'Radiolysis: bubbles from the beam, or from a cell that fills with H₂?', question: 'Below the dose rate at which the beam itself supersaturates H₂, do bubbles still form in a static cell, and does flow prevent them?', obs: ['bubbles', 'h2_beam_uM', 'h2_cell_uM', 'pH'],
+    setup(S, sim) { S.mode = 'tem'; S.spec = 'au'; S.fov = 40; chipState(S, sim, 'envCell', 'liquid'); S.lcClass = 'sinx'; S.lcGap = 500; S.lcDP = 1; S.lcRate = 10; },
+    timeline: [{ key: 'lcRate', t0: 240, t1: 300, to: 200 }], dur: 300, fps: 1,
     variants: { static: (S) => { S.lcClass = 'sinx'; }, 'flow 2 µL/min': (S) => { S.lcClass = 'sinxFlow'; S.lcFlow = 2; } },
-    probe: (sim) => ({ bubbles: sim.liq?.bubbles.length ?? 0 }),
+    probe: (sim) => ({ bubbles: sim.liq?.bubbles.length ?? 0, h2_cell_uM: 1e6 * (sim.liq?.res ?? 0), h2_beam_uM: 1e6 * (sim.liq?.h2 ?? 0), pH: sim.liq?.pH ?? 7 }),
     summary(rows, S) {
-      const first = rows.find((r) => r.bubbles > 0), thr = LIQ.bubbleThresholdGy(S) / LIQ.doseRateGy(1, S.kV);
-      return { threshold_e_A2_s: +thr.toFixed(2), first_bubble_s: first?.t ?? null, rate_at_first_bubble: first ? +first.lcRate.toFixed(2) : null, bubbles_at_end: rows.at(-1).bubbles };
+      const first = rows.find((r) => r.bubbles > 0), thr = LIQ.bubbleThresholdGy(S) / LIQ.doseRateGy(1, S.kV), at = (t) => rows.reduce((b, r) => (Math.abs(r.t - t) < Math.abs(b.t - t) ? r : b));
+      return { beam_threshold_e_A2_s: +thr.toFixed(1), h2_saturation_uM: +(1e6 * LIQ.h2Sat(S)).toFixed(0), first_bubble_s: first?.t ?? null, rate_at_first_bubble: first ? +first.lcRate.toFixed(1) : null, h2_cell_uM_at_200s: +at(200).h2_cell_uM.toFixed(0), h2_beam_uM_at_100s: +at(100).h2_beam_uM.toFixed(0), pH_at_100s: +at(100).pH.toFixed(2), bubbles_at_end: rows.at(-1).bubbles };
     },
   },
   {
-    id: 'E2', kind: 'liquid', title: 'Gold growth from a precursor: growth rate against dose rate, below the bubble threshold',
+    id: 'E2', kind: 'liquid', title: 'Gold growth from a precursor: growth rate against dose rate, below the bubble threshold', question: 'How does the growth rate of gold particles depend on the dose rate?', obs: ['radius_A', 'bubbles', 'h2_cell_uM'],
     setup(S, sim) { S.mode = 'tem'; S.spec = 'au'; S.fov = 40; chipState(S, sim, 'envCell', 'liquid'); S.lcGap = 500; S.lcDP = 0.5; S.lcPrecursor = true; S.lcRate = 0.5; },
     timeline: [{ key: 'lcRate', t0: 30, t1: 31, to: 2 }], dur: 60, fps: 2,
     probe: (sim) => ({ r_A: P.SPECIMENS.au.parts[0].r - (P.SPECIMENS.au.grownBy ?? 0) + (sim.liq?.grow ?? 0), bubbles: sim.liq?.bubbles.length ?? 0 }), // the growth itself (the specimen is rebuilt in 0.5 Å steps)
     summary(rows) {
       const at = (t) => rows.reduce((b, r) => (Math.abs(r.t - t) < Math.abs(b.t - t) ? r : b));
       const g1 = (at(29.5).r_A - at(0).r_A) / 29.5, g2 = (at(59.5).r_A - at(32).r_A) / 27.5;
-      return { r_start_A: +rows[0].r_A.toFixed(2), r_end_A: +rows.at(-1).r_A.toFixed(2), growth_A_s_at_0_5: +g1.toFixed(3), growth_A_s_at_2: +g2.toFixed(3), ratio: +(g2 / g1).toFixed(2), sqrt_rate_ratio: 2, bubbles_at_end: rows.at(-1).bubbles };
+      return { r_start_A: +rows[0].r_A.toFixed(2), r_end_A: +rows.at(-1).r_A.toFixed(2), growth_A_s_at_0_5: +g1.toFixed(3), growth_A_s_at_2: +g2.toFixed(3), ratio: +(g2 / g1).toFixed(2), dose_rate_ratio: 4, bubbles_at_end: rows.at(-1).bubbles };
     },
   },
   {
-    id: 'E3', kind: 'gas + heating', title: 'Sintering of gold nanoparticles: oxygen versus nitrogen',
+    id: 'E3', kind: 'gas + heating', title: 'Sintering of gold nanoparticles: oxygen versus nitrogen', question: 'At what temperature do the particles start to coarsen, and does oxygen speed it up?', obs: ['T_K', 'radius_A', 'sinter_A', 'drift_A'],
     setup(S, sim) { S.mode = 'tem'; S.spec = 'au'; S.fov = 40; chipState(S, sim, 'holder', 'heat'); chipState(S, sim, 'envCell', 'gas'); chipState(S, sim, 'gcGeom', 'windowed'); S.gcP = 1000; S.gcGap = 5; },
     timeline: [{ key: 'tempSet', t0: 10, t1: 60, to: 800 }], dur: 180, fps: 1,
     variants: { O2: (S) => { S.gcGas = 'O2'; }, N2: (S) => { S.gcGas = 'N2'; } },
@@ -66,7 +66,7 @@ export const EXPERIMENTS = [
     },
   },
   {
-    id: 'E4', kind: 'gas (ETEM)', title: 'How much gas can the image take? A pressure ramp in an open column',
+    id: 'E4', kind: 'gas (ETEM)', title: 'How much gas can the image take? A pressure ramp in an open column', question: 'At what pressure does the image lose half its contrast?', obs: ['contrast', 'transmitted'],
     setup(S, sim) { S.mode = 'tem'; S.spec = 'au'; S.fov = 20; chipState(S, sim, 'envCell', 'gas'); chipState(S, sim, 'gcGeom', 'open'); S.gcGas = 'N2'; S.gcPath = 5; S.gcP = 0.1; },
     timeline: [{ key: 'gcP', t0: 5, t1: 65, to: 20 }], dur: 70, fps: 1,
     probe: (sim, S) => ({ c: contrast(sim.tem.img), trans: ENV.gasNow(S).col.transmitted }),
@@ -76,18 +76,17 @@ export const EXPERIMENTS = [
     },
   },
   {
-    id: 'E5', kind: 'gas + heating', title: 'Redox cycling of SrTiO₃: reduce in H₂, re-oxidise in O₂',
+    id: 'E5', kind: 'gas + heating', title: 'Redox cycling of SrTiO₃: reduce in H₂, re-oxidise in O₂', question: 'How fast is SrTiO₃ reduced in hydrogen and re-oxidised in oxygen at 800 K?', obs: ['T_K', 'xi'],
     setup(S, sim) { S.mode = 'eds'; S.spec = 'sto'; chipState(S, sim, 'holder', 'heat'); chipState(S, sim, 'envCell', 'gas'); S.gcGas = 'H2'; S.gcP = 1000; },
-    timeline: [{ key: 'tempSet', t0: 5, t1: 25, to: 800 }], dur: 120, fps: 1, movieMode: 'tem',
-    stages: [{ label: 'H₂, 1 bar', set: (S) => { S.gcGas = 'H2'; } }, { label: 'O₂, 1 bar (gas switched; the temperature holds)', set: (S) => { S.gcGas = 'O2'; S.timeline = []; S.tempSet = 800; } }],
-    probe: (sim) => ({ xi: sim.gasSt?.xi ?? 0 }),
+    timeline: [{ key: 'tempSet', t0: 5, t1: 25, to: 800 }, { key: 'gcGas', t0: 120, t1: 120, to: 'O2' }], dur: 240, fps: 1, movieMode: 'tem',
+    probe: (sim, S) => ({ xi: sim.gasSt?.xi ?? 0, gas: S.gcGas }),
     summary(rows) {
-      const t90 = (st, f) => { const r = rows.filter((q) => q.stage === st), hit = r.find((q) => f(q.xi)); return hit ? +(hit.t - r[0].t).toFixed(1) : null; };
-      return { xi_end_H2: +rows.filter((r) => r.stage === 0).at(-1).xi.toFixed(3), t_90pct_reduced_s: t90(0, (x) => x > 0.9), xi_end_O2: +rows.at(-1).xi.toFixed(3), t_90pct_reoxidised_s: t90(1, (x) => x < 0.1) };
+      const h = rows.filter((r) => r.t < 120), o = rows.filter((r) => r.t >= 120), t90 = (r, f) => { const hit = r.find((q) => f(q.xi)); return hit ? +(hit.t - r[0].t).toFixed(1) : null; };
+      return { xi_end_H2: +h.at(-1).xi.toFixed(3), t_90pct_reduced_s: t90(h, (x) => x > 0.9), switched_to: o[0]?.gas, xi_end_O2: +rows.at(-1).xi.toFixed(3), t_90pct_reoxidised_s: t90(o, (x) => x < 0.1) };
     },
   },
   {
-    id: 'E6', kind: 'heating', title: 'Helium bubbles in silicon: coarsening, escape and voids on annealing',
+    id: 'E6', kind: 'heating', title: 'Helium bubbles in silicon: coarsening, escape and voids on annealing', question: 'In what order, and at what temperatures, do implanted helium bubbles coarsen, lose their helium and become voids?', obs: ['T_K', 'cavities', 'cavity_d_nm', 'he_density', 'drift_A'],
     setup(S, sim) { S.mode = 'tem'; S.spec = 'hesi'; S.fov = 48; S.thick = 40; chipState(S, sim, 'holder', 'heat'); P.SPECIMENS.hesi.reset(); },
     timeline: [{ key: 'tempSet', t0: 20, t1: 220, to: 1100 }], dur: 600, fps: 1,
     probe: (sim) => { const sp = P.SPECIMENS.hesi, b = sp.bubbles(); return { n: b.length, d_nm: b.length ? (2 * b.reduce((v, q) => v + q.r, 0)) / b.length / 10 : 0, he: sp.heDensity(), stage: sp.stage() }; },
@@ -98,7 +97,7 @@ export const EXPERIMENTS = [
     },
   },
   {
-    id: 'E7', kind: 'biasing', title: 'Mapping the field across a biased gap by holography, then breaking it down',
+    id: 'E7', kind: 'biasing', title: 'Mapping the field across a biased gap by holography, then breaking it down', question: 'Does the holographic phase measure the voltage on the specimen?', obs: ['V_specimen', 'I_uA', 'phase_grad'],
     setup(S, sim) { S.mode = 'oah'; S.spec = 'sto'; S.thick = 100; S.fov = 5; Object.assign(S, { bsOn: true, bsLayout: 'two', bsGap: 2, bsMat: 'insulator', bsRc: 0, bsRs: 0, bsStray: false, bsV: 0, bsEbd: 30 }); },
     timeline: [{ key: 'bsV', t0: 2, t1: 22, to: 20 }], dur: 25, fps: 1,
     probe: (sim, S) => { const d = sim.oah.disp; return { slope: d ? slopeX(d.ph, d.c, d.dx, d.inOv) : 0, V: sim.biasSt?.op?.Vspec ?? 0 }; },
@@ -110,7 +109,7 @@ export const EXPERIMENTS = [
     },
   },
   {
-    id: 'E8', kind: 'liquid + biasing', title: 'Electrochemistry: deposit gold, then strip it',
+    id: 'E8', kind: 'liquid + biasing', title: 'Electrochemistry: deposit gold, then strip it', question: 'Can the electrode potential switch a gold particle between growth and dissolution?', obs: ['V_specimen', 'echem_A_s', 'radius_A'],
     setup(S, sim) { S.mode = 'tem'; S.spec = 'au'; S.fov = 40; Object.assign(S, { bsOn: true, bsMat: 'semi', bsRc: 0, bsRs: 0, bsLimit: 10000, bsV: 0 }); chipState(S, sim, 'envCell', 'liquid'); S.lcPrecursor = true; S.lcRate = 0.05; S.lcGap = 300; S.lcDP = 0.3; },
     timeline: [{ key: 'bsV', t0: 5, t1: 10, to: -0.3 }, { key: 'bsV', t0: 30, t1: 35, to: 0.7 }], dur: 60, fps: 2,
     probe: (sim) => ({ r_A: goldR(), rate: sim.biasSt?.echem?.rate ?? 0 }),
@@ -130,6 +129,7 @@ function run(E, variantName = null) {
   if (variantName) E.variants[variantName](S);
   sim.invalidate('env'); sim.update(0.02);
   S.movOn = true; S.movDur = E.dur; S.movFps = E.fps; S.timeline = structuredClone(E.timeline);
+  S.expName = `${E.id}${variantName ? ` (${variantName})` : ''}: ${E.title}`; S.expGoal = E.question ?? ''; S.expObs = [...(E.obs ?? [])];
   if (E.movieMode) S.mode = E.movieMode;
   const est = footprintFor(S, sim);
   const session = toSession(S, { note: `TEM-view in situ experiment ${E.id}${variantName ? ` (${variantName})` : ''}: ${E.title}. Load it, then press Record movie.` });

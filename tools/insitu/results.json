@@ -1,33 +1,37 @@
 {
  "E1": {
-  "title": "Radiolysis threshold: when do bubbles form?",
+  "title": "Radiolysis: bubbles from the beam, or from a cell that fills with H₂?",
   "kind": "liquid",
   "timeline": [
    {
     "key": "lcRate",
-    "t0": 10,
-    "t1": 70,
-    "to": 80
+    "t0": 240,
+    "t1": 300,
+    "to": 200
    }
   ],
   "movie": {
-   "duration_s": 90,
-   "fps": 2
+   "duration_s": 300,
+   "fps": 1
   },
   "runs": {
    "static": {
-    "threshold_e_A2_s": 6.69,
-    "first_bubble_s": 18.5,
-    "rate_at_first_bubble": 11.76,
+    "beam_threshold_e_A2_s": 108.7,
+    "h2_saturation_uM": 770,
+    "first_bubble_s": 144,
+    "rate_at_first_bubble": 10,
+    "h2_cell_uM_at_200s": 817,
+    "h2_beam_uM_at_100s": 710,
+    "pH_at_100s": 4.66,
     "bubbles_at_end": 12,
     "estimate": {
-     "frames": 180,
-     "raw": "5.63 GB",
-     "acquire": "90 s",
-     "dose_total_e_A2": 36000,
+     "frames": 300,
+     "raw": "9.38 GB",
+     "acquire": "5.0 min",
+     "dose_total_e_A2": 120000,
      "tier": "gpu",
      "shape": [
-      180,
+      300,
       4096,
       4096
      ]
@@ -35,18 +39,22 @@
     "session": "sessions/E1-static.json"
    },
    "flow 2 µL/min": {
-    "threshold_e_A2_s": 33.44,
-    "first_bubble_s": 37,
-    "rate_at_first_bubble": 36.27,
-    "bubbles_at_end": 12,
+    "beam_threshold_e_A2_s": 108.7,
+    "h2_saturation_uM": 770,
+    "first_bubble_s": 280,
+    "rate_at_first_bubble": 136.7,
+    "h2_cell_uM_at_200s": 0,
+    "h2_beam_uM_at_100s": 79,
+    "pH_at_100s": 4.69,
+    "bubbles_at_end": 6,
     "estimate": {
-     "frames": 180,
-     "raw": "5.63 GB",
-     "acquire": "90 s",
-     "dose_total_e_A2": 36000,
+     "frames": 300,
+     "raw": "9.38 GB",
+     "acquire": "5.0 min",
+     "dose_total_e_A2": 120000,
      "tier": "gpu",
      "shape": [
-      180,
+      300,
       4096,
       4096
      ]
@@ -73,11 +81,11 @@
   "runs": {
    "main": {
     "r_start_A": 21,
-    "r_end_A": 30.71,
-    "growth_A_s_at_0_5": 0.109,
-    "growth_A_s_at_2": 0.219,
-    "ratio": 2,
-    "sqrt_rate_ratio": 2,
+    "r_end_A": 25.79,
+    "growth_A_s_at_0_5": 0.044,
+    "growth_A_s_at_2": 0.117,
+    "ratio": 2.66,
+    "dose_rate_ratio": 4,
     "bubbles_at_end": 0,
     "estimate": {
      "frames": 120,
@@ -202,26 +210,33 @@
     "t0": 5,
     "t1": 25,
     "to": 800
+   },
+   {
+    "key": "gcGas",
+    "t0": 120,
+    "t1": 120,
+    "to": "O2"
    }
   ],
   "movie": {
-   "duration_s": 120,
+   "duration_s": 240,
    "fps": 1
   },
   "runs": {
    "main": {
     "xi_end_H2": 1,
     "t_90pct_reduced_s": 41,
+    "switched_to": "O2",
     "xi_end_O2": 0,
-    "t_90pct_reoxidised_s": 18,
+    "t_90pct_reoxidised_s": 17,
     "estimate": {
-     "frames": 120,
-     "raw": "3.75 GB",
-     "acquire": "2.0 min",
-     "dose_total_e_A2": 48000,
+     "frames": 240,
+     "raw": "7.50 GB",
+     "acquire": "4.0 min",
+     "dose_total_e_A2": 96000,
      "tier": "gpu",
      "shape": [
-      120,
+      240,
       4096,
       4096
      ]
@@ -351,9 +366,9 @@
   "runs": {
    "main": {
     "r_start_A": 21,
-    "r_max_A": 31,
-    "t_max_s": 30,
-    "r_end_A": 22.5,
+    "r_max_A": 30.5,
+    "t_max_s": 30.5,
+    "r_end_A": 20.5,
     "deposition_A_s": 0.42,
     "stripping_A_s": -0.42,
     "estimate": {

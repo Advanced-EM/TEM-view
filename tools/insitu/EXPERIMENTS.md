@@ -12,16 +12,44 @@ and writes [`results.json`](results.json):
 node tools/insitu/experiments.mjs          # all designs (about 5 min); or name them: … E3 E5
 ```
 
+**Design your own.** In the exhibit, turn on **In situ experiment** (below the specimen controls), then:
+1. *Start from* a blank design or any of E1–E8.
+2. Give the experiment a name and the question it answers.
+3. Tick what to measure each frame. Only the observables that apply to the cell, holder, chip, specimen and
+   technique in use are offered.
+4. Build the timeline. A ramp can drive temperature, gas pressure, bias voltage or the liquid dose rate, and a step
+   can switch the gas.
+5. Size the movie, and record. The observables plot live.
+
+**Save session** keeps the whole design. **Export data** writes the frames with one array per observable, the
+design, and the kinetics behind every process in play, with each parameter's source.
+
+**How far to trust the kinetics.** Every constant comes from a parameter table
+([`js/kinetics.js`](../../js/kinetics.js)) with a unit, an uncertainty, a source and a label:
+
+| Process | Label | Model |
+| --- | --- | --- |
+| Radiolysis | literature | A water-radiolysis reaction network: published yields and rate constants (Buxton et al. 1988; Schneider et al. 2014), diffusion out of the beam, a reservoir that fills in a static cell and is flushed in a flow cell, closed graphene pockets |
+| Bubbles | literature | Nucleate where H₂ exceeds its Henry solubility at the liquid's pressure |
+| Growth from a precursor | trend | Gold ions reduced by hydrated electrons from the network; the share that deposits on existing particles (η = 0.003) is a placeholder |
+| Sintering | trend | One Arrhenius rate; the ×2 in oxygen is established for platinum and unverified for gold |
+| Redox | trend | Relaxation to the gas's equilibrium at an Arrhenius rate |
+| Electrochemistry | trend | Butler–Volmer with a placeholder exchange rate |
+
+*Literature* means published parameters that have not yet been compared with in situ TEM data here. *Trend*
+means the value only reproduces a published trend. Treat results labelled *trend* as qualitative. The next step,
+calibrating against measured series, will add *calibrated* parameters with the dataset named.
+
 Holders, cells and chips are described by their physics (window material and size, gap, pressure, electrode
 layout), never by product names. Acquisition, export and processing follow [SOP HPC-09](../hpc/SOP.md#hpc-09-acquire-an-in-situ-campaign).
 
 | | Experiment | Environment | Technique | Movie | Full-scale data |
 | --- | --- | --- | --- | --- | --- |
-| [E1](#e1-radiolysis-threshold-when-do-bubbles-form) | Radiolysis threshold: when do bubbles form? | liquid (static vs flow) | TEM | 90 s, 2 fps | 5.6 GB per run |
+| [E1](#e1-radiolysis-bubbles-from-the-beam-or-from-a-cell-that-fills-with-h₂) | Radiolysis: bubbles from the beam, or from a cell that fills with H₂? | liquid (static vs flow) | TEM | 300 s, 1 fps | 9.4 GB per run |
 | [E2](#e2-gold-growth-against-dose-rate) | Gold growth against dose rate | liquid + precursor | TEM | 60 s, 2 fps | 3.8 GB |
 | [E3](#e3-sintering-of-gold-nanoparticles-oxygen-versus-nitrogen) | Sintering: oxygen versus nitrogen | windowed gas cell + heating | TEM | 180 s, 1 fps | 5.6 GB per run |
 | [E4](#e4-how-much-gas-can-the-image-take) | How much gas can the image take? | open column (ETEM) | TEM | 70 s, 1 fps | 2.2 GB |
-| [E5](#e5-redox-cycling-of-srtio₃) | Redox cycling of SrTiO₃ | windowed gas cell + heating | TEM, then EDS/EELS | 2 × 120 s, 1 fps | 3.8 GB per stage |
+| [E5](#e5-redox-cycling-of-srtio₃) | Redox cycling of SrTiO₃ | windowed gas cell + heating, gas switched | TEM, then EDS/EELS | 240 s, 1 fps | 7.5 GB |
 | [E6](#e6-helium-bubbles-in-silicon-on-annealing) | Helium bubbles in silicon on annealing | heating in vacuum | TEM | 600 s, 1 fps | 18.8 GB |
 | [E7](#e7-the-field-across-a-biased-gap-then-breakdown) | The field across a biased gap, then breakdown | biasing chip | off-axis holography | 25 s, 1 fps | 0.8 GB |
 | [E8](#e8-electrochemistry-deposit-gold-then-strip-it) | Electrochemistry: deposit gold, then strip it | liquid + biasing | TEM | 60 s, 2 fps | 3.8 GB |
@@ -37,60 +65,59 @@ total dose will not describe the experiment.
 
 ---
 
-## E1 Radiolysis threshold: when do bubbles form?
+## E1 Radiolysis: bubbles from the beam, or from a cell that fills with H₂?
 
-**Question:** at what dose rate does radiolysis make bubbles, and how much does flow raise that threshold?
+**Question:** below the dose rate at which the beam itself supersaturates H₂, do bubbles still form in a static cell,
+and does flow prevent them?
 
-- **Setup:** gold nanoparticles; SiNₓ static liquid cell, 50 × 200 µm windows, 500 nm spacer, 0.5 bar across the
-  windows; TEM at 40 nm field of view.
+- **Setup:** gold nanoparticles; SiNₓ liquid cell, 50 × 200 µm windows, 500 nm spacer, liquid at 1 bar; TEM at
+  40 nm field of view.
 - **Variants:** static cell, and flow cell at 2 µL/min (sessions `E1-static`, `E1-flow`).
-- **Timeline:** dose rate 0.5 e⁻/Å²/s for 10 s, ramped to 80 e⁻/Å²/s over 10–70 s, held to 90 s.
-- **Measure:** the time of the first bubble, and the dose rate then; the bubble count against time (watch the
-  liquid note, or count the bright discs in the exported frames).
+- **Timeline:** 10 e⁻/Å²/s held for 240 s, then ramped to 200 e⁻/Å²/s over 240–300 s.
+- **Measure (preselected):** bubbles in view; H₂ in the beam; H₂ in the rest of the cell; pH.
 
-**Expected (simulator):**
+**Expected:**
 
-| | Threshold (H₂ at its solubility) | First bubble | Dose rate then | Bubbles at 90 s |
+| | Beam's own threshold | H₂ in the cell at 200 s | First bubble | Dose rate then |
 | --- | --- | --- | --- | --- |
-| Static | 6.7 e⁻/Å²/s (30 MGy/s) | 18.5 s | 11.8 e⁻/Å²/s | 12 |
-| Flow, 2 µL/min | 33.4 e⁻/Å²/s | 37 s | 36.3 e⁻/Å²/s | 12 |
+| Static | 109 e⁻/Å²/s (H₂ reaches 770 µM) | 817 µM, supersaturated | 144 s | 10 e⁻/Å²/s |
+| Flow, 2 µL/min | 109 e⁻/Å²/s | 0 µM, flushed | 280 s | 137 e⁻/Å²/s |
 
-- Bubbles appear only above the threshold, and later than the moment it is crossed: nucleation is a random process
-  whose rate grows with the supersaturation.
-- Flow raises the threshold fivefold (refreshed liquid). Graphene pockets raise it a further 10× by scavenging
-  radicals.
+- At 10 e⁻/Å²/s the beam makes only 79 µM H₂ locally. But H₂ diffuses out into the static cell's liquid, which fills
+  until it is supersaturated: bubbles form after 2–3 minutes, far below the beam's own threshold.
+- Flow flushes that liquid. Bubbles then come only once the ramp passes the beam's threshold, and a little later
+  than the crossing, because nucleation is random.
+- The water in the beam is at pH 4.7, with more H₂O₂ than H₂.
 
 **Design notes:**
-- Ramp the dose rate rather than stepping it: one movie brackets the threshold.
-- Repeat each variant 3 times; the onset time scatters.
-- On a real instrument, start below 1 e⁻/Å²/s, and record the dose rate from the screen current at each step.
+- The delay depends on the cell's liquid volume (chip area × spacer) and the illuminated area (beam radius 1 µm).
+  Both are geometry parameters labelled *trend*: measure your cell's.
+- On a real instrument, start at low dose rate and record the time of the first bubble; repeat each variant 3 times.
 
 ## E2 Gold growth against dose rate
 
-**Question:** how does the growth rate of gold particles in a precursor solution depend on the dose rate, staying
-below the bubble threshold?
+**Question:** how does the growth rate of gold particles in a precursor solution depend on the dose rate?
 
-- **Setup:** as E1 (static cell), with gold ions in the liquid (**Gold precursor** on).
-- **Timeline:** 0.5 e⁻/Å²/s for 30 s, stepped to 2 e⁻/Å²/s at 30 s, held to 60 s. Both rates are below the
-  6.7 e⁻/Å²/s bubble threshold.
-- **Measure:** the particle radius against time in each half (the size readout, or fit the particles in the exported
-  frames); the growth rate in Å/s for each dose rate.
+- **Setup:** as E1 (static cell, 1 bar), with 1 mM gold ions in the liquid (**Gold precursor** on), 0.5 bar across
+  the windows.
+- **Timeline:** 0.5 e⁻/Å²/s for 30 s, stepped to 2 e⁻/Å²/s at 30 s, held to 60 s.
+- **Measure:** particle radius against time in each half; bubbles; H₂ in the cell.
 
 **Expected:**
 
 | | 0.5 e⁻/Å²/s | 2 e⁻/Å²/s |
 | --- | --- | --- |
-| Growth rate | 0.109 Å/s | 0.219 Å/s |
+| Growth rate | 0.044 Å/s | 0.117 Å/s |
 
-- The ratio is 2.0 = √(2/0.5): hydrated electrons, and so the reduction rate, follow the square root of the dose
-  rate.
-- The radius goes from 21.0 to 30.7 Å in 60 s, with no bubbles.
+- Four times the dose rate gives 2.7 times the growth. The gold ions capture most, but not all, of the hydrated
+  electrons, so growth rises less than in proportion to the dose rate, though faster than its square root.
+- The radius goes from 21 to 25.8 Å in 60 s, with no bubbles.
+- The absolute rate rests on the deposition share η (*trend*, a placeholder). The ratio between dose rates does not.
 
 **Design notes:**
-- Stay below the threshold (E1): bubbles push particles and change the local liquid thickness.
-- For the resolution side of liquid-cell imaging, compare *the particle sits on the entrance window* with *on the
-  exit window*: STEM resolves the entrance-window particle better, TEM (energy-filtered) the exit-window one.
-  `tools/liquid-check.mjs` quantifies it.
+- Keep below bubble formation (E1): bubbles push particles and change the liquid's thickness.
+- For the resolution side, compare *the particle sits on the entrance window* with *on the exit window*. STEM
+  resolves the first better, TEM (energy-filtered) the second (`tools/liquid-check.mjs`).
 
 ## E3 Sintering of gold nanoparticles: oxygen versus nitrogen
 
@@ -141,27 +168,25 @@ N₂ per molecule (its one heavy atom against N₂'s two light ones).
 
 **Question:** how fast is SrTiO₃ reduced in hydrogen and re-oxidised in oxygen at 800 K?
 
-- **Setup:** SrTiO₃; heating holder; windowed gas cell at 1 bar.
-- **Stage 1:** H₂; setpoint ramped from 293 K to 800 K over 5–25 s; held to 120 s.
-- **Stage 2:** switch the gas to O₂ (the temperature holds at 800 K); 120 s.
-- **Technique:** record a TEM movie for drift and morphology. At the end of each stage, take an EDS or EELS spectrum
-  for the oxygen content: the O K edge falls with the reduction, and the O/Ti ratio in EDS too.
-- **Measure:** the degree of reduction ξ against time (the gas note gives it live), and the time to 90 % reduction
-  and to 90 % re-oxidation.
+- **Setup:** SrTiO₃; heating holder; windowed gas cell at 1 bar, starting in H₂.
+- **Timeline:** setpoint 293 → 800 K over 5–25 s; at 120 s, switch the gas from H₂ to O₂ (a step in the timeline);
+  hold to 240 s.
+- **Technique:** a TEM movie for drift and morphology. At 120 s and at the end, take an EDS or EELS spectrum for the
+  oxygen content: the O K edge falls with reduction, and so does the O/Ti ratio in EDS.
+- **Measure:** temperature, and the degree of reduction ξ.
 
 **Expected:**
 
 | | End of stage | Time to 90 % |
 | --- | --- | --- |
-| Stage 1 (H₂) | ξ = 1.00 | 41 s from the start, including the ramp |
-| Stage 2 (O₂) | ξ = 0.00 | 18 s after the switch |
+| In H₂ | ξ = 1.00 | 41 s from the start, including the ramp |
+| After the switch to O₂ | ξ = 0.00 | 17 s |
 
-The kinetics are Arrhenius with an activation energy of 1.2 eV. At 1000 K the same cycle completes within a
-second, too fast for a 1 fps movie, which is why this design runs at 800 K.
+At 1000 K the same cycle completes within a second, too fast for a 1 fps movie, which is why this design runs at
+800 K. The kinetics are labelled *trend*.
 
-**Design notes:**
-- The timeline does not switch gases; switch at the stage boundary yourself, and note the time.
-- Purge-time on a real gas system is seconds to minutes: record it.
+**Design notes:** a real gas system needs seconds to minutes to purge. Record the switch time, and the time the
+new gas actually reaches the cell.
 
 ## E6 Helium bubbles in silicon on annealing
 
@@ -229,9 +254,10 @@ become voids?
 - **Measure:** the particle radius against time and potential, and the deposition and stripping rates.
 
 **Expected:**
-- Deposition at 0.42 Å/s takes the radius from 21 to 31 Å by 30 s.
-- Stripping at 0.42 Å/s takes it back to 22.5 Å by 60 s.
-- The rates follow Butler–Volmer kinetics: they rise exponentially with the overpotential.
+- Deposition at 0.42 Å/s takes the radius from 21 to 30.5 Å by 30 s.
+- Stripping at 0.42 Å/s takes it back to 20.5 Å by 60 s.
+- The rates follow Butler–Volmer kinetics: they rise exponentially with the overpotential. The exchange rate is
+  a placeholder (*trend*).
 
 **Design notes:**
 - Keep the imaging dose rate low, or radiolysis grows gold too (E2) and confounds the electrochemistry.

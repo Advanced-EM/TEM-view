@@ -1,6 +1,6 @@
 {
  "format": "tem-view-session/2",
- "saved": "2026-11-22T17:45:11.575Z",
+ "saved": "2026-11-22T18:37:48.209Z",
  "note": "TEM-view in situ experiment E7: Mapping the field across a biased gap by holography, then breaking it down. Load it, then press Record movie.",
  "technique": "oah",
  "mods": {},
@@ -58,6 +58,13 @@
     "t1": 22,
     "to": 20
    }
+  ],
+  "expName": "E7: Mapping the field across a biased gap by holography, then breaking it down",
+  "expGoal": "Does the holographic phase measure the voltage on the specimen?",
+  "expObs": [
+   "V_specimen",
+   "I_uA",
+   "phase_grad"
   ]
  },
  "state": {
@@ -176,6 +183,13 @@
     "t1": 22,
     "to": 20
    }
+  ],
+  "expName": "E7: Mapping the field across a biased gap by holography, then breaking it down",
+  "expGoal": "Does the holographic phase measure the voltage on the specimen?",
+  "expObs": [
+   "V_specimen",
+   "I_uA",
+   "phase_grad"
   ],
   "bsOn": true,
   "bsLayout": "two",

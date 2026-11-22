@@ -1,6 +1,6 @@
 {
  "format": "tem-view-session/2",
- "saved": "2026-11-22T17:45:13.806Z",
+ "saved": "2026-11-22T18:37:50.463Z",
  "note": "TEM-view in situ experiment E8: Electrochemistry: deposit gold, then strip it. Load it, then press Record movie.",
  "technique": "tem",
  "mods": {},
@@ -64,6 +64,13 @@
     "t1": 35,
     "to": 0.7
    }
+  ],
+  "expName": "E8: Electrochemistry: deposit gold, then strip it",
+  "expGoal": "Can the electrode potential switch a gold particle between growth and dissolution?",
+  "expObs": [
+   "V_specimen",
+   "echem_A_s",
+   "radius_A"
   ]
  },
  "state": {
@@ -188,6 +195,13 @@
     "t1": 35,
     "to": 0.7
    }
+  ],
+  "expName": "E8: Electrochemistry: deposit gold, then strip it",
+  "expGoal": "Can the electrode potential switch a gold particle between growth and dissolution?",
+  "expObs": [
+   "V_specimen",
+   "echem_A_s",
+   "radius_A"
   ],
   "bsOn": true,
   "bsLayout": "two",

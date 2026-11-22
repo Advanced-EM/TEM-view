@@ -14,8 +14,15 @@ export const QUANTITIES = {
   gcP: { label: 'Gas pressure', unit: 'mbar', min: 0.01, max: 2000, def: 100 },
   bsV: { label: 'Bias voltage', unit: 'V', min: -20, max: 20, def: 2 },
   lcRate: { label: 'Dose rate (liquid)', unit: 'e⁻/Å²/s', min: 0.01, max: 1000, def: 10 },
+  gcGas: { label: 'Gas (switch)', unit: '', choices: ['H2', 'O2', 'N2', 'CO', 'H2O', 'Ar'], def: 'O2' }, // a step at t0
 };
 export const FPS = [1, 2, 5, 10, 25, 50, 100];
+// the designed experiments (tools/insitu/EXPERIMENTS.md), as starting points for your own
+export const PRESETS = [
+  ['E1-static', 'E1 Radiolysis: bubbles in a static cell'], ['E1-flow', 'E1 Radiolysis: bubbles in a flow cell'], ['E2', 'E2 Gold growth against dose rate'],
+  ['E3-O2', 'E3 Sintering in oxygen'], ['E3-N2', 'E3 Sintering in nitrogen'], ['E4', 'E4 How much gas can the image take?'], ['E5', 'E5 Redox cycling of SrTiO₃'],
+  ['E6', 'E6 Helium bubbles in silicon on annealing'], ['E7', 'E7 The field across a biased gap'], ['E8', 'E8 Electrochemistry: deposit, then strip'],
+];
 export const MAX_FRAMES = 240; // kept in the browser; longer movies keep every k-th frame (the estimator sizes all)
 export const DRIFT_PER_KS = 0.05; // Å/s of drift per K/s of temperature ramp
 
@@ -24,6 +31,7 @@ export function valueAt(timeline, key, t, base) {
   let v = base;
   for (const s of (timeline ?? []).filter((x) => x.key === key).sort((a, b) => a.t0 - b.t0)) {
     if (t < s.t0) break;
+    if (QUANTITIES[key]?.choices) { v = s.to; continue; } // a switch: a step at t0
     const v0 = v;
     v = t >= s.t1 || s.t1 <= s.t0 ? s.to : v0 + ((s.to - v0) * (t - s.t0)) / (s.t1 - s.t0);
   }
@@ -32,7 +40,7 @@ export function valueAt(timeline, key, t, base) {
 // all timeline quantities at t
 export const envAt = (timeline, t, base) => Object.fromEntries(Object.keys(QUANTITIES).map((k) => [k, valueAt(timeline, k, t, base[k])]));
 // the rate of change of `key` at t (per s), from a small central difference
-export const rateAt = (timeline, key, t, base, h = 1e-3) => (valueAt(timeline, key, t + h, base) - valueAt(timeline, key, Math.max(0, t - h), base)) / (t > h ? 2 * h : h);
+export const rateAt = (timeline, key, t, base, h = 1e-3) => QUANTITIES[key]?.choices ? 0 : (valueAt(timeline, key, t + h, base) - valueAt(timeline, key, Math.max(0, t - h), base)) / (t > h ? 2 * h : h);
 
 // the plan of a movie: frames, the decimation for the browser, the frame interval
 export function moviePlan(duration_s, fps) {
@@ -42,5 +50,5 @@ export function moviePlan(duration_s, fps) {
 // a timeline as text, for notes and metadata
 export function describe(timeline) {
   if (!timeline?.length) return 'no environment changes';
-  return timeline.map((s) => `${QUANTITIES[s.key]?.label ?? s.key} → ${s.to} ${QUANTITIES[s.key]?.unit ?? ''} over ${s.t0}–${s.t1} s`).join('; ');
+  return timeline.map((s) => (QUANTITIES[s.key]?.choices ? `${QUANTITIES[s.key].label} to ${s.to} at ${s.t0} s` : `${QUANTITIES[s.key]?.label ?? s.key} → ${s.to} ${QUANTITIES[s.key]?.unit ?? ''} over ${s.t0}–${s.t1} s`)).join('; ');
 }

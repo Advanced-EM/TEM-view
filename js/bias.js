@@ -22,6 +22,7 @@
 // electrode potential drives gold deposition or dissolution (Butler–Volmer).
 
 import { fft2 } from './physics.js';
+import * as K from './kinetics.js';
 
 export const LAYOUTS = {
   two: { label: 'Two-terminal, parallel electrodes', sense: false },
@@ -178,9 +179,9 @@ const triangle = (x) => { const f = x - Math.floor(x); return f < 0.25 ? 4 * f :
 // electrochemistry under liquid: the working (left) electrode sits at +V/2 against the liquid; overpotential
 // η = E − E_eq drives deposition (η < 0, needs gold ions in the liquid) or dissolution (η > 0). Butler–Volmer with
 // α = ½ at T, as Å of particle radius per second, capped at ±3 Å/s
-export function electrochem(Vspec, T, precursor, Eeq = 0.1) {
-  const f = 96485 / (8.314 * T), eta = Vspec / 2 - Eeq;
-  let r = 0.003 * (Math.exp(-0.5 * f * eta) - Math.exp(0.5 * f * eta));
+export function electrochem(Vspec, T, precursor, Eeq = K.p('bv_Eeq')) {
+  const f = 96485 / (8.314 * T), eta = Vspec / 2 - Eeq, a = K.p('bv_alpha');
+  let r = K.p('bv_i0') * (Math.exp(-a * f * eta) - Math.exp((1 - a) * f * eta));
   if (r > 0 && !precursor) r = 0; // nothing to deposit
   return { eta, rate: Math.max(-3, Math.min(3, r)) };
 }

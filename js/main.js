@@ -18,6 +18,8 @@ import * as LIQ from './liquid.js';
 import * as GASX from './gas.js';
 import * as BIASX from './bias.js';
 import * as INSITU from './insitu.js';
+import * as KIN from './kinetics.js';
+import * as OBSX from './observables.js';
 import { evaluate, PROFILES, LIMIT_TEXT, capFor } from './resources.js';
 import { RemoteBackend } from './remote.js';
 import { buildBundle, readResults } from './bundle.js';
@@ -159,15 +161,44 @@ function gasNote() {
   if (S.gcGeom !== 'open') { const Pb = LIQ.burstPressure({ a: (S.lcA / 2) * 1e-6, b: (S.lcB / 2) * 1e-6, t: (S.envWinT ?? 30) * 1e-9 }) / 1e5; parts.push(`The windows bulge the path to ${(g.pathA / 1e4).toFixed(1)} µm (gap ${S.gcGap} µm); they burst at ${Pb.toFixed(1)} bar.`); }
   if (sim.temp() > 500) parts.push(`At ${Math.round(sim.temp())} K the gas reacts:${S.spec === 'au' ? ` the gold has sintered by ${(G?.sinter ?? 0).toFixed(1)} Å${S.gcGas === 'O2' ? ' (faster in oxygen)' : ''}.` : S.spec === 'sto' ? ` SrTiO₃ is ${Math.round(100 * (G?.xi ?? 0))} % reduced (oxygen vacancies; ${S.gcGas === 'H2' || S.gcGas === 'CO' ? 'reducing gas' : S.gcGas === 'O2' ? 're-oxidising in oxygen' : 'an inert gas holds it'}): watch the O K edge.` : ' choose gold or SrTiO₃ to see sintering or reduction.'}`);
   else parts.push('Heat it (heating holder) to drive reactions: gold sinters, SrTiO₃ loses oxygen in H₂ and takes it back in O₂.');
+  if (sim.temp() > 500) parts.push(`[sintering and redox: ${KIN.LABEL_TEXT.trend}${S.gcGas === 'O2' && S.spec === 'au' ? '; the faster sintering in oxygen is established for platinum, unverified for gold' : ''}]`);
   parts.push(`Tilt up to ±${ENVW.maxTilt(S)}°.`);
   return parts.join(' ');
+}
+// the experiment's observables: those that apply to this environment, specimen and technique (observables.js)
+function renderObsPick(el) {
+  const a = OBSX.applicable(S), sel = S.expObs?.length ? S.expObs : OBSX.suggested(S), sig = `${a.join()}|${sel.join()}`;
+  if (el.dataset.sig === sig) return;
+  el.dataset.sig = sig;
+  el.innerHTML = `<div class="row"><label>Measure each frame</label></div><div class="obsgrid">${a.map((k) => `<label class="obsitem"><input type="checkbox" value="${k}"${sel.includes(k) ? ' checked' : ''}> ${OBSX.OBSERVABLES[k].label}${OBSX.OBSERVABLES[k].unit ? ` <small>(${OBSX.OBSERVABLES[k].unit})</small>` : ''}</label>`).join('')}</div>`;
+  el.querySelectorAll('input').forEach((b) => b.addEventListener('change', () => { S.expObs = [...el.querySelectorAll('input:checked')].map((x) => x.value); renderObsPick(el); }));
+}
+// the observables against time while the movie records (each scaled to its own range)
+const OBS_COLORS = ['#6fd6ff', '#ffb45e', '#b59bff', '#7ee08a', '#ff7a90', '#e9edf2'];
+function drawObs(cv) {
+  const M = sim.movie, g = cv.getContext('2d'), W = cv.width, H = cv.height;
+  g.clearRect(0, 0, W, H); g.fillStyle = 'rgba(255,255,255,0.04)'; g.fillRect(0, 0, W, H);
+  if (!M?.meta.length) return;
+  const keys = Object.keys(M.meta[0].obs ?? {}).slice(0, 6), t1 = Math.max(M.plan.duration_s, 1e-6), X = (t) => 10 + (t / t1) * (W - 20);
+  g.font = '16px system-ui, sans-serif';
+  keys.forEach((k, i) => {
+    const v = M.meta.map((m) => m.obs?.[k]).filter((x) => x != null && isFinite(x)), lo = Math.min(...v), hi = Math.max(...v), span = hi - lo || Math.abs(hi) || 1, Y = (x) => H - 24 - ((x - lo) / span) * (H - 48);
+    g.strokeStyle = OBS_COLORS[i]; g.lineWidth = 2; g.beginPath();
+    M.meta.forEach((m, j) => { const x = m.obs?.[k]; if (x == null || !isFinite(x)) return; j ? g.lineTo(X(m.t), Y(x)) : g.moveTo(X(m.t), Y(x)); });
+    g.stroke();
+    const lab = `${OBSX.OBSERVABLES[k].label}: ${lo.toPrecision(3)}–${hi.toPrecision(3)} ${OBSX.OBSERVABLES[k].unit}`;
+    g.fillStyle = 'rgba(5,7,11,0.75)'; g.fillRect(8, 4 + 18 * i, g.measureText(lab).width + 8, 18);
+    g.fillStyle = OBS_COLORS[i]; g.fillText(lab, 12, 18 + 18 * i);
+  });
+  g.fillStyle = '#8a94a3'; g.fillText(`t = 0–${t1} s`, W - 110, H - 6);
 }
 // the movie's timeline: the ramps, each removable, and a row to add one
 function renderTimeline(el) {
   const tl = S.timeline ?? [], q = Object.entries(INSITU.QUANTITIES);
   el.innerHTML = `<div class="row"><label>Timeline (from the movie's start)</label></div>${tl.length ? tl.map((s, i) => `<div class="tlRow"><span>${INSITU.QUANTITIES[s.key].label} → ${s.to} ${INSITU.QUANTITIES[s.key].unit}, ${s.t0}–${s.t1} s</span><button class="btn tlDel" data-i="${i}" aria-label="Remove this ramp">✕</button></div>`).join('') : '<p class="note">No changes: the environment holds.</p>'}
     <div class="tlAddRow"><select class="tlKey">${q.map(([k, v]) => `<option value="${k}">${v.label} (${v.unit})</option>`).join('')}</select><input class="tlTo" type="number" step="any" value="${q[0][1].def}" aria-label="Target value"><input class="tlT0" type="number" min="0" step="any" value="0" aria-label="Start (s)"><input class="tlT1" type="number" min="0" step="any" value="${Math.round(S.movDur / 2)}" aria-label="End (s)"><button class="btn" data-act="tlAdd">Add ramp</button></div>`;
-  el.querySelector('.tlKey').addEventListener('change', (e) => { el.querySelector('.tlTo').value = INSITU.QUANTITIES[e.target.value].def; });
+  const setTo = (key) => { const Q = INSITU.QUANTITIES[key], old = el.querySelector('.tlTo'), nw = document.createElement(Q.choices ? 'select' : 'input'); nw.className = 'tlTo'; nw.setAttribute('aria-label', 'Target value'); if (Q.choices) nw.innerHTML = Q.choices.map((g) => `<option value="${g}">${g}</option>`).join(''); else { nw.type = 'number'; nw.step = 'any'; } nw.value = Q.def; old.replaceWith(nw); };
+  el.querySelector('.tlKey').addEventListener('change', (e) => setTo(e.target.value));
   el.querySelector('[data-act="tlAdd"]').addEventListener('click', (e) => action('tlAdd', e.target));
   el.querySelectorAll('.tlDel').forEach((b) => b.addEventListener('click', () => { S.timeline = tl.filter((_, i) => i !== +b.dataset.i); renderTimeline(el); }));
 }
@@ -192,7 +223,7 @@ function biasNote() {
   if (o.P > 1e-7) parts.push(`Joule heating ${(o.P * 1e3).toPrecision(2)} mW: +${B.dT.toFixed(1)} K.`);
   const g = sim.biasGrad(), b = sim.biasBeta();
   parts.push(`At the beam: phase gradient ${(Math.hypot(...g) * 1e4).toPrecision(2)} mrad/nm, deflection ${(Math.hypot(...b) * 1e6).toPrecision(2)} µrad${S.bsStray ? ' (mostly the stray field around the chip)' : ''}. Off-axis holography, Lorentz and DPC (4D-STEM centre of mass) read it; images move by Δf·β, patterns by β.`);
-  if (B.echem) parts.push(`Under liquid the working electrode sits at ${(o.Vspec / 2).toFixed(2)} V: ${B.echem.rate > 0.01 ? 'gold deposits' : B.echem.rate < -0.01 ? 'gold dissolves' : 'no net reaction'} (${B.echem.rate.toFixed(2)} Å/s).`);
+  if (B.echem) parts.push(`Under liquid the working electrode sits at ${(o.Vspec / 2).toFixed(2)} V: ${B.echem.rate > 0.01 ? 'gold deposits' : B.echem.rate < -0.01 ? 'gold dissolves' : 'no net reaction'} (${B.echem.rate.toFixed(2)} Å/s) [${KIN.LABEL_TEXT[KIN.PROCESS.electrochemistry.label]}].`);
   const ev = B.events.at(-1);
   if (ev) parts.push(`Last event: ${ev.event} at t = ${ev.t.toFixed(1)} s.`);
   parts.push(`Tilt up to ±${ENVW.maxTilt(S)}°.`);
@@ -224,8 +255,9 @@ function liquidNote() {
   const parts = [];
   if (c.pockets) parts.push(`Graphene traps the liquid in pockets ~${S.lcPocket} nm across and ~${Math.round(S.lcPocket / 4)} nm high: ${c.inPocket ? `${(c.thicknessA / 10).toFixed(0)} nm of liquid here` : 'no pocket here: move the stage to find one'}. No bulging; the best resolution, and graphene scavenges radicals.`);
   else parts.push(`Each window bows ${(c.w * 1e6).toFixed(2)} µm at its centre (stress ${(c.stress / 1e9).toFixed(2)} GPa; it bursts at ${(c.burstP / 1e5).toFixed(1)} bar). ${c.onWin ? `Liquid here: ${(c.thicknessA / 1e4).toFixed(2)} µm (spacer ${S.lcGap} nm + bulge).` : 'The stage is on the silicon frame: move onto the window.'}`);
-  const r = LIQ.h2Ratio(S, S.kV);
-  parts.push(`Radiolysis: H₂ at ${(100 * r * r).toFixed(0)} % of its solubility${r > 1 ? ` — bubbles form (${L?.bubbles.length ?? 0} in view)` : ''}${S.lcPrecursor ? `; the gold has grown ${(L?.grow ?? 0).toFixed(1)} Å` : ''}.`);
+  const rn = LIQ.radiolysisNow(S, S.kV, L?.res ?? 0), sat = rn.sat, thr = LIQ.bubbleThresholdGy(S, S.kV) / LIQ.doseRateGy(1, S.kV);
+  const fill = LIQ.reservoirRate(S, S.kV, L?.res ?? 0, n?.tA), toSat = fill > 0 && (L?.res ?? 0) < sat ? (sat - (L?.res ?? 0)) / fill : Infinity;
+  parts.push(`Radiolysis (${(rn.D / 1e6).toPrecision(2)} MGy/s): H₂ in the beam ${(1e6 * rn.ss.H2).toPrecision(2)} µM, ${(100 * rn.ss.H2 / sat).toFixed(0)} % of its solubility; pH ${(-Math.log10(rn.ss.Hp)).toFixed(1)}, H₂O₂ ${(1e6 * rn.ss.H2O2).toPrecision(2)} µM.${c.pockets ? ' The pocket is closed: its products stay in it.' : ` The rest of the cell holds ${(1e6 * (L?.res ?? 0)).toPrecision(2)} µM H₂${S.lcClass === 'sinxFlow' ? ', flushed by the flow' : isFinite(toSat) ? `, saturated in ~${toSat > 120 ? `${(toSat / 60).toFixed(0)} min` : `${toSat.toFixed(0)} s`} at this dose rate` : ''}. Bubbles at once above ${thr.toPrecision(2)} e⁻/Å²/s.`}${(L?.ratio ?? 0) > 1 ? ` Supersaturated: bubbles form (${L?.bubbles.length ?? 0} in view).` : ''}${S.lcPrecursor ? ` The gold has grown ${(L?.grow ?? 0).toFixed(1)} Å.` : ''} [${KIN.LABEL_TEXT[KIN.PROCESS.radiolysis.label]}${S.lcPrecursor ? `; growth: ${KIN.LABEL_TEXT[KIN.PROCESS.growth.label]}` : ''}]`);
   if (n?.tA > 0) {
     const tb = LIQ.temBlur(n.tA, n.below, S.kV, { Cc: (S.profile.Cc ?? 1.4) * 1e7, lambdaA: 10 * P.imfp(S.kV, 7.4) });
     parts.push(`Resolution: STEM ≈ ${Math.max(0.1, LIQ.stemBlur(n.above, S.kV)).toFixed(1)} nm (probe broadening above the particle), TEM ≈ ${S.lcFilter ? tb.elastic.toFixed(1) : Math.max(tb.elastic, tb.chromatic * tb.inelasticShare).toFixed(1)} nm (${S.lcFilter ? 'zero loss only' : `${Math.round(100 * tb.inelasticShare)} % of the electrons lost energy: chromatic blur`}). Tilt up to ±${ENVW.maxTilt(S)}°.`);
@@ -519,11 +551,14 @@ const CONTROLS = [
   { pFn: () => biasNote(), show: () => S.bsOn },
   { buttons: [['newChip', 'Load a new chip']], show: () => S.bsOn },
   // an in situ movie (insitu.js): frames over time with drift, and a timeline of environment changes
-  { toggles: [['movOn', 'In situ movie (record a time series; the estimate covers the full movie)']], modes: 'tem stem diff cbed ronch oah ltem lstem' },
+  { toggles: [['movOn', 'In situ experiment (design it, record a movie; the estimate covers the full movie)']], modes: 'tem stem diff cbed ronch oah ltem lstem' },
+  { expDesign: true, modes: 'tem stem diff cbed ronch oah ltem lstem', show: () => S.movOn },
   { slider: 'movDur', label: 'Movie length', min: 1, max: 600, log: true, fmt: (v) => `${Math.round(v)} s`, modes: 'tem stem diff cbed ronch oah ltem lstem', show: () => S.movOn },
   { chips: 'movFps', label: 'Frames per second', small: true, modes: 'tem stem diff cbed ronch oah ltem lstem', show: () => S.movOn, opts: INSITU.FPS.map((f) => [f, `${f}`]) },
+  { obsPick: true, modes: 'tem stem diff cbed ronch oah ltem lstem', show: () => S.movOn },
   { timeline: true, modes: 'tem stem diff cbed ronch oah ltem lstem', show: () => S.movOn },
   { buttons: [['movRec', 'Record movie'], ['movStop', 'Stop'], ['movDiscard', 'Discard movie']], modes: 'tem stem diff cbed ronch oah ltem lstem', show: () => S.movOn },
+  { obsPlot: true, modes: 'tem stem diff cbed ronch oah ltem lstem', show: () => S.movOn && !!sim.movie?.meta.length },
   { pFn: () => movieNote(), modes: 'tem stem diff cbed ronch oah ltem lstem', show: () => S.movOn },
   { slider: 'tempSet', label: 'Temperature setpoint', dyn: () => { const H = HOLDERS[S.holder]; return { min: H.min, max: H.max, step: H.step, log: H.log }; }, fmt: (v) => fmtT(v), show: () => S.holder !== 'room' },
   { pFn: () => `Specimen at ${fmtT(sim.temp())}${S.holder === 'room' ? '' : ` (setpoint ${fmtT(S.tempSet)}; the grid runs ${S.holder === 'heat' ? 'about 1 % hotter than the reading' : 'warmer than the holder tip'} and fluctuates by ±${HOLDERS[S.holder].jitter} K)`}. Drift ${sim.driftSpeed().toFixed(2)} Å/s.` },
@@ -856,6 +891,31 @@ function build() {
       const ui = specimenUI();
       if (c.specGrid) ui.grid(el); else if (c.specView) ui.card(el); else ui.info(el);
       bound.push({ c, el });
+    } else if (c.expDesign) {
+      el = document.createElement('div');
+      el.className = 'ctl expdesign';
+      el.innerHTML = `<div class="row"><label>Start from</label></div><select class="expPreset"><option value="">Your own design (keep the current settings)</option>${INSITU.PRESETS.map(([f, t]) => `<option value="${f}">${t}</option>`).join('')}</select>
+        <div class="row"><label>Experiment name</label></div><input class="expName" type="text" maxlength="80" placeholder="e.g. Pt sintering in 10 mbar O₂">
+        <div class="row"><label>The question it answers</label></div><textarea class="expGoal" rows="2" maxlength="400" placeholder="e.g. At what temperature do the particles start to coarsen?"></textarea>`;
+      const nm = el.querySelector('.expName'), gl = el.querySelector('.expGoal');
+      nm.value = S.expName; gl.value = S.expGoal;
+      nm.addEventListener('input', () => { S.expName = nm.value; });
+      gl.addEventListener('input', () => { S.expGoal = gl.value; });
+      el.querySelector('.expPreset').addEventListener('change', async (e) => {
+        const f = e.target.value; if (!f) return;
+        try { const txt = await fetch(new URL(`../tools/insitu/sessions/${f}.json`, import.meta.url)).then((r) => { if (!r.ok) throw new Error(r.status); return r.text(); }); loadSessionFile(txt); S.movOn = true; sim.discardMovie?.(); nm.value = S.expName; gl.value = S.expGoal; refreshControls(); }
+        catch (err) { voice.flash(`<b>Could not load ${f}</b><p>${String(err.message ?? err)}</p>`, 5000); }
+      });
+      bound.push({ c, el });
+    } else if (c.obsPick) {
+      el = document.createElement('div');
+      el.className = 'ctl obspick';
+      bound.push({ c, el });
+    } else if (c.obsPlot) {
+      el = document.createElement('canvas');
+      el.className = 'ctl ivplot obsplot'; el.width = 560; el.height = 220;
+      el.setAttribute('aria-label', 'The experiment’s observables against time');
+      bound.push({ c, el });
     } else if (c.timeline) {
       el = document.createElement('div');
       el.className = 'ctl timeline';
@@ -1039,7 +1099,7 @@ function action(id, el) {
   if (id === 'movRec') { sim.startMovie(); refreshControls(); return; }
   if (id === 'movStop') { sim.stopMovie(); refreshControls(); return; }
   if (id === 'movDiscard') { sim.discardMovie(); refreshControls(); return; }
-  if (id === 'tlAdd') { const r = el.closest('.timeline'), q = (s) => r.querySelector(s).value; const key = q('.tlKey'), t0 = Math.max(0, +q('.tlT0')), t1 = Math.max(t0, +q('.tlT1')), Q = INSITU.QUANTITIES[key]; const to = Math.min(Q.max, Math.max(Q.min, +q('.tlTo'))); if (isFinite(to)) S.timeline = [...(S.timeline ?? []), { key, t0, t1, to }].sort((a, b) => a.t0 - b.t0); renderTimeline(r); return; }
+  if (id === 'tlAdd') { const r = el.closest('.timeline'), q = (s) => r.querySelector(s).value; const key = q('.tlKey'), t0 = Math.max(0, +q('.tlT0')), t1 = Math.max(t0, +q('.tlT1')), Q = INSITU.QUANTITIES[key]; const to = Q.choices ? q('.tlTo') : Math.min(Q.max, Math.max(Q.min, +q('.tlTo'))); if (Q.choices || isFinite(to)) S.timeline = [...(S.timeline ?? []), { key, t0, t1, to }].sort((a, b) => a.t0 - b.t0); renderTimeline(r); return; }
   if (id === 'newChip') { sim.resetBias(); refreshControls(); return; }
   if (id === 'newCell') { sim.resetLiquid(); sim.resetGas(); S.paused = false; refreshControls(); return; }
   if (id === 'exportProfile') download(new Blob([JSON.stringify(S.profile, null, 1)], { type: 'application/json' }), `instrument-profile-${S.profile.preset}.json`);
@@ -1947,6 +2007,8 @@ function frame(now) {
       if (vis) b.el.textContent = b.c.pFn();
     }
     for (const b of bound) if (b.c.ivPlot && !b.el.hidden) drawIV(b.el);
+    for (const b of bound) if (b.c.obsPlot) { const vis = (!b.el.dataset.modes || b.el.dataset.modes.split(' ').includes(S.mode)) && b.c.show(); b.el.hidden = !vis; if (vis) drawObs(b.el); }
+    for (const b of bound) if (b.c.obsPick && !b.el.hidden) renderObsPick(b.el);
     if (['eds', '4d', 'eels', 'stem', 'ronch', 'cbed', 'oah', 'ilh', 'ltem', 'lstem', 'ed3d', 'tomo', 'spa', 'ptychotomo'].includes(S.mode)) renderInfo();
     $('#status').textContent = `· ${fps} fps`;
   }

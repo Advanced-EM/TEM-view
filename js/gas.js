@@ -9,6 +9,7 @@
 // (Egerton). A fraction 1 − e^(−nσL) of the beam is scattered: the image keeps e^(−nσL) of its contrast and the rest
 // becomes a diffuse background. Reactions with gas and heat are simple rate laws: gold particles sinter (grow) when
 // hot, a perovskite loses oxygen in hydrogen and takes it back in oxygen.
+import * as K from './kinetics.js';
 const KB = 1.380649e-23;
 
 // molecules: atoms (Z, element) and gas-phase EELS edges: their onset (below the solid's: the sharp π* peaks, O₂ at
@@ -57,7 +58,7 @@ export function bulgedPath(cell, deflect, S) {
 export function react(st, S, T, dt) {
   const pBar = S.gcP / 1000, k = (Ea) => Math.exp(-Ea / (8.617e-5 * T));
   const eq = S.gcGas === 'H2' || S.gcGas === 'CO' ? 1 : S.gcGas === 'O2' ? 0 : st.xi;
-  st.xi += (eq - st.xi) * Math.min(1, 4e6 * k(1.2) * Math.sqrt(pBar) * dt);
-  if (T > 600) st.sinter = Math.min(20, st.sinter + 6e4 * k(1.0) * (S.gcGas === 'O2' ? 2 : 1) * dt);
+  st.xi += (eq - st.xi) * Math.min(1, K.p('redox_A') * k(K.p('redox_Ea')) * Math.sqrt(pBar) * dt);
+  if (T > 600) st.sinter = Math.min(20, st.sinter + K.p('sinter_A') * k(K.p('sinter_Ea')) * (S.gcGas === 'O2' ? K.p('sinter_O2') : 1) * dt);
   return st;
 }
