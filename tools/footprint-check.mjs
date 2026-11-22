@@ -106,5 +106,12 @@ for (const m of MODE_IDS) {
   ok(s.critical_dose_e_per_A2 > 0 && s.dose_over_critical > 1, `proteins in ice at 60 e⁻/Å²: ${s.dose_over_critical}× the critical dose ${s.critical_dose_e_per_A2} e⁻/Å²`);
 }
 
+// WebGPU (M8): a 256³ SIRT series runs in the browser with WebGPU, not in plain JS
+{
+  const plan = { scan: 256, bits: 16, dwell_us: 10, current_pA: 50, tilts: 71, recon: 'sirt', iters: 20 };
+  const js = footprint('tomo', plan, ctx()), gp = footprint('tomo', plan, ctx({ webgpu: true }));
+  ok(js.badge.tier !== 'browser' && gp.badge.tier === 'browser' && /WebGPU/.test(gp.badge.label), `256³ SIRT: ${js.badge.label} in JS (${js.time.process_s.browser.toFixed(0)} s), ${gp.badge.label} (${gp.time.process_s.browser.toFixed(1)} s)`);
+}
+
 console.log(fails ? `${fails} FAILED` : 'all passed');
 process.exit(fails ? 1 : 0);

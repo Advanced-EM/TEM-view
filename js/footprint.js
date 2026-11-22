@@ -20,16 +20,17 @@
 //   compression       sparse counting data (< 1 e⁻ per pixel per frame) 3–10×, dense data 1.2–2×
 //   tomography        a tilt series of scans: tilts·N²·B; volume N³ float32 (N = scan); WBP ≈ tilts·N³·4 flop,
 //                     SIRT ≈ iterations·tilts·N³·8 (a projection and a back-projection per iteration)
-//   badge (first match)  browser: working set ≤ 512 MB and processing ≤ 60 s; local GPU: ≤ the worker's memory
-//                     and ≤ 2 h; HPC otherwise
+//   badge (first match)  browser: working set ≤ 512 MB and processing ≤ 60 s (with WebGPU, ctx.webgpu: ≤ 1.5 GB at
+//                     the WebGPU rate); local GPU: ≤ the worker's memory and ≤ 2 h; HPC otherwise
 import { beamThickness } from './structure.js';
 
 export const E_CHARGE = 1.602176634e-19;
 export const BROWSER_BYTES = 512 * 2 ** 20;
+export const WEBGPU_BYTES = 1.5 * 2 ** 30; // with WebGPU and a large-buffer adapter (gpu.js)
 export const BROWSER_SECONDS = 60;
 export const GPU_SECONDS = 2 * 3600;
 export const DEFAULT_VRAM = 24 * 2 ** 30; // assumed when no GPU worker is connected
-export const RATE = { browser: 1e9, gpu: 5e12 }; // sustained flop/s for FFT-heavy loops (order of magnitude)
+export const RATE = { browser: 1e9, webgpu: 1e11, gpu: 5e12 }; // sustained flop/s for FFT-heavy loops (order of magnitude; webgpu: gpu.js on a laptop GPU)
 export const STREAM = { browser: 200e6, gpu: 20e9 }; // bytes/s for one pass over the data (virtual detectors)
 const EVENT_BYTES = 6;
 
@@ -176,7 +177,7 @@ export function footprint(technique, plan, ctx) {
   const sparse = eventsPerPixelFrame < 1;
   f.compressed = { bytes: sparse ? [raw / 10, raw / 3] : [raw / 2, raw / 1.2], ratio: sparse ? [3, 10] : [1.2, 2], sparse };
   f.working = { bytes: parts.reduce((s, [, b]) => s + b, 0), parts: parts.map(([name, bytes]) => ({ name, bytes })) };
-  const proc = (t) => procFlops / RATE[t] + procBytes / STREAM[t];
+  const proc = (t) => procFlops / (t === 'browser' && ctx.webgpu ? RATE.webgpu : RATE[t]) + procBytes / STREAM[t];
   f.time.process_s = { browser: proc('browser'), gpu: proc('gpu') };
 
   // dose against the specimen's critical dose
@@ -188,17 +189,18 @@ export function footprint(technique, plan, ctx) {
 
   if (ctx.thickness_A) f.specimen = { thickness_A: ctx.thickness_A, tau: ctx.tau ?? null };
   if (ctx.tau > 1) f.notes.push(`t/λ ≈ ${ctx.tau.toFixed(2)} along the beam: plural scattering dominates; spectra and phase need a thinner region`);
-  f.badge = badge(f, ctx.vram_bytes);
+  f.badge = badge(f, ctx.vram_bytes, ctx.webgpu);
   return f;
 }
 
 // where the analysis can run, with the reason (first match)
-export function badge(f, vram) {
+export function badge(f, vram, webgpu = false) {
   const w = f.working.bytes, tb = f.time.process_s.browser, tg = f.time.process_s.gpu;
   const mem = vram ?? DEFAULT_VRAM, assumed = vram ? '' : ' (no GPU worker connected; assuming 24 GB)';
   const big = f.working.parts.reduce((a, b) => (b.bytes > a.bytes ? b : a), { bytes: 0, name: '' });
-  if (w <= BROWSER_BYTES && tb <= BROWSER_SECONDS) return { tier: 'browser', label: 'In browser', reason: `working set ${fmtBytes(w)} within the ${fmtBytes(BROWSER_BYTES)} browser budget, about ${fmtTime(tb)} to process` };
-  const why = w > BROWSER_BYTES ? `${big.name} ${fmtBytes(big.bytes)} exceeds the ${fmtBytes(BROWSER_BYTES)} browser budget` : `about ${fmtTime(tb)} to process in the browser (limit ${BROWSER_SECONDS} s)`;
+  const budget = webgpu ? WEBGPU_BYTES : BROWSER_BYTES, gl = webgpu ? ' (WebGPU)' : '';
+  if (w <= budget && tb <= BROWSER_SECONDS) return { tier: 'browser', label: `In browser${gl}`, reason: `working set ${fmtBytes(w)} within the ${fmtBytes(budget)} browser budget${gl}, about ${fmtTime(tb)} to process` };
+  const why = w > budget ? `${big.name} ${fmtBytes(big.bytes)} exceeds the ${fmtBytes(budget)} browser budget${gl}` : `about ${fmtTime(tb)} to process in the browser (limit ${BROWSER_SECONDS} s)`;
   if (w <= mem && tg <= GPU_SECONDS) return { tier: 'gpu', label: 'Local GPU', reason: `${why}; fits ${fmtBytes(mem)} of GPU memory${assumed}, about ${fmtTime(tg)}` };
   return { tier: 'hpc', label: 'HPC batch', reason: w > mem ? `working set ${fmtBytes(w)} exceeds ${fmtBytes(mem)} of GPU memory${assumed}` : `about ${fmtTime(tg)} on a GPU (limit 2 h)` };
 }
@@ -210,6 +212,7 @@ export function contextFor(S, sim, extra = {}) {
     field_A: lor ? S.lorFov * 1e4 : sim.fovA(),
     dose: S.dose, current_pA: S.eelsCurrent, lambda_A: sim.lam, alpha_mrad: S.mode === '4d' ? S.alpha4d : S.alpha,
     Dc: sim.spec?.beamSensitive && !lor ? sim.critDose() : null,
+    webgpu: S.gpu !== 'off' && !!sim.compute?.gpu, // the exhibit's worker has WebGPU (gpu.js)
     ...(() => { const b = beamThickness(S, sim); return { thickness_A: b.t_A, tau: b.tau }; })(), // along the beam, with the tilt
     ...extra,
   };

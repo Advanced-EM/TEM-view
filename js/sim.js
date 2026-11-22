@@ -16,6 +16,7 @@ import { buildStructure } from './structure.js';
 import { HOLDERS, specimenT, u2Ratio, thermalStrain, radiolysisFactor, iceSublimation, DEVITRIFY_K } from './holder.js';
 
 const SP = P.SPECIMENS;
+const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 export const AP_MRAD = { none: Infinity, 40: 12, 20: 6, 10: 3, df: 2.5, zpp: Infinity };
@@ -657,7 +658,7 @@ export class Sim {
       pedJob = { ramps, back, phi: ped.phi, steps: M, descan: ped.descan };
       this.fd.ped = pedJob;
     }
-    this.fdTask = this.compute.run({ kind: 'fd-scan', geom: this.fd.geom, slices, prop, pr: sr, pi: si, ...(pedJob ? { ped: { ramps: pedJob.ramps, back: pedJob.back } } : {}) }, { data: this.fd.data });
+    this.fdTask = this.compute.run({ kind: 'fd-scan', geom: this.fd.geom, slices, prop, pr: sr, pi: si, gpu: S.gpu !== 'off', ...(pedJob ? { ped: { ramps: pedJob.ramps, back: pedJob.back } } : {}) }, { data: this.fd.data });
     this.stale.vimg = 1;
   }
   // Scripts step the simulation in a synchronous loop, in which worker results cannot arrive: take what the worker
@@ -802,7 +803,7 @@ export class Sim {
     ph.name = st.name; ph.notes = st.notes; ph.empty = !ph.vol.some((v) => v > 0);
     return ph;
   }
-  tomoRecKey() { const S = this.S; return JSON.stringify([this.tomo?.acqKey, S.tomoRecon, S.tomoRecon === 'sirt' ? S.tomoIter : S.tomoFilter, S.tomoAlign]); }
+  tomoRecKey() { const S = this.S; return JSON.stringify([this.tomo?.acqKey, S.tomoRecon, S.tomoRecon === 'sirt' ? S.tomoIter : S.tomoFilter, S.tomoAlign, S.gpu]); }
   stepTomo(dt) {
     const S = this.S, phKey = JSON.stringify([this.spec.zoneKey ?? S.spec, S.tomoPhantom, S.tomoN, ...(S.tomoPhantom === 'beads' ? [] : [S.thick, S.fov, S.cx, S.cy, this.spec.damageVer ?? 0])]);
     let T = this.tomo;
@@ -834,7 +835,7 @@ export class Sim {
       const before = T.rec.iter, x0 = T.rec.x;
       T.task.pump(S.paused ? 0 : 12);
       if (T.rec.iter !== before || T.rec.x !== x0) { this.tomoStats(); this.version++; }
-      if (T.task.finished && !T.task.queue?.length) T.taskDone = true;
+      if (T.task.finished && !T.task.queue?.length) { T.taskDone = true; T.recMs = now() - T.recT0; }
     }
   }
   tomoSeries() { const T = this.tomo, o = T.o; return TOMO.seriesInit({ ph: T.ph, angles: T.angles, signal: o.signal, dosePerImage: o.dose / T.angles.length, Dc: o.Dc ?? Infinity, jitter: o.jitter, seed: 7 + (T.runs ?? 0) }); }
@@ -854,9 +855,10 @@ export class Sim {
     let ser = TOMO.seriesData(T.ser);
     if (S.tomoAlign) ser = TOMO.alignCOM(ser);
     T.rec = {}; T.recKey = this.tomoRecKey(); T.taskDone = false; T.stats = null;
-    T.job = { kind: 'tomo', method: S.tomoRecon, filter: S.tomoFilter, iterations: S.tomoIter, ser };
+    T.job = { kind: 'tomo', method: S.tomoRecon, filter: S.tomoFilter, iterations: S.tomoIter, ser, gpu: S.gpu !== 'off' };
+    T.recT0 = now(); T.recMs = null;
     T.task = (instant ? new InlineBackend() : this.compute).run(T.job, { out: T.rec });
-    if (instant) { while (!T.task.finished) T.task.pump(Infinity); T.taskDone = true; this.tomoStats(); }
+    if (instant) { while (!T.task.finished) T.task.pump(Infinity); T.taskDone = true; T.recMs = now() - T.recT0; this.tomoStats(); }
     this.version++;
   }
   // quality: correlation with the phantom; for the test beads, the elongation along the beam against the

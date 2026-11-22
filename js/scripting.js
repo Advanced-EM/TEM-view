@@ -35,7 +35,7 @@ const SETTINGS = {
   lorentz_fov_um: 'field of view in µm (Lorentz modes)', film_thickness_nm: 'magnetic film thickness', field_mT: 'objective-lens field along the beam',
   divergence_urad: 'illumination divergence (ltem)', foucault: '+x, -x, +y, -y: the deflection the Foucault aperture passes', dpc_view: 'color, x, y, sum (lstem)',
   probe_urad: 'Lorentz-STEM probe semi-angle',
-  tomo_object: 'specimen or beads (gold test beads)', tomo_volume: '64, 96 or 128 voxels per side', tomo_signal: 'haadf or bf', tomo_scheme: 'linear or saxton', tomo_max_tilt_deg: 'maximum tilt, 20–80°', tomo_step_deg: 'tilt step (at 0° for saxton)',
+  tomo_object: 'specimen or beads (gold test beads)', tomo_volume: '64, 96, 128 or 256 voxels per side (256: WebGPU in the exhibit; slow in JS)', tomo_signal: 'haadf or bf', tomo_scheme: 'linear or saxton', tomo_max_tilt_deg: 'maximum tilt, 20–80°', tomo_step_deg: 'tilt step (at 0° for saxton)',
   tomo_dose: 'e⁻/Å² for the whole series', tomo_jitter_px: 'rms stage shift between tilts', tomo_align: 'True: centre-of-mass alignment', tomo_method: 'wbp or sirt', tomo_filter: 'ramp or hann (wbp)', tomo_iterations: 'SIRT iterations', tomo_view: 'series, xy, xz or yz', tomo_slice: 'slice position, −0.5–0.5 of the box',
   ed_method: 'cred, step, pedt (3D ED)', ed_range_deg: '[start, end] of the rotation (±70°)', ed_speed_deg_s: 'rotation speed (cred)', ed_fps: 'frame rate (cred)', ed_step_deg: 'tilt step (stills)', ed_exposure_s: 'exposure per still', ed_dose_rate: 'e⁻/Å²/s', ed_axis_deg: 'rotation axis in the image plane', ed_merge: 'friedel or laue',
   zone_axis: '[u, v, w] of the crystal along the beam (SrTiO₃, Au, Si, perovskites), or None for the specimen as built',

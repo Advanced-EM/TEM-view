@@ -1,0 +1,114 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>GPU check</title>
+<!-- WebGPU kernels (js/gpu.js) against the JS reference kernels; run by tools/gpu-check.mjs in headless Chromium.
+     ?big=1 also times 256³ tomography. The result is in window.__result (and printed on the page). -->
+<pre id="log">running…</pre>
+<script type="module">
+import { createGPU } from '../js/gpu.js';
+import * as K from '../js/kernels.js';
+import * as TOMO from '../js/tomo.js';
+import { WorkerBackend, InlineBackend } from '../js/compute.js';
+
+const q = new URLSearchParams(location.search), checks = [], lines = [];
+const log = (s) => { lines.push(s); document.getElementById('log').textContent = lines.join('\n'); };
+const check = (name, ok, detail) => { checks.push({ name, ok, detail }); log(`${ok ? 'ok  ' : 'FAIL'} ${name}  ${detail}`); };
+// worst |a − b| relative to the largest |b|
+const relErr = (a, b) => { let d = 0, m = 0; for (let i = 0; i < b.length; i++) { d = Math.max(d, Math.abs(a[i] - b[i])); m = Math.max(m, Math.abs(b[i])); } return d / (m || 1); };
+const rng = K.mulberry32(11);
+const t0 = () => performance.now();
+
+async function run() {
+  const g = await createGPU();
+  if (!g) { window.__result = { gpu: null, checks: [], ok: q.has('allowNoGPU') }; log('no WebGPU adapter'); return; }
+  log(`adapter: ${g.label}; max buffer ${(g.limits.maxBuffer / 2 ** 20).toFixed(0)} MB, binding ${(g.limits.maxBinding / 2 ** 20).toFixed(0)} MB`);
+
+  // ---- FFT: batched, both directions, against kernels.fft2 (Float64)
+  for (const [n, batch] of [[8, 1], [64, 3], [256, 2]]) {
+    const re = new Float64Array(batch * n * n).map(() => rng() - 0.5), im = new Float64Array(batch * n * n).map(() => rng() - 0.5);
+    for (const inv of [false, true]) {
+      const r = await g.fft2(re, im, n, inv, batch), rr = re.slice(), ri = im.slice();
+      for (let b = 0; b < batch; b++) { const a = rr.subarray(b * n * n, (b + 1) * n * n), c = ri.subarray(b * n * n, (b + 1) * n * n); K.fft2(a, c, n, inv); }
+      const e = Math.max(relErr(r.re, rr), relErr(r.im, ri));
+      check(`FFT ${n}² ×${batch} ${inv ? 'inverse' : 'forward'}`, e < 2e-5, `rel err ${e.toExponential(1)}`);
+    }
+  }
+
+  // ---- 4D-STEM multislice: GPU batches against kernels.fdStep
+  {
+    const gridN = 128, n4 = 32, Ks = 6, dx = 0.25, lam = 0.0251, dz = 2;
+    const slices = Array.from({ length: Ks }, () => { const re = new Float32Array(gridN * gridN), im = new Float32Array(gridN * gridN); for (let i = 0; i < re.length; i++) { const ph = 0.6 * rng(); re[i] = Math.cos(ph); im[i] = Math.sin(ph); } return { re, im }; });
+    const prop = { re: new Float32Array(n4 * n4), im: new Float32Array(n4 * n4) }, pr = new Float32Array(n4 * n4), pi = new Float32Array(n4 * n4);
+    for (let y = 0; y < n4; y++) for (let x = 0; x < n4; x++) {
+      const kx = (x < n4 / 2 ? x : x - n4) / (n4 * dx), ky = (y < n4 / 2 ? y : y - n4) / (n4 * dx), ph = -Math.PI * lam * dz * (kx * kx + ky * ky);
+      prop.re[y * n4 + x] = Math.cos(ph); prop.im[y * n4 + x] = Math.sin(ph);
+      const r2 = (x - n4 / 2) ** 2 + (y - n4 / 2) ** 2; pr[y * n4 + x] = Math.exp(-r2 / 18); pi[y * n4 + x] = 0.2 * Math.exp(-r2 / 30);
+    }
+    const geom = { N: 6, n4, gridN, dx, step: 1.5, scan: 9, K: Ks };
+    const job = { kind: 'fd-scan', geom, slices, prop, pr, pi };
+    const ref = new Float32Array(geom.N ** 2 * n4 * n4), st = K.fdInit(job, ref);
+    K.fdStep(st, 1e9, () => 0);
+    const r = g.fdScan(job, 8), got = new Float32Array(ref.length);
+    for (let from = 0; from < geom.N ** 2; from += r.B) { const c = Math.min(r.B, geom.N ** 2 - from); got.set(await r.run(from, c), from * n4 * n4); }
+    r.destroy();
+    const e = relErr(got, ref);
+    check(`4D-STEM multislice ${geom.N}² positions, ${Ks} slices, ${n4}² window`, e < 1e-4, `rel err ${e.toExponential(1)}`);
+  }
+
+  // ---- tomography: WBP and SIRT against tomo.js
+  {
+    const ph = TOMO.beadPhantom(48), angles = TOMO.tilts('linear', 60, 3);
+    const ser = TOMO.seriesData(TOMO.series({ ph, angles, noise: false, dosePerImage: 1e4 }));
+    const fp = TOMO.filterSeries(ser, 'ramp'), refW = TOMO.wbp(ser, { filter: 'ramp' }), T = g.tomo(ser);
+    const gw = await T.wbp(fp, TOMO.intervals(ser.angles));
+    let e = relErr(gw, refW);
+    check('WBP 48³, 41 tilts', e < 1e-4, `rel err ${e.toExponential(1)}`);
+    const it = 6, refS = TOMO.sirtInit(ser, { iterations: it, positivity: true });
+    TOMO.sirtStep(refS, ser);
+    T.sirtInit({ iterations: it, positivity: true });
+    while (await T.sirtStep());
+    const gx = await T.readX(); T.destroy();
+    e = relErr(gx, refS.x);
+    const er = Math.max(...refS.resid.map((r, i) => Math.abs(r - T.resid[i]) / r));
+    check(`SIRT 48³, ${it} iterations`, e < 1e-3 && er < 1e-3, `rel err ${e.toExponential(1)}, residuals ${er.toExponential(1)}`);
+  }
+
+  // ---- the worker runs tomography jobs on the GPU and gives the inline (JS) result
+  {
+    const ph = TOMO.beadPhantom(40), ser = TOMO.seriesData(TOMO.series({ ph, angles: TOMO.tilts('linear', 70, 5), noise: false }));
+    const wb = new WorkerBackend(new URL('../js/compute-worker.js', location.href));
+    for (const method of ['wbp', 'sirt']) {
+      const job = { kind: 'tomo', method, filter: 'hann', iterations: 4, ser, gpu: true };
+      const outW = {}, tw = wb.run(job, { out: outW });
+      while (!tw.finished) { await new Promise((r) => setTimeout(r, 20)); tw.pump(25); }
+      const outI = {}, ti = new InlineBackend().run({ ...job, gpu: false }, { out: outI });
+      while (!ti.finished) ti.pump(1e9);
+      const e = relErr(outW.x, outI.x);
+      check(`worker ${method.toUpperCase()} job on ${outW.device}`, outW.device !== 'cpu' && outW.device === wb.gpu && e < 1e-3, `rel err ${e.toExponential(1)}`);
+    }
+    // the same job with gpu: false stays in JS
+    const out = {}, tw = wb.run({ kind: 'tomo', method: 'wbp', filter: 'ramp', ser, gpu: false }, { out });
+    while (!tw.finished) { await new Promise((r) => setTimeout(r, 20)); tw.pump(25); }
+    check('worker job with gpu: false runs in JS', out.device === 'cpu', out.device);
+    wb.terminate();
+  }
+
+  // ---- timing at 256³ (?big=1): the M8 target, 256³ tomography interactive on capable browsers
+  if (q.has('big')) {
+    const N = 256, ph = TOMO.beadPhantom(N), angles = TOMO.tilts('linear', 70, 2);
+    let a = t0();
+    const ser = TOMO.seriesData(TOMO.series({ ph, angles, noise: false }));
+    const tSer = t0() - a, T = g.tomo(ser);
+    a = t0(); const fp = TOMO.filterSeries(ser, 'ramp'); const tF = t0() - a;
+    a = t0(); await T.wbp(fp, TOMO.intervals(ser.angles)); const tW = t0() - a;
+    T.sirtInit({ iterations: 5 }); await T.sirtStep(); await T.readX();
+    a = t0(); for (let i = 0; i < 4; i++) await T.sirtStep(); const tS = (t0() - a) / 4;
+    a = t0(); await T.readX(); const tR = t0() - a;
+    T.destroy();
+    log(`256³, ${angles.length} tilts: series ${(tSer / 1e3).toFixed(1)} s (JS), filter ${tF.toFixed(0)} ms (JS), WBP back-projection ${tW.toFixed(0)} ms, SIRT ${tS.toFixed(0)} ms/iteration, read-back ${tR.toFixed(0)} ms`);
+    checks.push({ name: 'timing 256³', ok: true, detail: { tSer, tF, tW, tS, tR } });
+  }
+  window.__result = { gpu: g.label, checks, ok: checks.every((c) => c.ok) };
+}
+run().catch((e) => { log(`error: ${e.stack ?? e}`); window.__result = { error: String(e.stack ?? e), ok: false, checks }; });
+</script>

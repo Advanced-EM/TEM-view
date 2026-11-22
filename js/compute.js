@@ -10,6 +10,9 @@
 // browsers without workers. WorkerBackend runs the same kernels in a module Web Worker (compute-worker.js), so
 // the page stays responsive; the 4D data set stays in the worker and the ptychography jobs reuse it. Both give
 // identical results: the kernels are the same code and their visiting order is seeded.
+// Jobs with gpu: true run on WebGPU in the worker where it is available (gpu.js: a 4D-STEM scan without precession,
+// tomography); backend.gpu is the adapter's label once known (null: none). Results say where they were computed
+// (task.device, out.device for tomography: 'cpu' or the GPU's label).
 // Tier 2/3 backends (a lab GPU worker, an HPC bundle) will implement the same run(job) (M11, M12).
 import * as K from './kernels.js';
 import * as TOMO from './tomo.js';
@@ -19,7 +22,7 @@ const now = () => (typeof performance !== 'undefined' ? performance.now() : Date
 // ---------------------------------------------------------------- inline (same thread)
 class InlineTask {
   constructor(job, sink) {
-    this.job = job; this.sink = sink; this.finished = false;
+    this.job = job; this.sink = sink; this.finished = false; this.device = 'cpu';
     if (job.kind === 'fd-scan') { this.st = K.fdInit(job, sink.data); this.done = this.st.done; }
     else if (job.kind === 'epie') K.epieInit(sink.out, job.geom, job.pr, job.pi, job.seed);
     else if (job.kind === 'msepie') K.msInit(sink.out, job.geom, job.seed);
@@ -39,7 +42,7 @@ class InlineTask {
 }
 // tomography (tomo.js): WBP in one go, SIRT an iteration at a time; out: { x, iter, iterations, resid, method }
 function tomoInit(t, job, out) {
-  Object.assign(out, { method: job.method, iter: 0, iterations: job.method === 'sirt' ? job.iterations : 1, resid: [], x: null });
+  Object.assign(out, { method: job.method, iter: 0, iterations: job.method === 'sirt' ? job.iterations : 1, resid: [], x: null, device: 'cpu' });
   if (job.method === 'sirt') { t.st = TOMO.sirtInit(job.ser, { iterations: job.iterations, positivity: true }); out.x = t.st.x; }
 }
 function tomoStep(t, job, out, budget) {
@@ -50,7 +53,7 @@ function tomoStep(t, job, out, budget) {
 }
 
 export class InlineBackend {
-  constructor() { this.name = 'inline'; }
+  constructor() { this.name = 'inline'; this.gpu = null; }
   run(job, sink) { return new InlineTask(job, sink); }
 }
 
@@ -75,10 +78,11 @@ class WorkerTask {
     if (pause !== this.paused && !this.finished) { this.paused = pause; this.b.post({ op: 'pause', id: this.id, paused: pause }); }
     let n = 0;
     for (const m of this.queue.splice(0)) {
-      if (m.type === 'patterns') { this.sink.data.set(m.data, m.from * this.job.geom.n4 * this.job.geom.n4); this.done = m.from + m.count; n += m.count; }
+      if (m.type === 'patterns') { this.sink.data.set(m.data, m.from * this.job.geom.n4 * this.job.geom.n4); this.done = m.from + m.count; n += m.count; this.device = m.device; }
       else if (m.type === 'epie') { const T = this.sink.out; T.re.set(m.re); T.im.set(m.im); Object.assign(T, { iter: m.iter, k: m.k, errHist: m.errHist, err: m.err }); n++; }
       else if (m.type === 'msepie') { const T = this.sink.out; m.O.forEach((o, k) => { T.O[k].re.set(o.re); T.O[k].im.set(o.im); }); Object.assign(T, { iter: m.iter, k: m.k, errHist: m.errHist }); n++; }
-      else if (m.type === 'tomo') { Object.assign(this.sink.out, { x: m.x, iter: m.iter, resid: m.resid }); n++; }
+      else if (m.type === 'tomo') { Object.assign(this.sink.out, { x: m.x, iter: m.iter, resid: m.resid, device: m.device }); n++; }
+      else if (m.type === 'gpu-error') { this.gpuError = m.message; console.warn(`GPU: ${m.message}; continuing in JS`); }
       else if (m.type === 'error') { this.error = m.message; this.finished = true; }
       if (m.final) { this.finished = true; this.b.tasks.delete(this.id); }
     }
@@ -89,11 +93,12 @@ class WorkerTask {
 }
 export class WorkerBackend {
   constructor(url) {
-    this.name = 'worker'; this.tasks = new Map(); this.datasets = new Set(); this.failed = null;
+    this.name = 'worker'; this.tasks = new Map(); this.datasets = new Set(); this.failed = null; this.gpu = undefined; // undefined: not known yet
     this.w = new Worker(url, { type: 'module' });
     this.w.onmessage = (e) => {
       const m = e.data;
       if (m.type === 'dropped') { this.datasets.delete(m.id); return; }
+      if (m.type === 'gpu') { this.gpu = m.label; this.onGpu?.(m.label); return; }
       this.tasks.get(m.id)?.receive(m);
     };
     this.w.onerror = (e) => { this.failed = e.message || 'worker error'; for (const t of this.tasks.values()) t.receive({ type: 'error', message: this.failed, final: true }); };

@@ -238,15 +238,24 @@ export function alignCOM(ser) {
 // weighted back-projection: each projection row filtered by the ramp |k| (Ram-Lak, optionally apodised by a Hann
 // window), back-projected with the weight of its angular interval
 export function wbp(ser, { filter = 'ramp', positivity = false } = {}) {
-  const N = ser.N, M = nextPow2(2 * N), vol = new Float32Array(N * N * N), w = intervals(ser.angles);
+  const N = ser.N, vol = new Float32Array(N * N * N), w = intervals(ser.angles);
+  filterSeries(ser, filter).forEach((fp, t) => backproject(fp, N, ser.angles[t], vol, w[t]));
+  // f = ∫₀^π (h * p_θ) dθ with the kernel above in units of 1/sample²: the sum over Δθ is that integral
+  if (positivity) for (let i = 0; i < vol.length; i++) if (vol[i] < 0) vol[i] = 0;
+  return vol;
+}
+// the filtered projections of WBP (shared with the GPU back-projector, gpu.js)
+export function filterSeries(ser, filter = 'ramp') {
+  const N = ser.N, M = nextPow2(2 * N);
   // the Ram-Lak kernel in real space (h₀ = 1/4, h_n = −1/(π n)² for odd n), transformed: a ramp whose DC term is
   // right, so flat regions keep their level (sampling |k| directly would cup them); Hann apodises it
   const H = new Float64Array(M), hi = new Float64Array(M);
   for (let n = 0; n < M; n++) { const d = Math.min(n, M - n); H[n] = d === 0 ? 0.25 : d % 2 ? -1 / (Math.PI * d) ** 2 : 0; }
   fft1(H, hi, M, false);
   for (let k = 0; k < M; k++) { const f = Math.min(k, M - k) / M; H[k] *= filter === 'hann' ? 0.5 + 0.5 * Math.cos(2 * Math.PI * f) : 1; }
-  const re = new Float64Array(M), im = new Float64Array(M), fp = new Float32Array(N * N);
-  ser.proj.forEach((p, t) => {
+  const re = new Float64Array(M), im = new Float64Array(M);
+  return ser.proj.map((p) => {
+    const fp = new Float32Array(N * N);
     // filter along v for each x (columns of p)
     for (let x = 0; x < N; x++) {
       re.fill(0); im.fill(0);
@@ -256,11 +265,8 @@ export function wbp(ser, { filter = 'ramp', positivity = false } = {}) {
       fft1(re, im, M, true);
       for (let v = 0; v < N; v++) fp[x + N * v] = re[v];
     }
-    backproject(fp, N, ser.angles[t], vol, w[t]);
+    return fp;
   });
-  // f = ∫₀^π (h * p_θ) dθ with the kernel above in units of 1/sample²: the sum over Δθ is that integral
-  if (positivity) for (let i = 0; i < vol.length; i++) if (vol[i] < 0) vol[i] = 0;
-  return vol;
 }
 
 // SIRT: x ← x + λ C Aᵀ R (p − A x), with R and C the inverse row and column sums of A (Gilbert 1972); one call of

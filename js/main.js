@@ -57,6 +57,21 @@ const sim = new Sim(S);
 // 4D-STEM and ptychography run in a Web Worker (compute.js), so the page stays responsive; the worker gets the
 // same cache-busting stamp as this module. Without workers they run on the main thread as before.
 sim.setCompute(defaultBackend(new URL(`./compute-worker.js${new URL(import.meta.url).search}`, import.meta.url)));
+sim.compute.onGpu = () => refreshControls(); // the worker reports whether it has WebGPU (gpu.js) a moment after start
+// where the heavy loops of this mode ran (M8: WebGPU where the browser has it, else the JS kernels in the worker)
+function computeNote(mode) {
+  const g = sim.compute?.gpu;
+  if (g === undefined) return '';
+  const where = (d) => (d && d !== 'cpu' ? `the GPU (${d})` : 'the CPU (JavaScript, in a background thread)');
+  if (mode === 'tomo') {
+    const T = sim.tomo, d = T?.rec?.device, t = T?.recMs;
+    const done = d && T.taskDone ? `Reconstructed on ${where(d)} in ${t < 1000 ? `${t.toFixed(0)} ms` : `${(t / 1000).toFixed(1)} s`}. ` : d ? `Reconstructing on ${where(d)}… ` : '';
+    return done + (g ? (S.gpu === 'off' ? 'WebGPU is available: choose GPU for 256³ volumes.' : 'WebGPU: the projector, back-projector and SIRT run on the GPU (the WBP filter in JavaScript).') : 'This browser has no WebGPU, so reconstructions run in JavaScript; 256³ volumes need WebGPU.');
+  }
+  const d = sim.fdTask?.device;
+  if (!g) return d ? `The 4D scan runs on ${where(d)}; this browser has no WebGPU.` : '';
+  return `${d ? `The 4D scan runs on ${where(d)}. ` : ''}${S.pedOn && S.gpu !== 'off' ? 'Precessed scans (SPED) run in JavaScript: the GPU kernels do the unprecessed multislice.' : ''}`;
+}
 const scene = new Scene3D($('#gl'), $('#labels'));
 const mainCv = $('#detMain'), secCv = $('#detSec');
 
@@ -288,7 +303,9 @@ const CONTROLS = [
   { chips: 'tomoRecon', label: 'Reconstruction', small: true, modes: 'tomo', opts: [['wbp', 'WBP (filtered back-projection)'], ['sirt', 'SIRT (iterative)']] },
   { chips: 'tomoFilter', label: 'WBP filter', small: true, modes: 'tomo', opts: [['ramp', 'Ramp'], ['hann', 'Hann (less noise)']], show: () => S.tomoRecon === 'wbp' },
   { slider: 'tomoIter', label: 'SIRT iterations', min: 1, max: 100, step: 1, fmt: (v) => `${v}`, modes: 'tomo', show: () => S.tomoRecon === 'sirt' },
-  { chips: 'tomoN', label: 'Volume', small: true, modes: 'tomo', opts: [[64, '64³'], [96, '96³'], [128, '128³']] },
+  { chips: 'tomoN', label: 'Volume', small: true, modes: 'tomo', dynOpts: () => [[64, '64³'], [96, '96³'], [128, '128³'], ...(sim.compute?.gpu || S.tomoN === 256 ? [[256, '256³ (GPU)']] : [])] },
+  { chips: 'gpu', label: 'Compute on', small: true, modes: 'tomo 4d', opts: [['auto', 'GPU (WebGPU)'], ['off', 'CPU (JavaScript)']], show: () => !!sim.compute?.gpu },
+  { pFn: () => computeNote('tomo'), modes: 'tomo' },
   { chips: 'tomoView', label: 'View', small: true, modes: 'tomo', opts: [['series', 'Tilt series'], ['xy', 'XY'], ['xz', 'XZ'], ['yz', 'YZ (across the axis)']] },
   { slider: 'tomoDepth', label: 'Slice position', min: -0.5, max: 0.5, step: 0.01, fmt: (v) => `${(+v * 100).toFixed(0)} % of the box`, modes: 'tomo', show: () => S.tomoView !== 'series' },
   { pFn: () => { const T = sim.tomo; if (!T) return ''; const F = T.angles?.length ?? 0, st = T.stats; return `${F} projections from −${S.tomoMax}° to +${S.tomoMax}°. The holder cannot tilt to 90°, so a ${180 - 2 * S.tomoMax}° wedge of Fourier space is never measured and every feature is stretched along the beam by about ${T.pred?.toFixed(2)}× (a point; larger objects stretch less).${st?.meas ? ` Measured on the smallest beads: ${st.meas.toFixed(2)}×.` : ''} HAADF intensity grows with mass and thickness only, so its projections can be reconstructed; bright-field diffraction contrast changes with the tilt and breaks that.${T.o?.Dc ? ` This specimen is beam-sensitive (critical dose ≈ ${T.o.Dc.toFixed(0)} e⁻/Å²): it loses mass during the series, so the projections disagree.` : ''}`; }, modes: 'tomo' },
@@ -299,6 +316,7 @@ const CONTROLS = [
   { slider: 'pedDescan', label: 'Descan error', min: 0, max: 10, step: 0.5, fmt: (v) => `${v} % of φ`, modes: 'diff cbed 4d', show: () => S.pedOn, ends: ['matched', '', 'spots smear into rings'] },
   { pFn: () => (S.pedOn ? `The beam is tilted by φ and rotated on a cone, then brought back on axis below the specimen. Each spot is integrated through its rocking curve: intensities oscillate less with thickness and many more reflections appear. Each reflection here uses two-beam dynamical theory${sim.pedInfo ? ` (${Math.round(100 * sim.pedInfo.powerInReflections)} % of the diffracted signal is in crystal reflections)` : ''}; try the thickness slider with φ = 0 and with φ = 30 mrad.` : 'Precession (PED): rock the beam on a hollow cone to get near-kinematical, mistilt-tolerant intensities.'), modes: 'diff cbed' },
   { pFn: () => (S.pedOn ? `Scanning precession (SPED): every pattern of the scan is precessed (up to 12 azimuths here), which makes the orientation and phase maps reliable. Use a nearly parallel probe (convergence ≈ 1–3 mrad) so the spots do not overlap, and keep φ ≲ 20 mrad: the simulated patterns hold reflections out to ≈ ${(1.85 - (S.pedPhi * 1e-3) / sim.lam).toFixed(1)} Å⁻¹ at this angle.` : 'Scanning precession (SPED) precesses every pattern of the scan; choose the Orientation or Phase map virtual view to index the grains.'), modes: '4d' },
+  { pFn: () => computeNote('4d'), modes: '4d' },
   { chips: 'vdet', label: 'Virtual detector', modes: '4d', opts: [['bf', 'BF'], ['abf', 'ABF'], ['adf', 'ADF'], ['disk', 'Disk (DF)'], ['dpc', 'DPC'], ['com', 'Center of mass'], ['ptycho', 'Ptychography'], ['mptycho', 'Multislice ptycho'], ['orient', 'Orientation'], ['phase', 'Phase map']] },
   { chips: 'edsSel', label: 'Map element', modes: 'eds', dynOpts: () => [['all', 'All']].concat(sim.si ? [...new Set(sim.si.els.map((e) => e.sym))].map((s) => [s, s]) : []) },
   { chips: 'eelsRange', label: 'Spectrum range (preset)', modes: 'eels', opts: [['zlp', 'Zero loss'], ['low', 'Low loss'], ['core', 'Core loss'], ['high', 'High loss']] },

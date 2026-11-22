@@ -34,3 +34,18 @@ jobs:
         run: cd tools/temview-mcp && npm ci && node test.mjs
       - name: Collector Worker
         run: cd hf/worker && node test.mjs
+  gpu:
+    # the WebGPU kernels (js/gpu.js) against the JS reference kernels, in headless Chromium on the software
+    # adapter (SwiftShader): runners have no GPU, but the arithmetic is the same
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Playwright Chromium
+        run: npm i --no-save --no-package-lock playwright@1.62.1 && npx playwright install --with-deps chromium
+      - name: WebGPU kernels (FFT, multislice, WBP, SIRT, worker jobs)
+        run: node tools/gpu-check.mjs
+        env:
+          GPU_ADAPTER: swiftshader

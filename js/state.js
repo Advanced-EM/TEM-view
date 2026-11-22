@@ -42,6 +42,8 @@ export const defaultState = () => ({
   tomoJitter: 0, tomoAlign: true, tomoRecon: 'wbp', tomoFilter: 'ramp', tomoIter: 20, tomoView: 'yz', tomoDepth: 0,
   // zone axis [u, v, w] of a built-in crystal along the beam (zone.js); null: the specimen as built
   zone: null,
+  // where the 4D-STEM scan and tomography run in a browser with WebGPU: 'auto' (the GPU, gpu.js) | 'off' (JS)
+  gpu: 'auto',
   // acquisition plan overrides by technique (footprint.js): scan size, detector pixels, bit depth, dwell, ...
   plan: {},
   // hidden misalignment added to the knob settings (training scenarios); never shown in the controls
