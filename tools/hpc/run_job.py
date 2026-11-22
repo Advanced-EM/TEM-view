@@ -180,7 +180,72 @@ def run_abtem(job, data, log):
     return {k: np.asarray(v) for k, v in res["arrays"].items()}, {"engine": "abtem", **{k: v for k, v in res.get("meta", {}).items() if isinstance(v, (str, int, float, bool, list, dict))}}
 
 
-ENGINES = {"tomo": run_tomo, "abtem": run_abtem}
+def _phase_corr(a, b):
+    """Sub-pixel shift (dy, dx) that moves image b onto image a: phase correlation with a Hann window."""
+    wy, wx = np.hanning(a.shape[0]), np.hanning(a.shape[1])
+    w = np.outer(wy, wx)
+    A, B = np.fft.fft2((a - a.mean()) * w), np.fft.fft2((b - b.mean()) * w)
+    R = A * np.conj(B)
+    r = np.real(np.fft.ifft2(R / np.maximum(np.abs(R), 1e-30)))
+    iy, ix = np.unravel_index(np.argmax(r), r.shape)
+    def sub(m, c, p):
+        d = m - 2 * c + p
+        return 0.0 if d == 0 else (m - p) / (2 * d)
+    ny, nx = r.shape
+    dy = iy + sub(r[(iy - 1) % ny, ix], r[iy, ix], r[(iy + 1) % ny, ix])
+    dx = ix + sub(r[iy, (ix - 1) % nx], r[iy, ix], r[iy, (ix + 1) % nx])
+    return (dy - ny if dy > ny / 2 else dy), (dx - nx if dx > nx / 2 else dx)
+
+
+def _shift(img, dy, dx):
+    """Shift an image by (dy, dx) pixels with the Fourier shift theorem."""
+    ky, kx = np.fft.fftfreq(img.shape[0])[:, None], np.fft.fftfreq(img.shape[1])[None, :]
+    return np.real(np.fft.ifft2(np.fft.fft2(img) * np.exp(-2j * np.pi * (ky * dy + kx * dx))))
+
+
+def run_insitu(job, data, log):
+    """An in situ movie: drift measured by phase correlation against the first frame (frame to frame where the
+    specimen has changed too much), the frames aligned onto the first, their sum, and each frame's environment."""
+    p = job["parameters"]
+    mov = np.asarray(data["movie"], float)
+    F = mov.shape[0]
+    out = {"time_s": np.asarray(data["time_s"], np.float32)}
+    for k in ("T_K", "tempSet", "gcP", "bsV", "lcRate"):
+        if k in data:
+            out[k] = np.asarray(data[k], np.float32)
+    info = {"engine": "numpy", "frames": F, "mode": p.get("mode"), "voxel_A": p.get("pixel_A")}
+    if not p.get("align") or not p.get("pixel_A"):
+        log(f"in situ series: {F} frames of {p.get('mode')} (patterns: no drift correction)")
+        out["movie"] = mov.astype(np.float32)
+        return out, {**info, "note": "series packaged with its environment; patterns are not drift-corrected"}
+    px = float(p["pixel_A"])
+    log(f"in situ movie: {F} frames of {mov.shape[1]}x{mov.shape[2]}, {px:.4f} A per pixel, drift correction")
+    # each frame against the first (no accumulation of sub-pixel bias); if a frame correlates poorly with the first
+    # (the specimen changed), its shift from the previous frame is added instead
+    shifts = np.zeros((F, 2))
+    for k in range(1, F):
+        dy, dx = _phase_corr(mov[0], mov[k])
+        sy, sx = _phase_corr(mov[k - 1], mov[k])
+        step = (shifts[k - 1, 0] + sy, shifts[k - 1, 1] + sx)
+        shifts[k] = (dy, dx) if np.hypot(dy - step[0], dx - step[1]) < 3 else step
+        if k % max(1, F // 10) == 0:
+            log(f"  frame {k}/{F}: shift ({shifts[k, 1]:.2f}, {shifts[k, 0]:.2f}) px")
+    aligned = np.stack([_shift(mov[k], shifts[k, 0], shifts[k, 1]) for k in range(F)])
+    # the image moves against the specimen: the specimen drift is minus the image shift onto the first frame
+    drift = np.stack([shifts[:, 1], shifts[:, 0]], axis=1) * px
+    out.update(movie_aligned=aligned.astype(np.float32), aligned_sum=aligned.mean(0).astype(np.float32), drift_measured_A=drift.astype(np.float32))
+    note = "phase correlation against the first frame (frame to frame where the specimen changed); Fourier-shift alignment"
+    if "drift_true_A" in data:
+        t = np.asarray(data["drift_true_A"], float)
+        err = np.sqrt(np.mean(np.sum((drift - t) ** 2, axis=1)))
+        out["drift_true_A"] = t.astype(np.float32)
+        info["drift_rms_error_A"] = round(float(err), 4)
+        info["drift_rms_error_px"] = round(float(err / px), 4)
+        log(f"  drift vs the exhibit's true drift: RMS {err:.3f} A ({err / px:.2f} px)")
+    return out, {**info, "note": note}
+
+
+ENGINES = {"tomo": run_tomo, "abtem": run_abtem, "insitu": run_insitu}
 
 
 # ---------------------------------------------------------------- outputs
@@ -206,7 +271,13 @@ def write_ome_zarr(path, arrays, meta, voxel=1.0):
         os.makedirs(os.path.join(g, "0"), exist_ok=True)
         json.dump({"zarr_format": 2}, open(os.path.join(g, ".zgroup"), "w"))
         axes = [{"name": n, "type": "space", "unit": "angstrom"} for n in ("zyx"[-a.ndim:] if a.ndim <= 3 else [f"d{i}" for i in range(a.ndim)])]
-        json.dump({"multiscales": [{"version": "0.4", "name": name, "axes": axes, "datasets": [{"path": "0", "coordinateTransformations": [{"type": "scale", "scale": [voxel] * a.ndim}]}]}]},
+        if name in ("movie", "movie_aligned") and a.ndim == 3:  # an in situ movie: time, then the image
+            axes[0] = {"name": "t", "type": "time", "unit": "second"}
+        scale = [voxel] * a.ndim
+        if axes[0].get("type") == "time":
+            pr = (meta.get("provenance") or {}).get("parameters") or {}
+            scale[0] = float(pr.get("every", 1)) / float(pr.get("fps", 1))
+        json.dump({"multiscales": [{"version": "0.4", "name": name, "axes": axes, "datasets": [{"path": "0", "coordinateTransformations": [{"type": "scale", "scale": scale}]}]}]},
                   open(os.path.join(g, ".zattrs"), "w"), indent=1)
         json.dump({"zarr_format": 2, "shape": list(a.shape), "chunks": list(a.shape), "dtype": "<f4", "compressor": None, "fill_value": 0.0, "order": "C", "filters": None, "dimension_separator": "."},
                   open(os.path.join(g, "0", ".zarray"), "w"), indent=1)

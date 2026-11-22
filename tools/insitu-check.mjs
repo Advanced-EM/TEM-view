@@ -10,6 +10,12 @@ import { Sim } from '../js/sim.js';
 import { chipState } from '../js/ops.js';
 import { footprintFor, footprint, planFor } from '../js/footprint.js';
 import { collectData } from '../js/export.js';
+import { buildBundle, readResults } from '../js/bundle.js';
+import { mkdtempSync, writeFileSync, readFileSync, mkdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, dirname } from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 let fails = 0;
 const ok = (c, m) => { console.log(`${c ? 'ok  ' : 'FAIL'} ${m}`); if (!c) fails++; };
@@ -57,6 +63,16 @@ const record = (S, sim) => { sim.startMovie(); for (let i = 0; i < 5000 && sim.m
   M.frames.forEach((f, k) => { if (k % 4) return; const [sx, sy] = shift(f), [tx, ty] = M.meta[k].drift_A; errs.push(Math.hypot(sx * dx + tx, sy * dx + ty)); if (process.env.DBG) console.log(k, M.meta[k].T_K.toFixed(0), (sx * dx).toFixed(2), (-tx).toFixed(2), (sy * dx).toFixed(2), (-ty).toFixed(2)); });
   const rms = Math.sqrt(errs.reduce((a, e) => a + e * e, 0) / errs.length);
   ok(rms < 0.5 * dx, `drift measured from the frames (phase correlation with the first) follows the true drift: RMS error ${rms.toFixed(3)} Å = ${(rms / dx).toFixed(2)} px over ${(L / dx).toFixed(0)} px of travel (the image moves against the specimen)`);
+  // the campaign on a cluster: the movie in a job bundle, run by run_job.py (insitu engine) as on a node, read back
+  {
+    const root = fileURLToPath(new URL('..', import.meta.url)), runner = readFileSync(join(root, 'tools/hpc/run_job.py'), 'utf8');
+    const { files, job } = await buildBundle(S, sim, { runner, version: 'test' }), dir = mkdtempSync(join(tmpdir(), 'temview-insitu-'));
+    for (const f of files) { const p = join(dir, f.name); mkdirSync(dirname(p), { recursive: true }); writeFileSync(p, f.bytes); }
+    const r = spawnSync('python3', ['run_job.py', 'job.json', '--out', 'results'], { cwd: dir, encoding: 'utf8' });
+    const buf = r.status === 0 ? readFileSync(join(dir, 'results/result.npz')) : null, res = buf ? await readResults(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength)) : null, pv = res?.meta.provenance ?? {};
+    ok(job.engine.kind === 'insitu' && job.data.arrays.movie.join() === `40,${c},${c}` && r.status === 0 && res.arrays.movie_aligned?.shape.join() === `40,${c},${c}` && res.arrays.tempSet?.shape[0] === 40 && pv.drift_rms_error_px < 0.5 && pv.session_sha256 === job.provenance.session_sha256,
+      `HPC bundle of the movie, run by run_job.py (exit ${r.status}): drift corrected by phase correlation, RMS ${pv.drift_rms_error_A} Å (${pv.drift_rms_error_px} px) from the true drift; aligned frames, their sum and each frame's environment come back with the session's SHA-256${r.status ? `\n${r.stderr}` : ''}`);
+  }
   const data = collectData(sim, S);
   ok(data.arrays.movie.shape.join() === `40,${c},${c}` && data.arrays.movie_drift.shape.join() === '40,2' && data.meta.calibration.movie.frame_meta.length === 40, `export: movie [${data.arrays.movie.shape}], times, temperatures and the true drift per frame, with the timeline`);
 }

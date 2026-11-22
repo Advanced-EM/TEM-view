@@ -36,7 +36,12 @@ export function npy(f32, shape) {
 
 // the engine and full-resolution parameters for the current technique
 function engineFor(S, sim, f) {
-  const p = f.plan;
+  const p = f.plan, M = sim.movie;
+  // an in situ movie recorded in the exhibit (insitu.js): drift correction and the per-frame environment
+  if (M?.frames.length && !M.rec) {
+    const px = { tem: sim.tem?.dx, stem: sim.stemImg?.dx, oah: sim.oah?.disp?.dx, ltem: sim.lor?.disp?.dx, lstem: sim.lor?.disp?.dx }[M.mode] ?? null;
+    return { engine: { kind: 'insitu', name: 'numpy' }, parameters: { mode: M.mode, pixel_A: px, align: px != null, fps: M.plan.fps, duration_s: M.plan.duration_s, every: M.plan.every, timeline: M.timeline, full_scale: { ...p, movie: f.movie ?? null } }, runnable: true };
+  }
   if (S.mode === 'tomo') {
     const T = sim.tomo;
     return { engine: { kind: 'tomo', name: S.tomoRecon === 'sirt' ? 'astra' : 'numpy', fallback: 'numpy' },
@@ -62,6 +67,16 @@ export async function buildBundle(S, sim, { runner = '', abtemRequest = null, ve
   const e = engineFor(S, sim, f);
   if (e.abtem) { try { e.parameters.request = abtemRequest ? abtemRequest(S, sim, { preset: 'full' }) : null; } catch (err) { e.runnable = false; e.parameters.why = String(err.message ?? err); } }
   let data = null;
+  if (e.engine.kind === 'insitu') {
+    const M = sim.movie, [h, w] = M.shape, st = new Float32Array(M.frames.length * h * w), F = M.frames.length;
+    M.frames.forEach((fr, k) => st.set(fr, k * h * w));
+    const col = (key) => Float32Array.from(M.meta.map((m) => m[key] ?? NaN));
+    const arrays = { movie: [F, h, w], time_s: [F], drift_true_A: [F, 2], T_K: [F], tempSet: [F], gcP: [F], bsV: [F], lcRate: [F] };
+    const { zip } = await import('./npy.js');
+    files.push({ name: 'data.npz', bytes: zip([{ name: 'movie.npy', bytes: npy(st, [F, h, w]) }, { name: 'time_s.npy', bytes: npy(col('t'), [F]) }, { name: 'drift_true_A.npy', bytes: npy(Float32Array.from(M.meta.flatMap((m) => m.drift_A)), [F, 2]) },
+      ...['T_K', 'tempSet', 'gcP', 'bsV', 'lcRate'].map((k) => ({ name: `${k}.npy`, bytes: npy(col(k), [F]) }))]) });
+    data = { file: 'data.npz', arrays };
+  }
   if (S.mode === 'tomo' && e.runnable) {
     const T = sim.tomo, N = T.ph.N, n = T.ser.proj.length, st = new Float32Array(n * N * N);
     T.ser.proj.forEach((p, i) => st.set(p, i * N * N));

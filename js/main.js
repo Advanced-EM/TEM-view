@@ -248,7 +248,7 @@ async function exportBundle() {
     const { files, job } = await buildBundle(S, sim, { runner, abtemRequest, version: v });
     const { zip } = await import('./npy.js');
     download(new Blob([zip(files)], { type: 'application/zip' }), `tem-view-job-${S.mode}-${stamp()}.zip`);
-    voice.flash(`<b>HPC bundle</b><p>${job.technique}: ${job.engine.name}${job.data ? ', with the recorded tilt series' : ''}. Unzip on the cluster, build the image once, then <code>sbatch run.slurm</code>. Load results/result.npz back here.</p>`, 6000);
+    voice.flash(`<b>HPC bundle</b><p>${job.technique}: ${job.engine.kind === 'insitu' ? `in situ movie (${job.data.arrays.movie[0]} frames), drift correction` : job.engine.name}${job.data && job.engine.kind !== 'insitu' ? ', with the recorded tilt series' : ''}. Unzip on the cluster, build the image once, then <code>sbatch run.slurm</code>. Load results/result.npz back here.</p>`, 6000);
   } catch (e) { voice.flash(`<b>No bundle</b><p>${String(e.message ?? e)}</p>`, 5000); }
 }
 let lastImport = null;
@@ -267,6 +267,9 @@ async function loadResults(buf, name) {
       if (S.mode !== 'tomo') setMode('tomo');
       const res = sim.importVolume(vol[1].data, vol[1].shape[0], r.meta);
       lastImport.shown = `${vol[0]} in the tomography viewer${res.resampled ? ` (resampled to ${res.N}³)` : ''}`;
+    } else if (r.arrays.drift_measured_A || r.arrays.time_s) { // an in situ movie processed on a cluster (run_job.py insitu)
+      const F = r.arrays.time_s?.shape[0] ?? 0;
+      lastImport.shown = `in situ movie, ${F} frames${pv.drift_rms_error_A != null ? `, drift corrected (RMS ${pv.drift_rms_error_A} Å from the true drift)` : ''}: open the aligned frames, their sum and the per-frame environment in Python`;
     } else lastImport.shown = 'no volume to show (2D results: open them in Python)';
     // does the result come from this session?
     const mine = pv.session_sha256 ? await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(toSession(S), null, 1))).then((h) => [...new Uint8Array(h)].map((b) => b.toString(16).padStart(2, '0')).join('')) : null;
