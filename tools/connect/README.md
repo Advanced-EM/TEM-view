@@ -1,7 +1,6 @@
 # temview-connect: connect simulators and instruments to TEM-view
 
-Copyright © 2026 by Northwestern University. All Rights Reserved. Confidential: patent pending material,
-local only.
+Copyright © 2026 by Northwestern University. All Rights Reserved.
 
 One protocol, **temview-connect/1**, lets other programs and real instruments join the microscope.
 
