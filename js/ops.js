@@ -92,14 +92,14 @@ export function modeState(S, sim, m) {
 // (Lorentz microscopy, and the EELS spectrometer)
 export const LOR_LIMITS = { lorDf: [-3000, 3000, 0], lorFov: [0.3, 10, 3], lorThick: [10, 150, 0], lorField: [0, 600, 0], lorDiv: [0.5, 30, 1], lorAlpha: [20, 3000, 0], lorApR: [2, 40, 1],
   pedPhi: [0, 60, 1], pedSteps: [4, 128, 0], pedDescan: [0, 20, 1],
-  tomoMax: [20, 80, 0], envWinT: [1, 50, 1], lcA: [10, 500, 0], lcB: [10, 2000, 0], lcGap: [20, 5000, 0], lcDP: [0, 30, 2], lcFlow: [0, 5, 2], lcPocket: [5, 500, 0], lcRate: [0.01, 1000, 2], tomoStep: [0.5, 10, 1], tomoDose: [1, 1e7, 0], tomoJitter: [0, 5, 1], tomoIter: [1, 100, 0], tomoDepth: [-0.5, 0.5, 2],
+  tomoMax: [20, 80, 0], envWinT: [1, 50, 1], lcA: [10, 500, 0], lcB: [10, 2000, 0], lcGap: [20, 5000, 0], lcDP: [0, 30, 2], lcFlow: [0, 5, 2], lcPocket: [5, 500, 0], lcRate: [0.01, 1000, 2], gcP: [0.01, 2000, 2], gcGap: [1, 100, 1], gcPath: [0.1, 10, 2], tomoStep: [0.5, 10, 1], tomoDose: [1, 1e7, 0], tomoJitter: [0, 5, 1], tomoIter: [1, 100, 0], tomoDepth: [-0.5, 0.5, 2],
   ptMax: [10, 75, 0], ptAlpha: [10, 20, 1], ptDose: [1e3, 1e7, 0], ptIters: [2, 30, 0],
   spaN: [100, 20000, 0], spaDose: [2, 300, 1], spaDf: [0, 4, 2], spaPref: [0, 0.95, 2], spaAngErr: [0, 10, 1],
   edStart: [-70, 0, 1], edEnd: [0, 70, 1], edSpeed: [0.1, 10, 2], edStep: [0.1, 5, 2], edExp: [0.05, 5, 3], edDoseRate: [0.001, 2, 4], edAxis: [0, 180, 1], edLayer: [-3, 3, 0],
   eelsBeta: [1, 100, 1], eelsOffset: [-50, 3000, 1], eelsWin: [0, 6000, 2], eelsWidth: [0.5, 80, 1], eelsCurrent: [5, 2000, 0], eelsExp: [1e-4, 10, 5], eelsExpLow: [1e-5, 0.1, 6] };
 export const LOR_CHOICES = { lorView: ['fresnel', 'foucault', 'tie', 'phase'], lstemView: ['color', 'x', 'y', 'sum'], lorFouc: ['+x', '-x', '+y', '-y'],
   eelsSource: ['profile', 'schottky', 'cfeg', 'mono'], eelsDet: ['ccd', 'direct'], eelsYScale: ['log', 'lin', 'split'], eelsDisp: [0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1],
-  pedOn: [true, false], dualEels: [true, false], edMethod: ['cred', 'step', 'pedt'], tomoPhantom: ['specimen', 'beads'], tomoN: [64, 96, 128, 256], gpu: ['auto', 'off'], spaSample: ['apo', 'bgal'], envWin: ['none', 'sinx', 'graphene', 'carbon'], envCell: ['none', 'liquid'], lcClass: ['sinx', 'sinxFlow', 'graphene'], lcDepth: ['top', 'middle', 'bottom'], lcPrecursor: [true, false], lcFilter: [true, false], ptTilts: [1, 3, 5, 7, 9], ptFusion: ['sirt', 'average'], ptView: ['xz', 'xy', 'slices'], spaZpp: [true, false], spaBin: [1, 2], spaView: ['mic', 'ctf', 'classes', 'map'], tomoSignal: ['haadf', 'bf'], tomoScheme: ['linear', 'saxton'], tomoAlign: [true, false], tomoRecon: ['wbp', 'sirt'], tomoFilter: ['ramp', 'hann'], tomoView: ['series', 'xy', 'xz', 'yz'], edFps: [1, 2, 4, 10, 20, 40], edMerge: ['friedel', 'laue'], edSlice: ['hk0', 'h0l', '0kl'], eelsFit: [true, false], eelsDeconv: [true, false], eelsLine: [true, false], bgsub: [true, false] };
+  pedOn: [true, false], dualEels: [true, false], edMethod: ['cred', 'step', 'pedt'], tomoPhantom: ['specimen', 'beads'], tomoN: [64, 96, 128, 256], gpu: ['auto', 'off'], spaSample: ['apo', 'bgal'], envWin: ['none', 'sinx', 'graphene', 'carbon'], envCell: ['none', 'liquid', 'gas'], gcGeom: ['windowed', 'open'], gcGas: ['H2', 'O2', 'N2', 'CO', 'H2O', 'Ar'], lcClass: ['sinx', 'sinxFlow', 'graphene'], lcDepth: ['top', 'middle', 'bottom'], lcPrecursor: [true, false], lcFilter: [true, false], ptTilts: [1, 3, 5, 7, 9], ptFusion: ['sirt', 'average'], ptView: ['xz', 'xy', 'slices'], spaZpp: [true, false], spaBin: [1, 2], spaView: ['mic', 'ctf', 'classes', 'map'], tomoSignal: ['haadf', 'bf'], tomoScheme: ['linear', 'saxton'], tomoAlign: [true, false], tomoRecon: ['wbp', 'sirt'], tomoFilter: ['ramp', 'hann'], tomoView: ['series', 'xy', 'xz', 'yz'], edFps: [1, 2, 4, 10, 20, 40], edMerge: ['friedel', 'laue'], edSlice: ['hk0', 'h0l', '0kl'], eelsFit: [true, false], eelsDeconv: [true, false], eelsLine: [true, false], bgsub: [true, false] };
 // a Lorentz setting from a command, clamped; true if `op` was one
 export function lorSet(S, set, op) {
   // zone axis [u, v, w] of a built-in crystal (null: as built); the field returns to the crystal's centre
@@ -141,8 +141,14 @@ export function chipState(S, sim, key, v) {
     sim.invalidate('temp'); sim.invalidate('env');
     return 'holder';
   }
-  if (key === 'envCell' || key === 'lcClass') { // a liquid cell (liquid.js): no cryo holder with it; each class has its windows
+  if (key === 'envCell' || key === 'lcClass' || key === 'gcGeom') { // a liquid or gas cell (liquid.js, gas.js): no cryo holder with it; each class has its windows
     S[key] = v;
+    if (S.envCell === 'gas') {
+      if (['ln2', 'lhe'].includes(S.holder)) { S.holder = 'room'; S.tempSet = 293; }
+      S.envWinT = 30;
+      if (S.gcGeom === 'open') S.gcP = Math.min(S.gcP, 20); else S.tomoMax = Math.min(S.tomoMax, 20);
+      sim.resetGas?.();
+    }
     if (S.envCell === 'liquid') {
       if (HOLDERS[S.holder] && ['ln2', 'lhe'].includes(S.holder)) { S.holder = 'room'; S.tempSet = 293; }
       S.envWinT = S.lcClass === 'graphene' ? 1 : 50;
@@ -241,7 +247,7 @@ export function runOpState(S, sim, op) {
       return true;
     case 'chip':
       if (op.k === 'kV' && [80, 200, 300].includes(op.v)) set('kV', op.v, 'kV');
-      else if (['corrector', 'holder', 'detPreset', 'eelsRange', 'vdet', 'magSpec', 'envWin', 'envCell', 'lcClass'].includes(op.k) && (!LOR_CHOICES[op.k] || LOR_CHOICES[op.k].includes(op.v))) chipState(S, sim, op.k, op.k === 'corrector' ? !!op.v : op.v);
+      else if (['corrector', 'holder', 'detPreset', 'eelsRange', 'vdet', 'magSpec', 'envWin', 'envCell', 'lcClass', 'gcGeom'].includes(op.k) && (!LOR_CHOICES[op.k] || LOR_CHOICES[op.k].includes(op.v))) chipState(S, sim, op.k, op.k === 'corrector' ? !!op.v : op.v);
       return true;
     case 'nudge': { const st = S.corrector ? 2 : S.spec === 'bio' ? 100 : 10; set('df', +clamp(S.df + op.d * st, ...dfLimits(S)).toFixed(1), 'df'); return true; }
     case 'zoom': set('fov', +clamp(S.fov * op.f, 1.5, fovMax(S)).toFixed(2), 'fov'); return true;

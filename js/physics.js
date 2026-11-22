@@ -1407,6 +1407,7 @@ export const XRAY = [
   { el: 'C', line: 'Kα', E: 0.277, w: 1, y: 0.22 },
   { el: 'O', line: 'Kα', E: 0.525, w: 1, y: 0.45 },
   { el: 'Si', line: 'Kα', E: 1.74, w: 1, y: 1.0 },
+  { el: 'Ar', line: 'Kα', E: 2.957, w: 1, y: 1.0 }, // a gas cell's argon (gas.js)
   { el: 'Si', line: 'Kβ', E: 1.836, w: 0.03, y: 1.0 },
   { el: 'Ti', line: 'Lα', E: 0.452, w: 0.06, y: 1.1 },
   { el: 'Ti', line: 'Kα', E: 4.511, w: 1, y: 1.1 },
@@ -1461,6 +1462,7 @@ export const EDGES = [
   // carbon: amorphous / organic (weak, broad 1s→π*) and graphitic sp² (sharp π* and the σ* exciton)
   { key: 'C', el: 'C', name: 'C K', E: 284, kind: 'sharp', h: 1.0, elnes: [[285.2, 1.4, 0.4], [292, 5, 0.65], [300, 9, 0.3]] },
   { key: 'Cg', el: 'C', name: 'C K (sp²)', E: 284, kind: 'sharp', h: 1.0, elnes: [[285.4, 0.3, 1.6], [291.7, 0.5, 0.9], [293.8, 2.5, 0.7], [302, 8, 0.35]] },
+  { key: 'Ar', el: 'Ar', name: 'Ar L₂,₃', E: 248, kind: 'delayed', h: 1.6, delay: 4, elnes: [[250, 1, 0.5]] }, // a gas cell's argon (gas.js)
   { key: 'O', el: 'O', name: 'O K', E: 532, kind: 'sharp', h: 0.7, elnes: [[533, 1.8, 0.55], [538.5, 3.5, 0.45], [545, 7, 0.35]] },
   { key: 'Si', el: 'Si', name: 'Si L₂,₃', E: 99.8, kind: 'delayed', h: 2.4, delay: 7, elnes: [[100.3, 0.9, 0.25]] },
   { key: 'SiOx', el: 'Si', name: 'Si L₂,₃ (oxide)', E: 105.6, kind: 'delayed', h: 2.4, delay: 5, elnes: [[108.2, 1.6, 0.6], [115, 3, 0.4]] },

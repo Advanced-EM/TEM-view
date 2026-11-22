@@ -16,6 +16,7 @@ import * as SPA from './spa.js';
 import * as PT from './ptychotomo.js';
 import * as ENV from './environment.js';
 import * as LIQ from './liquid.js';
+import * as GAS from './gas.js';
 import { buildStructure } from './structure.js';
 import { HOLDERS, specimenT, u2Ratio, thermalStrain, radiolysisFactor, iceSublimation, DEVITRIFY_K } from './holder.js';
 
@@ -296,6 +297,7 @@ export class Sim {
       }
     this.liquidTEM(I, n, dx);
     this.tem = { img: cropArr(I, n, c), c, dx, fft: F, n, apK, apCenter, kmax: 1 / (2 * dx) };
+    this.gasContrast(this.tem.img); // on the image as shown (its own mean)
     this.main = { arr: this.tem.img, w: c, h: c };
   }
 
@@ -397,6 +399,7 @@ export class Sim {
     this.scanDrift(img, n, dx);
     this.scanDistort(img, n);
     this.stemImg = { img: cropArr(img, n, c), c, dx, type };
+    this.gasContrast(this.stemImg.img);
     this._stemPass = this.frameNoise;
     this.main = { arr: this.stemImg.img, w: c, h: c };
   }
@@ -433,6 +436,7 @@ export class Sim {
         }
         I[j] = v;
       }
+    this.gasDiffuse(I, n, dk);
     // azimuthal average (skip the direct beam)
     const nb = 220, prof = new Float32Array(nb), cnt = new Float32Array(nb), kStep = 1.9 / nb;
     for (let y = 0; y < n; y++)
@@ -1011,6 +1015,46 @@ export class Sim {
     }
     if (S.spec === 'au' && !S.zone && L.grow - L.grown >= 0.5) { L.grown = L.grow; P.regrowGold(Math.round(L.grow * 2) / 2); this.mapCache.clear(); this.invalidate('damage'); }
   }
+  // the gas (gas.js): images keep e^(−nσL) of their contrast; the scattered electrons spread as a background
+  gasContrast(I) {
+    const g = ENV.gasNow(this.S, this.temp());
+    if (!g) return;
+    const A = g.col.transmitted;
+    let m = 0;
+    for (let i = 0; i < I.length; i++) m += I[i];
+    m /= I.length || 1;
+    for (let i = 0; i < I.length; i++) I[i] = A * I[i] + (1 - A) * m;
+  }
+  // diffraction: the gas's elastically scattered share becomes a diffuse halo falling off with angle
+  gasDiffuse(I, n, dk) {
+    const g = ENV.gasNow(this.S, this.temp());
+    if (!g) return;
+    const f = 1 - Math.exp(-g.col.tauEl);
+    let tot = 0, h = 0;
+    for (let i = 0; i < I.length; i++) tot += I[i];
+    const halo = new Float32Array(n * n);
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) { const k = Math.hypot(x - n / 2, y - n / 2) * dk, v = Math.exp(-k / 0.3); halo[y * n + x] = v; h += v; }
+    for (let i = 0; i < I.length; i++) I[i] = (1 - f) * I[i] + (f * tot * halo[i]) / (h || 1);
+  }
+  // gas reactions with the heating chip (gas.js): gold sinters, a perovskite is reduced in H₂ and re-oxidised in O₂;
+  // a windowed cell bursts like a liquid cell when the gas pressure exceeds what its windows hold
+  stepGas(dt) {
+    const S = this.S;
+    if (S.envCell !== 'gas') { if (this.gasSt) { this.gasSt = null; if (SP.au.grownBy) { P.regrowGold(0); this.mapCache.clear(); } this.invalidate('env'); } return; }
+    this.gasSt ??= { xi: 0, sinter: 0, grown: 0, burst: null, events: [], t: 0 };
+    const G = this.gasSt;
+    if (S.gcGeom !== 'open' && !G.burst) {
+      const Pb = LIQ.burstPressure({ a: (S.lcA / 2) * 1e-6, b: (S.lcB / 2) * 1e-6, t: (S.envWinT ?? 30) * 1e-9 }) / 1e5;
+      if (S.gcP / 1000 >= Pb) { G.burst = { t: G.t, p_bar: S.gcP / 1000, burst_bar: Pb }; G.events.push({ event: 'burst', ...G.burst }); S.paused = true; this.invalidate('env'); return; }
+    }
+    if (G.burst || S.paused || !(dt > 0)) return;
+    G.t += dt * S.speed;
+    const xi0 = G.xi;
+    GAS.react(G, S, this.temp(), dt * S.speed);
+    if (Math.abs(G.xi - xi0) > 0.01) this.stale.si = 1, this.stale.eels = 1;
+    if (S.spec === 'au' && !S.zone && G.sinter - G.grown >= 0.5) { G.grown = G.sinter; P.regrowGold(Math.round(G.sinter * 2) / 2); this.mapCache.clear(); this.invalidate('damage'); }
+  }
+  resetGas() { if (SP.au.grownBy) P.regrowGold(0); this.gasSt = null; this.mapCache.clear(); this.invalidate('env'); }
   resetLiquid() { if (SP.au.grownBy) P.regrowGold(0); this.liq = null; this.mapCache.clear(); this.invalidate('env'); }
   // TEM: electrons that lost energy in the liquid are blurred by chromatic aberration (their share e^(−t/λ) is
   // not); the liquid below the particle adds a smaller elastic blur (the top–bottom effect)
@@ -1155,6 +1199,7 @@ export class Sim {
     const spec = new Float32Array(nb);
     const compSym = {};
     for (const e of si.els) compSym[e.sym] = (compSym[e.sym] || 0) + si.comp[e.key];
+    if (this.gasSt?.xi && compSym.O && S.spec === 'sto') compSym.O *= 1 - 0.15 * this.gasSt.xi; // reduced in H₂: oxygen vacancies (gas.js)
     // the environment's windows: their atoms against the specimen's (atoms per Å² along the beam), as extra lines
     const wa = ENV.windowAtoms(S, this.liq), specAtoms = (si.totN.reduce((a, b) => a + b, 0) / si.totN.length) / (si.dx * si.dx) * 1.45;
     for (const [el, a] of Object.entries(wa)) compSym[el] = (compSym[el] || 0) + a / Math.max(specAtoms, 1e-3);
@@ -1224,7 +1269,8 @@ export class Sim {
   eelsModel(site) {
     const S = this.S, spec = this.spec, zeff = spec.zeff ?? 10, tau = site.tau * EELS.tauBetaFactor(S.kV, zeff, S.eelsBeta), ctx = { q: spec.dmg ?? 0, T: this.temp() };
     const edges = [];
-    for (const ed of P.EDGES) { const c = site.comp[ed.key]; if (c) edges.push({ edge: ed, w: tau * c, peaks: spec.elnes?.[ed.key]?.(ctx) }); }
+    const oLeft = this.gasSt?.xi && S.spec === 'sto' ? 1 - 0.15 * this.gasSt.xi : 1;
+    for (const ed of P.EDGES) { const c = (site.comp[ed.key] ?? 0) * (ed.key === 'O' ? oLeft : 1); if (c) edges.push({ edge: ed, w: tau * c, peaks: spec.elnes?.[ed.key]?.(ctx) }); }
     const m = { tau, plasmons: spec.plasmon, edges, extraLoss: spec.extraLoss ? (E, r) => spec.extraLoss(E, r) : null, kV: S.kV, beta: S.eelsBeta, zlp: this.zlp(), realistic: S.clarity === 'real', bg: { amp: 0.012, s: 3.1 } };
     return EELS.addInelasticComponents(m, [...ENV.inelastic(S, S.kV, this.liq), ...(this.inelastic ?? [])]); // the environment's windows, then any other layers
   }
@@ -1602,6 +1648,7 @@ export class Sim {
     if (m === 'spa') this.stepSPA();
     if (m === 'ptychotomo') this.stepPT();
     this.stepLiquid(dt);
+    this.stepGas(dt);
     if (m === 'oah' && this.oah.stale) { this.oah.compute(); this.version++; }
     if (m === 'oah') this.main = this.oah.disp ? { arr: this.oah.disp.holo, w: this.oah.disp.c, h: this.oah.disp.c } : null;
     if (m === 'ilh') {

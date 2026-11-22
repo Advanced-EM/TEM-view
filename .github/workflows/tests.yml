@@ -41,6 +41,8 @@ jobs:
         run: node tools/env-check.mjs
       - name: Liquid cell (bulge, burst, resolution, top-bottom effect, bubbles)
         run: node tools/liquid-check.mjs
+      - name: Gas cell and ETEM (contrast follows exp(-n sigma L), spectra, burst, reactions)
+        run: node tools/gas-check.mjs
       - name: MCP server
         run: cd tools/temview-mcp && npm ci && node test.mjs
       - name: Collector Worker

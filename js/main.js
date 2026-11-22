@@ -15,6 +15,7 @@ import { defaultBackend } from './compute.js';
 import { SAMPLES } from './spa.js';
 import * as ENVW from './environment.js';
 import * as LIQ from './liquid.js';
+import * as GASX from './gas.js';
 import { evaluate, PROFILES, LIMIT_TEXT, capFor } from './resources.js';
 import { RemoteBackend } from './remote.js';
 import { buildBundle, readResults } from './bundle.js';
@@ -147,6 +148,18 @@ function renderStatus(checking = false) {
 }
 setTimeout(() => checkResources(), 2500); // measure once the exhibit has settled (no connector probing until Status opens)
 
+// the gas column: scattering, the windows' bulge and burst margin, reactions (gas.js)
+function gasNote() {
+  const g = ENVW.gasNow(S, sim.temp()), G = sim.gasSt;
+  if (!g) return '';
+  if (G?.burst) return `The windows burst at ${G.burst.p_bar.toFixed(2)} bar (they hold ${G.burst.burst_bar.toFixed(2)} bar): the column protection blanked the beam and the event is logged. Load a new cell.`;
+  const c = g.col, parts = [`${GASX.GASES[g.cell.gas].label} at ${g.cell.pMbar >= 100 ? `${(g.cell.pMbar / 1000).toFixed(2)} bar` : `${g.cell.pMbar.toPrecision(2)} mbar`} and ${Math.round(g.cell.T)} K over ${g.pathA > 1e6 ? `${(g.pathA / 1e7).toFixed(1)} mm` : `${(g.pathA / 1e4).toFixed(1)} µm`}: ${c.N.toPrecision(2)} molecules per Å², nσL = ${c.tau.toFixed(3)}, so ${(100 * (1 - c.transmitted)).toFixed(1)} % of the beam is scattered and images keep ${(100 * c.transmitted).toFixed(1)} % of their contrast.`];
+  if (S.gcGeom !== 'open') { const Pb = LIQ.burstPressure({ a: (S.lcA / 2) * 1e-6, b: (S.lcB / 2) * 1e-6, t: (S.envWinT ?? 30) * 1e-9 }) / 1e5; parts.push(`The windows bulge the path to ${(g.pathA / 1e4).toFixed(1)} µm (gap ${S.gcGap} µm); they burst at ${Pb.toFixed(1)} bar.`); }
+  if (sim.temp() > 500) parts.push(`At ${Math.round(sim.temp())} K the gas reacts:${S.spec === 'au' ? ` the gold has sintered by ${(G?.sinter ?? 0).toFixed(1)} Å${S.gcGas === 'O2' ? ' (faster in oxygen)' : ''}.` : S.spec === 'sto' ? ` SrTiO₃ is ${Math.round(100 * (G?.xi ?? 0))} % reduced (oxygen vacancies; ${S.gcGas === 'H2' || S.gcGas === 'CO' ? 'reducing gas' : S.gcGas === 'O2' ? 're-oxidising in oxygen' : 'an inert gas holds it'}): watch the O K edge.` : ' choose gold or SrTiO₃ to see sintering or reduction.'}`);
+  else parts.push('Heat it (heating holder) to drive reactions: gold sinters, SrTiO₃ loses oxygen in H₂ and takes it back in O₂.');
+  parts.push(`Tilt up to ±${ENVW.maxTilt(S)}°.`);
+  return parts.join(' ');
+}
 // the window type in effect: the liquid cell's own, else the chosen one (sinx when none is chosen, for the slider)
 function winKey() { return ENVW.windowsOf(S)?.key ?? 'sinx'; }
 // the liquid cell's state: bulge, burst margin, the liquid here, radiolysis, resolution (liquid.js)
@@ -404,15 +417,15 @@ const CONTROLS = [
   { buttons: [['libRand', 'Random particle'], ['libAuCo', 'Au–Co, phase-separated'], ['libChip', 'Whole chip']], modes: NOT_LOR, show: () => S.spec === 'lib' },
   { chips: 'holder', label: 'Specimen holder', opts: Object.entries(HOLDERS).map(([k, v]) => [k, v.short]) },
   // the environment (environment.js): window membranes above and below the specimen, seen by every technique
-  { chips: 'envCell', label: 'Cell around the specimen', small: true, opts: [['none', 'None (grid)'], ['liquid', 'Liquid cell']] },
+  { chips: 'envCell', label: 'Cell around the specimen', small: true, opts: [['none', 'None (grid)'], ['liquid', 'Liquid cell'], ['gas', 'Gas cell / ETEM']] },
   { chips: 'envWin', label: 'Windows (one above, one below the specimen)', small: true, opts: Object.entries(ENVW.WINDOWS).map(([k, v]) => [k, v.label]), show: () => S.envCell === 'none' },
-  { slider: 'envWinT', label: 'Window thickness, each', show: () => S.envCell === 'liquid' || S.envWin !== 'none', dyn: () => { const w = ENVW.WINDOWS[winKey()]; return { min: w.range[0], max: w.range[1], step: 1 }; },
+  { slider: 'envWinT', label: 'Window thickness, each', show: () => S.envCell === 'liquid' || (S.envCell === 'gas' && S.gcGeom !== 'open') || (S.envCell === 'none' && S.envWin !== 'none'), dyn: () => { const w = ENVW.WINDOWS[winKey()]; return { min: w.range[0], max: w.range[1], step: 1 }; },
     fmt: (v) => (winKey() === 'graphene' ? `${Math.round(v)} layer${Math.round(v) > 1 ? 's' : ''} (${(Math.round(v) * 0.335).toFixed(2)} nm)` : `${(+v).toFixed(0)} nm`) },
   { pFn: () => envNote(), show: () => S.envCell === 'none' },
   // the liquid cell (liquid.js)
   { chips: 'lcClass', label: 'Liquid cell', small: true, show: () => S.envCell === 'liquid', opts: [['sinx', 'SiNₓ static'], ['sinxFlow', 'SiNₓ flow'], ['graphene', 'Graphene pockets']] },
-  { slider: 'lcA', label: 'Window short side', min: 10, max: 500, step: 5, fmt: (v) => `${v} µm`, show: () => S.envCell === 'liquid' && S.lcClass !== 'graphene' },
-  { slider: 'lcB', label: 'Window long side', min: 10, max: 2000, step: 10, fmt: (v) => `${v} µm`, show: () => S.envCell === 'liquid' && S.lcClass !== 'graphene' },
+  { slider: 'lcA', label: 'Window short side', min: 10, max: 500, step: 5, fmt: (v) => `${v} µm`, show: () => (S.envCell === 'liquid' && S.lcClass !== 'graphene') || (S.envCell === 'gas' && S.gcGeom !== 'open') },
+  { slider: 'lcB', label: 'Window long side', min: 10, max: 2000, step: 10, fmt: (v) => `${v} µm`, show: () => (S.envCell === 'liquid' && S.lcClass !== 'graphene') || (S.envCell === 'gas' && S.gcGeom !== 'open') },
   { slider: 'lcGap', label: 'Spacer (liquid at the window edge)', min: 20, max: 5000, log: true, fmt: (v) => `${Math.round(v)} nm`, show: () => S.envCell === 'liquid' && S.lcClass !== 'graphene' },
   { slider: 'lcDP', label: 'Pressure difference (liquid − vacuum)', min: 0, max: 30, step: 0.05, fmt: (v) => `${(+v).toFixed(2)} bar`, show: () => S.envCell === 'liquid' && S.lcClass !== 'graphene', ends: ['', 'atmosphere', 'burst?'] },
   { slider: 'lcFlow', label: 'Flow', min: 0, max: 5, step: 0.05, fmt: (v) => `${(+v).toFixed(2)} µL/min`, show: () => S.envCell === 'liquid' && S.lcClass === 'sinxFlow' },
@@ -420,7 +433,14 @@ const CONTROLS = [
   { slider: 'lcRate', label: 'Dose rate', min: 0.01, max: 1000, log: true, fmt: (v) => `${(+v).toPrecision(2)} e⁻/Å²/s · ${(LIQ.doseRateGy(+v, S.kV) / 1e6).toPrecision(2)} MGy/s`, show: () => S.envCell === 'liquid' },
   { chips: 'lcDepth', label: 'The particle sits', small: true, show: () => S.envCell === 'liquid', opts: [['top', 'On the entrance window'], ['middle', 'In the liquid'], ['bottom', 'On the exit window']] },
   { toggles: [['lcPrecursor', 'Gold precursor in the liquid (particles grow)'], ['lcFilter', 'Energy filter (TEM: zero loss only)']], show: () => S.envCell === 'liquid' },
-  { buttons: [['newCell', 'Load a new cell']], show: () => S.envCell === 'liquid' },
+  // the gas cell / environmental column (gas.js)
+  { chips: 'gcGeom', label: 'Gas geometry', small: true, show: () => S.envCell === 'gas', opts: [['windowed', 'Windowed cell (to ~1 bar)'], ['open', 'Open column (to 20 mbar)']] },
+  { chips: 'gcGas', label: 'Gas', small: true, show: () => S.envCell === 'gas', opts: Object.entries(GASX.GASES).map(([k, v]) => [k, v.label]) },
+  { slider: 'gcP', label: 'Pressure at the specimen', min: 0.01, max: 2000, log: true, dyn: () => ({ max: GASX.GEOMETRIES[S.gcGeom].maxP }), fmt: (v) => (v >= 100 ? `${(v / 1000).toFixed(2)} bar` : `${(+v).toPrecision(2)} mbar`), show: () => S.envCell === 'gas' },
+  { slider: 'gcGap', label: 'Gas gap between the windows', min: 1, max: 100, step: 0.5, fmt: (v) => `${v} µm`, show: () => S.envCell === 'gas' && S.gcGeom !== 'open' },
+  { slider: 'gcPath', label: 'Gas path through the pole-piece gap', min: 0.1, max: 10, step: 0.1, fmt: (v) => `${(+v).toFixed(1)} mm`, show: () => S.envCell === 'gas' && S.gcGeom === 'open' },
+  { pFn: () => gasNote(), show: () => S.envCell === 'gas' },
+  { buttons: [['newCell', 'Load a new cell']], show: () => S.envCell === 'liquid' || (S.envCell === 'gas' && S.gcGeom !== 'open') },
   { pFn: () => liquidNote(), show: () => S.envCell === 'liquid' },
   { slider: 'tempSet', label: 'Temperature setpoint', dyn: () => { const H = HOLDERS[S.holder]; return { min: H.min, max: H.max, step: H.step, log: H.log }; }, fmt: (v) => fmtT(v), show: () => S.holder !== 'room' },
   { pFn: () => `Specimen at ${fmtT(sim.temp())}${S.holder === 'room' ? '' : ` (setpoint ${fmtT(S.tempSet)}; the grid runs ${S.holder === 'heat' ? 'about 1 % hotter than the reading' : 'warmer than the holder tip'} and fluctuates by ±${HOLDERS[S.holder].jitter} K)`}. Drift ${sim.driftSpeed().toFixed(2)} Å/s.` },
@@ -923,7 +943,7 @@ function action(id, el) {
   if (id === 'abtem') openAbTEM({ S, sim, mainCv, download });
   if (id === 'connect') openConnect({ S, sim, download });
   if (id === 'status') return openStatus();
-  if (id === 'newCell') { sim.resetLiquid(); S.paused = false; refreshControls(); return; }
+  if (id === 'newCell') { sim.resetLiquid(); sim.resetGas(); S.paused = false; refreshControls(); return; }
   if (id === 'exportProfile') download(new Blob([JSON.stringify(S.profile, null, 1)], { type: 'application/json' }), `instrument-profile-${S.profile.preset}.json`);
   if (id === 'restore') { sim.restoreSpecimen(); explainChange('restore'); }
   if (id === 'lorReset') {
