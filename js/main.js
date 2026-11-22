@@ -59,6 +59,38 @@ const sim = new Sim(S);
 // same cache-busting stamp as this module. Without workers they run on the main thread as before.
 sim.setCompute(defaultBackend(new URL(`./compute-worker.js${new URL(import.meta.url).search}`, import.meta.url)));
 sim.compute.onGpu = () => refreshControls(); // the worker reports whether it has WebGPU (gpu.js) a moment after start
+// the ptychographic tomography status
+function ptNote() {
+  const A = sim.pt, o = A?.out;
+  if (!A) return '';
+  const lam = P.wavelength(S.kV), dr = lam / (S.ptAlpha * 1e-3) ** 2, lr = lam / (2 * S.ptAlpha * 1e-3), parts = [];
+  parts.push(`Browser preview: a 16 Å cube of atoms (two heavy atoms stacked 8 Å apart along the beam), a 24 × 24 scan per tilt, 4 slices, from a flat start. One view resolves ≈ ${lr.toFixed(2)} Å laterally but only ≈ ${dr.toFixed(0)} Å in depth (λ/α²), more than the cube is deep.`);
+  if (A.full && !A.done) parts.push(`Tilt ${Math.min((o.t ?? 0) + 1, o.tilts ?? S.ptTilts)} of ${o.tilts ?? S.ptTilts}: ${o.stage === 'data' ? 'scanning' : o.stage === 'recon' ? 'MS-ePIE' : 'fusing'}…`);
+  const st = o?.stats;
+  if (st?.atom) parts.push(`Depth spread of the isolated atom: ${st.atom.single.z.toFixed(1)} Å from the 0° view, ${st.atom.fused.z.toFixed(1)} Å from ${o.tilts} tilts (the atom itself: ${st.atom.truth.z.toFixed(1)} Å). The stacked pair is ${st.pair.fused > 0.5 ? 'resolved' : 'not resolved'} after fusion (dip ${Math.round(100 * st.pair.fused)} %), ${st.pair.single > 0.5 ? 'and' : 'but not'} from one view (${Math.round(100 * st.pair.single)} %).`);
+  else if (!A.full) parts.push('Press Scan to record the tilts (about a minute).');
+  parts.push('The full problem (joint multi-tilt reconstruction, mixed-state probes, position correction) runs on a GPU or HPC: the export prefills it.');
+  return parts.join(' ');
+}
+// the preview's volumes as MRC files, and the full-scale job (Tier 2/3) with its parameters prefilled
+function exportPT() {
+  const A = sim.pt, o = A?.out;
+  if (!o?.fused) { $('#change').hidden = false; $('#change').innerHTML = '<small>Nothing to export</small><p>Scan the tilts and reconstruct first.</p>'; return; }
+  const N = o.N, files = [];
+  for (const [name, v] of [['fused.mrc', o.fused], ['single-tilt.mrc', o.single], ['object.mrc', o.truth]]) files.push({ name, bytes: TOMO.mrc(v, N, N, N, o.dx, { label: `TEM-view ptycho-tomography ${name}` }) });
+  const f = footprintFor(S, sim), job = {
+    format: 'temview-ptychotomo/1', note: 'Full-scale parameters prefilled from the browser session; the preview used a 24² scan, 4 slices and the listed tilts.',
+    beam: { kV: S.kV, wavelength_A: +P.wavelength(S.kV).toFixed(6), convergence_semiangle_mrad: S.ptAlpha },
+    scan: { positions: [f.plan.scan, f.plan.scan], detector_px: [f.plan.det, f.plan.det], dwell_us: f.plan.dwell_us },
+    tilts: { count: f.plan.tilts, max_deg: S.ptMax, preview_angles_deg: o.angles, axis: 'x (image rows)' },
+    reconstruction: { method: 'joint multislice ePIE over all tilts', slices: f.plan.slices, iterations: f.plan.iters, mixed_state_probes: 4, position_correction: true, engines: ['py4DSTEM', 'PtyRAD'] },
+    dose_total_e_per_A2: S.ptDose, footprint: { raw_bytes: Math.round(f.raw.bytes), tier: f.badge.tier, reason: f.badge.reason },
+    preview: o.stats ? { depth_fwhm_single_A: o.stats.atom.single.z, depth_fwhm_fused_A: o.stats.atom.fused.z, pair_dip_single: o.stats.pair.single, pair_dip_fused: o.stats.pair.fused } : null,
+  };
+  files.push({ name: 'ptychotomo-job.json', bytes: new TextEncoder().encode(JSON.stringify(job, null, 2)) });
+  files.push({ name: 'README.txt', bytes: new TextEncoder().encode(`TEM-view ptychographic tomography (browser preview)\n${o.tilts} tilts to ±${S.ptMax}°, ${S.kV} kV, α = ${S.ptAlpha} mrad, ${S.ptDose.toExponential(1)} e⁻/Å² in all\nfused.mrc: the volume from all tilts (${S.ptFusion}); single-tilt.mrc: the 0° view alone; object.mrc: the test object (phase per voxel), ${N}³ voxels of ${o.dx} Å\nptychotomo-job.json: the full-scale job (Tier 2/3) with the session's parameters.\nSimulated, qualitative data for teaching and pipeline tests.\n`) });
+  download(new Blob([zip(files)], { type: 'application/zip' }), `tem-view-ptychotomo-${stamp()}.zip`);
+}
 // the SPA status and what the numbers mean
 function spaNote() {
   const A = sim.spa, o = A?.out;
@@ -181,7 +213,7 @@ const logMap = (min, max) => ({ to: (v) => (Math.log(v / min) / Math.log(max / m
 const NOT_RONCH = 'tem stem 4d diff eds eels cbed oah ilh';
 const TILTABLE = 'tem stem 4d diff eds eels cbed oah ilh ltem lstem';
 // the atomic-scale specimens and the objective lens: not in the Lorentz modes (objective off, magnetic specimens)
-const NOT_LOR = 'tem stem 4d diff cbed eds eels ronch oah ilh ed3d tomo spa';
+const NOT_LOR = 'tem stem 4d diff cbed eds eels ronch oah ilh ed3d tomo spa ptychotomo';
 const LOR = 'ltem lstem';
 // acquisition plan (footprint.js): the current technique's plan, and the chip options for one field
 const curPlan = () => { try { return footprintFor(S, sim).plan; } catch { return {}; } };
@@ -320,6 +352,16 @@ const CONTROLS = [
   { chips: 'edSlice', label: 'Reciprocal-space layer', small: true, modes: 'ed3d', opts: [['hk0', 'hk0'], ['h0l', 'h0l'], ['0kl', '0kl']] },
   { slider: 'edLayer', label: 'Layer index', min: -3, max: 3, step: 1, fmt: (v) => `${v}`, modes: 'ed3d' },
   { pFn: () => { const e = sim.ed; if (!e || e.none) return 'Choose a crystal (SrTiO₃, Au, Si or a perovskite), or load any structure as XYZ or CIF: its lattice is found from the atoms. Set the orientation with the zone axis, or with Align to zone in the structure preview.'; if (e.diffuse) return `${e.series.plan.frames} frames over ${e.series.plan.range}°. No lattice was found in this structure, so the frames show its diffuse scattering (a molecule or amorphous material): there are no reflections to index.`; if (e.lattice) return `Lattice found from the atoms: ${e.name.split('· ')[1]} (${e.lattice.basis.length} atoms per cell, ${e.refl.length} reflections to ${(1 / e.gMax).toFixed(2)} Å). Indices refer to this primitive cell; equivalents merged as Friedel pairs. ${e.series.plan.frames} frames of ${e.series.plan.wedge.toFixed(2)}°: ${(100 * e.full.completeness).toFixed(1)} % complete over ${e.series.plan.range}°.`; const p = e.series.plan, f = e.full; return `${p.frames} frames of ${p.wedge.toFixed(2)}° over ${p.range}°: ${p.time_s.toFixed(0)} s, ${p.totalDose.toPrecision(3)} e⁻/Å² in total${Number.isFinite(e.o.Dc) ? ` (critical dose ≈ ${e.o.Dc.toFixed(0)} e⁻/Å²)` : ''}. Detector edge ${(1 / e.gMax).toFixed(2)} Å. Full series: ${(100 * f.completeness).toFixed(1)} % complete${f.dLimit ? `, ⟨I/σ⟩ ≥ 2 to ${f.dLimit.toFixed(2)} Å` : ''}. With Friedel symmetry only, a range Φ covers Φ/180° of reciprocal space; more range, or a higher-symmetry crystal, fills the rest.`; }, modes: 'ed3d' },
+  { sec: 'Ptychographic tomography · browser preview', modes: 'ptychotomo' },
+  { buttons: [['ptCollect', 'Scan the tilts and reconstruct'], ['ptExport', 'Export volumes + full-scale job']], modes: 'ptychotomo' },
+  { chips: 'ptView', label: 'View', small: true, modes: 'ptychotomo', opts: [['xz', 'XZ (depth)'], ['xy', 'XY (top)'], ['slices', 'Per-tilt slices']] },
+  { chips: 'ptTilts', label: 'Tilts', small: true, modes: 'ptychotomo', opts: [[1, '1 (no tomography)'], [3, '3'], [5, '5'], [7, '7'], [9, '9']] },
+  { slider: 'ptMax', label: 'Maximum tilt', min: 10, max: 75, step: 1, fmt: (v) => `±${v}°`, modes: 'ptychotomo' },
+  { slider: 'ptAlpha', label: 'Probe semi-angle α', min: 10, max: 20, step: 0.5, fmt: (v) => `${v} mrad · depth resolution of one view ≈ ${Math.round(P.wavelength(S.kV) / (v * 1e-3) ** 2)} Å`, modes: 'ptychotomo' },
+  { slider: 'ptDose', label: 'Dose for all tilts', min: 1e3, max: 1e7, log: true, fmt: (v) => `${(+v).toExponential(1)} e⁻/Å²`, modes: 'ptychotomo' },
+  { slider: 'ptIters', label: 'MS-ePIE iterations per tilt', min: 2, max: 30, step: 1, fmt: (v) => `${v}`, modes: 'ptychotomo' },
+  { chips: 'ptFusion', label: 'Fusion', small: true, modes: 'ptychotomo', opts: [['sirt', 'Joint SIRT on the slabs'], ['average', 'Average (back-projection)']] },
+  { pFn: () => ptNote(), modes: 'ptychotomo' },
   { sec: 'Single-particle cryo-EM', modes: 'spa' },
   { buttons: [['spaCollect', 'Collect and process'], ['spaExport', 'Export maps + classes (.mrc)']], modes: 'spa' },
   { chips: 'spaSample', label: 'Particle', small: true, modes: 'spa', opts: [['apo', 'Apoferritin · 480 kDa, octahedral'], ['bgal', 'β-Galactosidase · 465 kDa, D2']] },
@@ -699,6 +741,8 @@ function action(id, el) {
     sim.invalidate('magnet'); explainChange('lorReset');
   }
   if (id === 'edCollect') { sim.startED3D(); return; }
+  if (id === 'ptCollect') { sim.startPT(); return; }
+  if (id === 'ptExport') return exportPT();
   if (id === 'spaCollect') { sim.startSPA(); return; }
   if (id === 'spaExport') return exportSPA();
   if (id === 'tomoCollect') { sim.startTomo(); return; }
@@ -842,6 +886,7 @@ function updateDetectorHeader() {
     eels: ['Energy-filtered map', 'Electron energy-loss spectrum'],
     ed3d: ['Diffraction frame · rotation series', 'Reciprocal space · completeness by shell'],
     tomo: [`${S.tomoSignal === 'bf' ? 'BF-TEM' : 'HAADF-STEM'} tilt series · tomogram`, 'Across the tilt axis · missing wedge'],
+    ptychotomo: [{ xz: 'Depth section (XZ) · one view against all tilts', xy: 'Top section (XY)', slices: 'Per-tilt MS-ePIE phase slices' }[S.ptView] ?? 'Ptycho-tomography', 'Depth profile through the stacked atoms'],
     spa: [{ mic: 'Cryo-EM micrograph · picks', ctf: 'Power spectrum · CTF fit', classes: '2D class averages', map: '3D reconstruction' }[S.spaView] ?? 'Cryo-EM', 'FSC · angular distribution'],
     ronch: ['Ronchigram · direct electron detector', 'Aberration phase & budget'],
     oah: [`Off-axis hologram · ${({ holo: 'raw hologram', phase: 'reconstructed phase', amp: 'reconstructed amplitude', contour: 'phase contours' })[S.holoView]}`, 'Sideband selection & phase profile'],
@@ -1592,7 +1637,7 @@ function frame(now) {
       b.el.hidden = !vis;
       if (vis) b.el.textContent = b.c.pFn();
     }
-    if (['eds', '4d', 'eels', 'stem', 'ronch', 'cbed', 'oah', 'ilh', 'ltem', 'lstem', 'ed3d', 'tomo', 'spa'].includes(S.mode)) renderInfo();
+    if (['eds', '4d', 'eels', 'stem', 'ronch', 'cbed', 'oah', 'ilh', 'ltem', 'lstem', 'ed3d', 'tomo', 'spa', 'ptychotomo'].includes(S.mode)) renderInfo();
     $('#status').textContent = `· ${fps} fps`;
   }
   if (!scene.renderer.xr.isPresenting) requestAnimationFrame(frame); else xrLoop = true; // in a headset the XR session drives the frames

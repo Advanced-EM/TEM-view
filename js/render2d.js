@@ -181,7 +181,7 @@ export function draw(sim, S, mainCv, secCv, hover) {
   const m = fit(mainCv), s = fit(secCv);
   m.ctx.fillStyle = C.bg; m.ctx.fillRect(0, 0, m.W, m.H);
   s.ctx.fillStyle = C.bg; s.ctx.fillRect(0, 0, s.W, s.H);
-  const fn = { spa: drawSPA, tomo: drawTomo, ed3d: drawED3D, tem: drawTEM, stem: drawSTEM, diff: drawDiff, '4d': draw4D, eds: drawEDS, eels: drawEELS, ronch: drawRonch, cbed: drawCBED, oah: drawOAH, ilh: drawILH, ltem: drawLTEM, lstem: drawLSTEM }[S.mode];
+  const fn = { ptychotomo: drawPT, spa: drawSPA, tomo: drawTomo, ed3d: drawED3D, tem: drawTEM, stem: drawSTEM, diff: drawDiff, '4d': draw4D, eds: drawEDS, eels: drawEELS, ronch: drawRonch, cbed: drawCBED, oah: drawOAH, ilh: drawILH, ltem: drawLTEM, lstem: drawLSTEM }[S.mode];
   fn(sim, S, m, s, performance.now() / 1000);
   cryoLabel(m.ctx, sim, S, m.W, m.H, m.dpr);
   if (sim.single?.hits && sim.single.count && !['4d', 'eds', 'eels', 'ilh', 'ltem', 'lstem'].includes(S.mode)) {
@@ -416,6 +416,60 @@ function drawED3D(sim, S, m, s) {
 
 // electron tomography: the tilt series or a slice of the reconstruction (main); across the beam, the phantom
 // beside the reconstruction and the Fourier plane each tilt fills (secondary)
+// ptychographic tomography preview: depth (XZ) or top (XY) sections of the object, the 0° view alone and the fused
+// volume side by side, or the per-tilt MS-ePIE slices; the depth profile through the stacked atoms below
+function drawPT(sim, S, m, s) {
+  const A = sim.pt, { ctx, W, H, dpr } = m;
+  if (!A) return;
+  const o = A.out ?? {}, N = 64, dx = 0.25, truth = o.truth ?? A.truth, lut = real(S) ? LUT.gray : LUT.magma, c = N / 2 - 0.5;
+  let what;
+  if (S.ptView === 'slices' && o.slices?.length) {
+    const rows = o.slices.length, cols = o.K, gap = 3 * dpr, tile = Math.min((W - (cols + 2) * gap - 50 * dpr) / cols, (H - 60 * dpr - (rows + 1) * gap) / rows);
+    o.slices.forEach((d, r) => d.slabs.forEach((sl, k) => { const [lo, hi] = range(sl, 0.01, 0.995); paint(ctx, sl, N, N, [50 * dpr + k * (tile + gap), 46 * dpr + r * (tile + gap), tile, tile], { lo, hi, lut }); }));
+    o.slices.forEach((d, r) => label(ctx, `${d.th >= 0 ? '+' : ''}${d.th.toFixed(0)}°`, 8 * dpr, 46 * dpr + r * (tile + gap) + tile / 2, dpr, { color: C.muted, size: 8 }));
+    what = `MS-ePIE phase slices · ${rows} tilts × ${cols} slices (top to bottom of the tilted beam)`;
+  } else {
+    // three sections: the object, one view (0°), all tilts fused
+    const xy = S.ptView === 'xy', iz = Math.round(c), iy = Math.round(c), sec = (v) => (v ? TOMO.orthoslices(v, N, Math.round(c), iy, iz)[xy ? 'xy' : 'xz'] : null);
+    const panes = [[truth, 'object'], [o.single, 'one view (0°)'], [o.fused, `${o.tilts ?? S.ptTilts} tilts fused`]];
+    const wide = W > 1.5 * H, gap = 8 * dpr, tile = wide ? Math.min((W - 4 * gap) / 3, H - 70 * dpr) : Math.min((W - 3 * gap) / 2, (H - 70 * dpr - gap) / 2);
+    panes.forEach(([v, name], i) => {
+      const px = wide ? gap + i * (tile + gap) : gap + (i % 2) * (tile + gap), py = 46 * dpr + (wide ? 0 : Math.floor(i / 2) * (tile + gap + 14 * dpr));
+      const a = sec(v);
+      if (a) { const [lo, hi] = range(a, 0.01, 0.999); paint(ctx, a, N, N, [px, py, tile, tile], { lo: Math.min(0, lo), hi: hi || 1, lut }); }
+      else { ctx.fillStyle = '#06080b'; ctx.fillRect(px, py, tile, tile); label(ctx, A.full && !A.done ? 'reconstructing…' : 'press Scan', px + tile / 2, py + tile / 2, dpr, { color: C.muted, size: 8, align: 'center' }); }
+      label(ctx, name, px + 4 * dpr, py + 10 * dpr, dpr, { color: C.muted, size: 8 });
+      if (!xy) label(ctx, '↓ z (beam at 0°)', px + 4 * dpr, py + tile - 10 * dpr, dpr, { color: C.muted, size: 7 });
+    });
+    what = xy ? 'top sections (XY) through the middle' : 'depth sections (XZ) through the stacked atoms';
+  }
+  label(ctx, what, 10 * dpr, 16 * dpr, dpr, { color: C.accent, size: 9 });
+  label(ctx, 'BROWSER PREVIEW · qualitative', W - 10 * dpr, 16 * dpr, dpr, { color: C.warm, size: 8, align: 'right' });
+  const p = A.o;
+  label(ctx, `16 Å cube · ${p.kV} kV · α ${p.alpha} mrad · ${p.tilts} tilt${p.tilts > 1 ? 's' : ''} to ±${p.maxTilt}° · ${p.dose.toExponential(0)} e⁻/Å²`, 10 * dpr, 32 * dpr, dpr, { color: C.muted, size: 8 });
+  if (A.full && !A.done) label(ctx, `tilt ${Math.min((o.t ?? 0) + 1, o.tilts ?? p.tilts)}/${o.tilts ?? p.tilts} · ${o.stage === 'recon' ? 'MS-ePIE' : o.stage ?? ''} · ${Math.round(100 * (o.progress ?? 0))} %`, 10 * dpr, H - 14 * dpr, dpr, { color: C.warm, size: 9 });
+
+  // ---- secondary: the depth profile through the stacked pair (each normalised to its maximum) and readouts
+  const q = s.ctx, dq = s.dpr, top = 24 * dq, gx = 30 * dq, gw = s.W - gx - 12 * dq, gh = Math.min(s.H * 0.55, s.H - 110 * dq);
+  q.fillStyle = '#06080b'; q.fillRect(gx, top, gw, gh);
+  const st = o.stats, prof = st?.pair?.profiles ?? { truth: (() => { const v = new Float32Array(N); for (let z = 0; z < N; z++) v[z] = truth[Math.round(c) + N * (Math.round(c) + N * z)]; return v; })() };
+  const X = (z) => gx + (z / (N - 1)) * gw;
+  for (const [k, col, w] of [['truth', C.dim, 1], ['single', C.warm, 1.4], ['fused', C.accent, 1.8]]) {
+    const v = prof[k]; if (!v) continue;
+    let mx = 0; for (const a of v) mx = Math.max(mx, a);
+    q.strokeStyle = col; q.lineWidth = w * dq; q.beginPath();
+    v.forEach((a, z) => { const y = top + gh - (Math.max(0, a) / (mx || 1)) * gh * 0.9 - 4 * dq; z ? q.lineTo(X(z), y) : q.moveTo(X(z), y); }); q.stroke();
+  }
+  q.lineWidth = 1 * dq;
+  for (const z of [-4, 4]) { q.strokeStyle = 'rgba(255,255,255,0.18)'; q.setLineDash([3 * dq, 3 * dq]); q.beginPath(); q.moveTo(X(c + z / dx), top); q.lineTo(X(c + z / dx), top + gh); q.stroke(); q.setLineDash([]); }
+  label(q, 'depth profile through the stacked atoms (8 Å apart)', gx, top - 10 * dq, dq, { color: C.muted, size: 8 });
+  label(q, 'z →', gx + gw - 26 * dq, top + gh + 10 * dq, dq, { color: C.muted, size: 7, bg: 'rgba(0,0,0,0)' });
+  const lines = [['object', C.dim], ['one view (0°)', C.warm], ['all tilts fused', C.accent]];
+  if (st?.atom) lines.push([`isolated atom, depth FWHM: ${st.atom.single.z.toFixed(1)} → ${st.atom.fused.z.toFixed(1)} Å (true ${st.atom.truth.z.toFixed(1)})`, C.text], [`lateral FWHM ${st.atom.fused.x.toFixed(2)} Å · λ/α² ≈ ${st.depthRes.toFixed(0)} Å`, C.muted], [`correlation with the object ${st.corrSingle.toFixed(2)} → ${st.corrFused.toFixed(2)}`, C.muted]);
+  if (A.ms) lines.push([`computed in ${(A.ms / 1000).toFixed(0)} s`, C.muted]);
+  lines.forEach(([t, col], i) => label(q, t, gx, top + gh + 24 * dq + i * 14 * dq, dq, { color: col, size: 8 }));
+}
+
 // single-particle cryo-EM: the micrograph with picks, the CTF fit, 2D classes or the 3D map; the FSC and the
 // angular distribution below
 function drawSPA(sim, S, m, s) {

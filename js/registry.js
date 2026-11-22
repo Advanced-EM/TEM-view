@@ -24,6 +24,8 @@ export const TECHNIQUES = [
   // a tilt series of images reconstructed into a volume; HAADF-STEM by default (its own signal model, no atomic probe)
   // single-particle cryo-EM: low-dose micrographs of one protein, picked, classified and averaged in 3D (spa.js)
   { id: 'spa', name: 'Cryo-EM SPA', sub: 'single particles · FSC', group: '3D & Cryo Reconstruction', family: 'tem', caps: ['image', 'phase-contrast', 'particle-stack'] },
+  // multislice ptychography at several tilts, fused into one volume (a browser preview: ptychotomo.js)
+  { id: 'ptychotomo', name: 'Ptycho-tomography', sub: 'multi-tilt ptychography · preview', group: '3D & Cryo Reconstruction', family: 'probe', caps: ['diffraction', 'scan', 'phase', 'tilt-series'], ownProbe: true },
   { id: 'tomo', name: 'Tomography', sub: 'tilt series · WBP / SIRT', group: '3D & Cryo Reconstruction', family: 'probe', caps: ['image', 'tilt-series'], ownProbe: true },
   { id: 'ronch', name: 'Ronchigram', sub: 'corrector tuning', group: 'Optics & Fields', family: 'probe', key: '8', caps: ['alignment'] },
   { id: 'ltem', name: 'Lorentz TEM', sub: 'magnetic domains', group: 'Optics & Fields', family: 'tem', key: '-', caps: ['image', 'magnetic'] },

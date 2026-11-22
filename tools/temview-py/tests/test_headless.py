@@ -290,3 +290,13 @@ def test_single_particle_cryo_em():
     assert r["particles"] == 300 and r["kept"] > 250
     assert 6 < r["resolution_A"] < 40
     assert r["picking"]["recall"] > 0.5
+
+
+def test_ptychographic_tomography_preview():
+    tem = tv.connect("headless")
+    tem.set(mode="ptychotomo", pt_tilts=3, pt_iterations=3)
+    acq = tem.acquire()
+    assert acq["fused"].shape == (64, 64, 64) and acq["single_tilt"].shape == (64, 64, 64)
+    r = tem.analyze("ptychotomo_stats")["result"]
+    assert r["tilts"] == 3
+    assert r["depth_fwhm_fused_A"] < r["depth_fwhm_single_A"]

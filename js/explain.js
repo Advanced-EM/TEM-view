@@ -89,6 +89,15 @@ export function modeInfo(S, sim) {
         ],
       };
     }
+    case 'ptychotomo': {
+      const A = sim.pt, st = A?.out?.stats;
+      return {
+        title: 'Depth from <em>many tilts</em>',
+        body: `Multislice ptychography models the specimen as a stack of slices and recovers each one from the 4D-STEM data, so a single scan already holds some depth information. But depth is resolved only to about λ/α², tens of ångströms for a 20 mrad probe, while laterally it reaches λ/2α, under an ångström: two atoms on top of each other merge into one elongated blob. Scanning the specimen again at several tilts and combining the slices of every view in one frame, here by a joint SIRT over the slabs, recovers the depth: the stacked atoms separate and each atom becomes nearly round. This is a small, qualitative preview (a 16 Å cube, 24 × 24 positions, 4 slices, a few tilts). The real problem, with joint reconstruction through all tilts, several probe modes and position correction, needs a GPU or a cluster.`,
+        stats: st?.atom ? [['Depth, one view', `${st.atom.single.z.toFixed(1)} Å`, 'FWHM of the isolated atom'], ['Depth, fused', `${st.atom.fused.z.toFixed(1)} Å`, `${A.out.tilts} tilts to ±${A.o.maxTilt}°`], ['Stacked pair', `${Math.round(100 * st.pair.fused)} % dip`, `one view: ${Math.round(100 * st.pair.single)} %`], ['λ/α²', `${st.depthRes.toFixed(0)} Å`, `α = ${A.o.alpha} mrad`]]
+          : [['Tilts', `${S.ptTilts}`, `to ±${S.ptMax}°`], ['α', `${S.ptAlpha} mrad`, 'probe semi-angle'], ['Scan', '24 × 24', 'per tilt'], ['Status', A?.full && !A.done ? 'running' : '—', 'press Scan']],
+      };
+    }
     case 'spa': {
       const A = sim.spa, o = A?.out;
       return {
