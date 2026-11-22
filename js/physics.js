@@ -262,7 +262,7 @@ function makeGold(grow = 0) {
     const p = { x: (rng() * 2 - 1) * 200, y: (rng() * 2 - 1) * 200, r: 7 + rng() * 22, rot: rng() * Math.PI };
     if (parts.every((q) => Math.hypot(p.x - q.x, p.y - q.y) > p.r + q.r + 7)) parts.push(p);
   }
-  if (grow) for (const p of parts) p.r += grow; // grown in a liquid cell (liquid.js): the same particles, larger
+  if (grow) for (const p of parts) p.r = Math.max(3, p.r + grow); // grown in a liquid cell (liquid.js), or dissolved (bias.js): the same particles
   const basis = [[0, 0, [EI.Au]], [0.5, 0.5, [EI.Au]]];
   parts.forEach((p, gi) => {
     fillLattice(A, {

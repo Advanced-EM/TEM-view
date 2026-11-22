@@ -16,6 +16,7 @@ import { SAMPLES } from './spa.js';
 import * as ENVW from './environment.js';
 import * as LIQ from './liquid.js';
 import * as GASX from './gas.js';
+import * as BIASX from './bias.js';
 import { evaluate, PROFILES, LIMIT_TEXT, capFor } from './resources.js';
 import { RemoteBackend } from './remote.js';
 import { buildBundle, readResults } from './bundle.js';
@@ -159,6 +160,41 @@ function gasNote() {
   else parts.push('Heat it (heating holder) to drive reactions: gold sinters, SrTiO₃ loses oxygen in H₂ and takes it back in O₂.');
   parts.push(`Tilt up to ±${ENVW.maxTilt(S)}°.`);
   return parts.join(' ');
+}
+// the biasing chip (bias.js): operating point, where the source limits, failures, heating, the field at the beam
+const fmtA = (a) => { const v = Math.abs(a); return v === 0 ? '0 A' : v >= 1e-3 ? `${(a * 1e3).toPrecision(3)} mA` : v >= 1e-6 ? `${(a * 1e6).toPrecision(3)} µA` : v >= 1e-9 ? `${(a * 1e9).toPrecision(3)} nA` : `${(a * 1e12).toPrecision(3)} pA`; };
+const fmtOhm = (r) => (r >= 1e9 ? `${(r / 1e9).toPrecision(3)} GΩ` : r >= 1e6 ? `${(r / 1e6).toPrecision(3)} MΩ` : r >= 1e3 ? `${(r / 1e3).toPrecision(3)} kΩ` : `${(+r).toPrecision(3)} Ω`);
+function biasNote() {
+  const B = sim.biasSt, o = B?.op;
+  if (!o) return '';
+  const parts = [];
+  if (B.open) parts.push(`The circuit is open (${B.events.filter((e) => /burn|opened/.test(e.event)).map((e) => e.event).join(', ') || 'failed'}): no current flows. Load a new chip.`);
+  parts.push(`Source ${o.Vsrc.toFixed(3)} V, ${fmtA(o.I)}${o.limited === 'compliance' ? ' (in compliance: the source holds the current at its limit)' : o.limited === 'voltage' ? ` (at the ${BIASX.MAX_V} V limit)` : ''}. Specimen ${fmtOhm(o.R)}: ${o.Vspec.toFixed(3)} V across it; the ${BIASX.LAYOUTS[S.bsLayout].sense ? 'sense contacts read' : 'two-terminal readback (contacts included) reads'} ${o.Vmeas.toFixed(3)} V.`);
+  parts.push(`Field ${(Math.abs(o.Vspec) / S.bsGap).toPrecision(3)} V/µm in the gap, ${(o.Epk / 1e6).toPrecision(3)} MV/m at its peak (breakdown at ${S.bsEbd} MV/m)${B.broken ? ': it broke down, and a conducting filament now shorts the gap' : ''}.`);
+  if (o.P > 1e-7) parts.push(`Joule heating ${(o.P * 1e3).toPrecision(2)} mW: +${B.dT.toFixed(1)} K.`);
+  const g = sim.biasGrad(), b = sim.biasBeta();
+  parts.push(`At the beam: phase gradient ${(Math.hypot(...g) * 1e4).toPrecision(2)} mrad/nm, deflection ${(Math.hypot(...b) * 1e6).toPrecision(2)} µrad${S.bsStray ? ' (mostly the stray field around the chip)' : ''}. Off-axis holography, Lorentz and DPC (4D-STEM centre of mass) read it; images move by Δf·β, patterns by β.`);
+  if (B.echem) parts.push(`Under liquid the working electrode sits at ${(o.Vspec / 2).toFixed(2)} V: ${B.echem.rate > 0.01 ? 'gold deposits' : B.echem.rate < -0.01 ? 'gold dissolves' : 'no net reaction'} (${B.echem.rate.toFixed(2)} Å/s).`);
+  const ev = B.events.at(-1);
+  if (ev) parts.push(`Last event: ${ev.event} at t = ${ev.t.toFixed(1)} s.`);
+  parts.push(`Tilt up to ±${ENVW.maxTilt(S)}°.`);
+  return parts.join(' ');
+}
+// the I–V trace (readback voltage against current) on a small canvas
+function drawIV(cv) {
+  const B = sim.biasSt, g = cv.getContext('2d'), W = cv.width, H = cv.height, tr = B?.trace ?? [];
+  g.clearRect(0, 0, W, H);
+  g.fillStyle = 'rgba(255,255,255,0.04)'; g.fillRect(0, 0, W, H);
+  const vm = Math.max(0.1, ...tr.map((p) => Math.abs(p[0]))), im = Math.max(1e-9, ...tr.map((p) => Math.abs(p[1])));
+  const X = (v) => W / 2 + (v / vm) * (W / 2 - 24), Y = (i) => H / 2 - (i / im) * (H / 2 - 18);
+  g.strokeStyle = 'rgba(255,255,255,0.18)'; g.lineWidth = 1;
+  g.beginPath(); g.moveTo(0, H / 2); g.lineTo(W, H / 2); g.moveTo(W / 2, 0); g.lineTo(W / 2, H); g.stroke();
+  g.strokeStyle = '#6fd6ff'; g.lineWidth = 2; g.beginPath();
+  tr.forEach((p, k) => (k ? g.lineTo(X(p[0]), Y(p[1])) : g.moveTo(X(p[0]), Y(p[1]))));
+  g.stroke();
+  if (tr.length) { const p = tr.at(-1); g.fillStyle = '#ffb45e'; g.beginPath(); g.arc(X(p[0]), Y(p[1]), 4, 0, 2 * Math.PI); g.fill(); }
+  g.fillStyle = '#8a94a3'; g.font = '18px system-ui, sans-serif';
+  g.fillText(`I (±${fmtA(im)})`, W / 2 + 6, 18); g.fillText(`V (±${vm.toPrecision(2)} V)`, W - 150, H / 2 - 6);
 }
 // the window type in effect: the liquid cell's own, else the chosen one (sinx when none is chosen, for the slider)
 function winKey() { return ENVW.windowsOf(S)?.key ?? 'sinx'; }
@@ -442,6 +478,25 @@ const CONTROLS = [
   { pFn: () => gasNote(), show: () => S.envCell === 'gas' },
   { buttons: [['newCell', 'Load a new cell']], show: () => S.envCell === 'liquid' || (S.envCell === 'gas' && S.gcGeom !== 'open') },
   { pFn: () => liquidNote(), show: () => S.envCell === 'liquid' },
+  // the biasing chip (bias.js): electrodes, the source and the circuit; combines with heating and with the liquid cell
+  { toggles: [['bsOn', 'Biasing chip (electrodes across the specimen)']] },
+  { chips: 'bsLayout', label: 'Electrode layout', small: true, show: () => S.bsOn, opts: Object.entries(BIASX.LAYOUTS).map(([k, v]) => [k, v.label]) },
+  { chips: 'bsMat', label: 'Specimen between the electrodes', small: true, show: () => S.bsOn, opts: Object.entries(BIASX.MATERIALS).map(([k, v]) => [k, v.label]) },
+  { slider: 'bsGap', label: 'Electrode gap', min: 2, max: 10, step: 0.5, fmt: (v) => `${(+v).toFixed(1)} µm`, show: () => S.bsOn },
+  { chips: 'bsMode', label: 'Source', small: true, show: () => S.bsOn, opts: [['V', 'Voltage source'], ['I', 'Current source']] },
+  { chips: 'bsWave', label: 'Waveform', small: true, show: () => S.bsOn && S.bsMode === 'V', opts: [['dc', 'DC'], ['sweep', 'Triangular sweep (I–V)']] },
+  { slider: 'bsV', label: 'Voltage', min: -20, max: 20, step: 0.05, fmt: (v) => `${(+v).toFixed(2)} V${S.bsWave === 'sweep' ? ' (sweep ±)' : ''}`, show: () => S.bsOn && S.bsMode === 'V' },
+  { slider: 'bsRate', label: 'Sweep rate', min: 0.01, max: 20, log: true, fmt: (v) => `${(+v).toPrecision(2)} V/s`, show: () => S.bsOn && S.bsMode === 'V' && S.bsWave === 'sweep' },
+  { slider: 'bsI', label: 'Current', min: -10000, max: 10000, step: 1, fmt: (v) => fmtA(v * 1e-6), show: () => S.bsOn && S.bsMode === 'I' },
+  { slider: 'bsLimit', label: 'Compliance', min: 1, max: 10000, log: true, fmt: (v) => fmtA(v * 1e-6), show: () => S.bsOn && S.bsMode === 'V' },
+  { slider: 'bsRc', label: 'Contact resistance, each', min: 1, max: 1e6, log: true, fmt: (v) => fmtOhm(v), show: () => S.bsOn },
+  { slider: 'bsRs', label: 'Series resistance', min: 1, max: 1e6, log: true, fmt: (v) => fmtOhm(v), show: () => S.bsOn },
+  { slider: 'bsLeak', label: 'Substrate leakage', min: 1e5, max: 1e12, log: true, fmt: (v) => fmtOhm(v), show: () => S.bsOn },
+  { slider: 'bsEbd', label: 'Breakdown field', min: 1, max: 1000, log: true, fmt: (v) => `${(+v).toPrecision(2)} MV/m`, show: () => S.bsOn },
+  { toggles: [['bsStray', 'Stray field in the vacuum above and below the chip']], show: () => S.bsOn },
+  { ivPlot: true, show: () => S.bsOn },
+  { pFn: () => biasNote(), show: () => S.bsOn },
+  { buttons: [['newChip', 'Load a new chip']], show: () => S.bsOn },
   { slider: 'tempSet', label: 'Temperature setpoint', dyn: () => { const H = HOLDERS[S.holder]; return { min: H.min, max: H.max, step: H.step, log: H.log }; }, fmt: (v) => fmtT(v), show: () => S.holder !== 'room' },
   { pFn: () => `Specimen at ${fmtT(sim.temp())}${S.holder === 'room' ? '' : ` (setpoint ${fmtT(S.tempSet)}; the grid runs ${S.holder === 'heat' ? 'about 1 % hotter than the reading' : 'warmer than the holder tip'} and fluctuates by ±${HOLDERS[S.holder].jitter} K)`}. Drift ${sim.driftSpeed().toFixed(2)} Å/s.` },
   { buttons: [['newGrid', 'Load a fresh grid']], modes: NOT_LOR, show: () => S.spec === 'bio' },
@@ -773,6 +828,11 @@ function build() {
       const ui = specimenUI();
       if (c.specGrid) ui.grid(el); else if (c.specView) ui.card(el); else ui.info(el);
       bound.push({ c, el });
+    } else if (c.ivPlot) {
+      el = document.createElement('canvas');
+      el.className = 'ctl ivplot'; el.width = 560; el.height = 220;
+      el.setAttribute('aria-label', 'I–V trace of the biasing chip');
+      bound.push({ c, el });
     } else if (c.footprint) {
       el = document.createElement('table');
       el.className = 'data footprint';
@@ -943,6 +1003,7 @@ function action(id, el) {
   if (id === 'abtem') openAbTEM({ S, sim, mainCv, download });
   if (id === 'connect') openConnect({ S, sim, download });
   if (id === 'status') return openStatus();
+  if (id === 'newChip') { sim.resetBias(); refreshControls(); return; }
   if (id === 'newCell') { sim.resetLiquid(); sim.resetGas(); S.paused = false; refreshControls(); return; }
   if (id === 'exportProfile') download(new Blob([JSON.stringify(S.profile, null, 1)], { type: 'application/json' }), `instrument-profile-${S.profile.preset}.json`);
   if (id === 'restore') { sim.restoreSpecimen(); explainChange('restore'); }
@@ -1848,6 +1909,7 @@ function frame(now) {
       b.el.hidden = !vis;
       if (vis) b.el.textContent = b.c.pFn();
     }
+    for (const b of bound) if (b.c.ivPlot && !b.el.hidden) drawIV(b.el);
     if (['eds', '4d', 'eels', 'stem', 'ronch', 'cbed', 'oah', 'ilh', 'ltem', 'lstem', 'ed3d', 'tomo', 'spa', 'ptychotomo'].includes(S.mode)) renderInfo();
     $('#status').textContent = `· ${fps} fps`;
   }

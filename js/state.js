@@ -59,6 +59,11 @@ export const defaultState = () => ({
   // the gas cell / environmental column (gas.js): windowed | open, the gas, pressure (mbar), the windowed cell's gap
   // (µm), the open column's path (mm); the windows' sides come from lcA, lcB and their thickness from envWinT
   gcGeom: 'windowed', gcGas: 'N2', gcP: 1000, gcGap: 5, gcPath: 2,
+  // a biasing chip (bias.js): on, electrode layout (two | four | tip), gap (µm), specimen material (metal | semi |
+  // insulator), source mode (V | I), waveform (dc | sweep), voltage or sweep amplitude (V), current (µA), sweep rate
+  // (V/s), compliance (µA), contact resistance each (Ω), series resistance (Ω), substrate leakage (Ω), breakdown field
+  // (MV/m), whether the stray field in the vacuum above and below the chip is included
+  bsOn: false, bsLayout: 'two', bsGap: 5, bsMat: 'semi', bsMode: 'V', bsWave: 'dc', bsV: 0, bsI: 0, bsRate: 1, bsLimit: 100, bsRc: 100, bsRs: 50, bsLeak: 1e9, bsEbd: 30, bsStray: true,
   // where the 4D-STEM scan and tomography run in a browser with WebGPU: 'auto' (the GPU, gpu.js) | 'off' (JS)
   gpu: 'auto',
   // acquisition plan overrides by technique (footprint.js): scan size, detector pixels, bit depth, dwell, ...
@@ -75,7 +80,7 @@ export const SESSION_KEYS = [
   'eelsSource', 'eelsBeta', 'eelsDet', 'eelsYScale', 'eelsFit', 'eelsPre', 'eelsDeconv', 'eelsPx', 'eelsLine',
   'pedOn', 'pedPhi', 'pedSteps', 'pedDescan', 'zone',
   'edMethod', 'edStart', 'edEnd', 'edSpeed', 'edFps', 'edStep', 'edExp', 'edDoseRate', 'edAxis', 'edMerge', 'edSlice', 'edLayer',
-  'tomoPhantom', 'tomoN', 'tomoSignal', 'tomoScheme', 'tomoMax', 'tomoStep', 'tomoDose', 'tomoJitter', 'tomoAlign', 'tomoRecon', 'tomoFilter', 'tomoIter', 'tomoView', 'tomoDepth', 'envWin', 'envWinT', 'envCell', 'lcClass', 'lcA', 'lcB', 'lcGap', 'lcDP', 'lcFlow', 'lcPocket', 'lcRate', 'lcDepth', 'lcPrecursor', 'lcFilter', 'gcGeom', 'gcGas', 'gcP', 'gcGap', 'gcPath', 'ptTilts', 'ptMax', 'ptAlpha', 'ptDose', 'ptIters', 'ptFusion', 'ptView', 'spaSample', 'spaN', 'spaDose', 'spaDf', 'spaZpp', 'spaPref', 'spaAngErr', 'spaBin', 'spaView', 'ab', 'ronchAp', 'cbedKind', 'alphaCB', 'alphaLA', 'strain', 'holz',
+  'tomoPhantom', 'tomoN', 'tomoSignal', 'tomoScheme', 'tomoMax', 'tomoStep', 'tomoDose', 'tomoJitter', 'tomoAlign', 'tomoRecon', 'tomoFilter', 'tomoIter', 'tomoView', 'tomoDepth', 'envWin', 'envWinT', 'envCell', 'lcClass', 'lcA', 'lcB', 'lcGap', 'lcDP', 'lcFlow', 'lcPocket', 'lcRate', 'lcDepth', 'lcPrecursor', 'lcFilter', 'gcGeom', 'gcGas', 'gcP', 'gcGap', 'gcPath', 'bsOn', 'bsLayout', 'bsGap', 'bsMat', 'bsMode', 'bsWave', 'bsV', 'bsI', 'bsRate', 'bsLimit', 'bsRc', 'bsRs', 'bsLeak', 'bsEbd', 'bsStray', 'ptTilts', 'ptMax', 'ptAlpha', 'ptDose', 'ptIters', 'ptFusion', 'ptView', 'spaSample', 'spaN', 'spaDose', 'spaDf', 'spaZpp', 'spaPref', 'spaAngErr', 'spaBin', 'spaView', 'ab', 'ronchAp', 'cbedKind', 'alphaCB', 'alphaLA', 'strain', 'holz',
   'biprism', 'sbR', 'numCorr', 'holoView', 'nFocal', 'focalStep', 'ilhView', 'holder', 'tempSet', 'profile', 'mis',
   'magSpec', 'lorThick', 'lorFov', 'lorDf', 'lorDiv', 'lorView', 'lorFouc', 'lorApR', 'lorField', 'lorChir', 'lorPol', 'lstemView', 'lorAlpha',
 ];

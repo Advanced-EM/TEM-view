@@ -174,14 +174,17 @@ export class Lorentz {
     }
     const phM = integrate(gx, gy, n, dx), sig = P.sigmaOf(S.kV), envTau = sim.envTau?.() ?? 0;
     const ph = new Float32Array(n * n), amp = new Float32Array(n * n);
+    // a biased chip (bias.js): the electrostatic phase of its field in the film and the stray field around it; the
+    // uniform part (a tilt) is kept aside as a gradient, so the FFT propagation sees only what varies
+    const bias = sim.biasPhase?.(n, dx, S.lorThick * 10, { residual: true, tMap: M.t });
     for (let i = 0; i < n * n; i++) {
       const tt = M.t[i] / (cx * cy);
-      ph[i] = phM[i] + sig * sp.V0 * tt;
+      ph[i] = phM[i] + sig * sp.V0 * tt + (bias ? bias.ph[i] : 0);
       amp[i] = Math.exp(-tt / (2 * sp.L * 10) - envTau / 2); // envTau: inelastic loss in window membranes (energy-filtered)
     }
     // largest deflection anywhere (rad) and the saturation one, β = λ |∇φ| / 2π
     const betaS = deflection(S, sim.temp(), S.kV);
-    return { n, dx, ph, phM, amp, M, betaS, BsT: sp.Bs * (S.magSpec === 'fege' ? (M.info.f ?? 0) : 1) * S.lorThick };
+    return { n, dx, ph, phM, amp, M, betaS, BsT: sp.Bs * (S.magSpec === 'fege' ? (M.info.f ?? 0) : 1) * S.lorThick, tilt: bias?.grad ?? [0, 0] };
   }
 
   // propagate ψ by Δf (Å) with the spatial-coherence envelope of the illumination divergence θc (rad)
@@ -200,7 +203,8 @@ export class Lorentz {
         const ux = kx[x] - aperture.kx, uy = kx[y] - aperture.ky;
         if (ux * ux + uy * uy > aperture.kr * aperture.kr) a = 0;
       }
-      const c = -Math.PI * lam * dfA * q2, cr = Math.cos(c) * a, ci = Math.sin(c) * a, r = re[i], m = im[i];
+      // the uniform bias field tilts the beam: the defocused image moves by Δf·β, β = λ∇φ/2π (the shift theorem)
+      const c = -Math.PI * lam * dfA * q2 - lam * dfA * (kx[x] * (w.tilt?.[0] ?? 0) + kx[y] * (w.tilt?.[1] ?? 0)), cr = Math.cos(c) * a, ci = Math.sin(c) * a, r = re[i], m = im[i];
       re[i] = r * cr - m * ci; im[i] = r * ci + m * cr;
     }
     P.fft2(re, im, n, true);
@@ -243,6 +247,7 @@ export class Lorentz {
     // the probe: diffraction-limited spot of the Lorentz-mode aperture (FWHM ≈ 0.51 λ/α)
     const fwhm = (0.51 * lam) / a, sPx = fwhm / 2.355 / dx;
     const g = gradient(w.ph, n, dx);
+    if (w.tilt) for (let i = 0; i < n * n; i++) { g.gx[i] += w.tilt[0]; g.gy[i] += w.tilt[1]; } // the uniform bias field, put back
     let bx = blur(g.gx, n, sPx), by = blur(g.gy, n, sPx);
     const D = (u) => (Math.abs(u) >= 1 ? Math.sign(u) : (2 / Math.PI) * (u * Math.sqrt(1 - u * u) + Math.asin(u)));
     const sx = new Float32Array(n * n), sy = new Float32Array(n * n), sum = new Float32Array(n * n);

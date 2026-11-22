@@ -3,7 +3,7 @@
 //
 //   slices(S)          layers added to the projected potential: window membranes (amorphous phase screens)
 //   inelastic(S)       extra inelastic layers for EELS (t/λ, plasmon, edges) and their X-ray lines for EDS
-//   fields(S)          electrostatic potential and field (biasing, M16): none yet
+//   fields(S)          electrostatic potential and field (biasing, M16: bias.js, applied by sim.biasPhase/biasBeta)
 //   processes          time evolution (temperature, radiolysis, …): the holder's existing models (holder.js)
 //
 // plus limits other parts read: the holder's tilt range (the missing wedge of the 3D techniques) and whether it can
@@ -38,7 +38,8 @@ export function windowsOf(S) {
   return { key: cell ? cell.windows : S.envWin, material: w.material, each, total: 2 * each, w };
 }
 export const envOf = (S) => ENVIRONMENTS[S.holder] ?? ENVIRONMENTS.room;
-export const maxTilt = (S) => Math.min(envOf(S).maxTilt, S.envCell === 'gas' && S.gcGeom === 'open' ? 90 : CELL_TILT[S.envCell] ?? 90);
+export const BIAS_TILT = 25; // a biasing chip holder
+export const maxTilt = (S) => Math.min(envOf(S).maxTilt, S.envCell === 'gas' && S.gcGeom === 'open' ? 90 : CELL_TILT[S.envCell] ?? 90, S.bsOn ? BIAS_TILT : 90);
 // the gas column now (gas.js; specimenT for the gas temperature): { cell, pathA, col: { N, tau, transmitted, … } } or null
 export function gasNow(S, specimenT = 293) {
   const c = GAS.gasOf(S, specimenT);

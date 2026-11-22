@@ -78,6 +78,10 @@ export class OffAxis {
     const maps = sim.maps({ n, dx });
     const exit = P.transmission(maps.phase, S.kV);
     const img = sim.lensWave(maps, { exit });
+    // a biased specimen (bias.js): its potential and the stray field add a slowly varying phase to the image wave
+    // (applied after the lens: a smooth phase passes it unchanged, and a ramp would wrap around the FFT box)
+    const bias = sim.biasPhase?.(n, dx);
+    if (bias) for (let i = 0; i < n * n; i++) { const c = Math.cos(bias.ph[i]), s = Math.sin(bias.ph[i]), a = img.re[i], b = img.im[i]; img.re[i] = a * c - b * s; img.im[i] = a * s + b * c; }
     const bp = biprism(S.biprism, S.profile);
     // carrier frequency on whole FFT bins, at most one fringe per 3 detector pixels
     const th = 20 * DEG, qMax = 1 / (3 * dx);
@@ -142,13 +146,14 @@ export class OffAxis {
     // the true wave at the same resolution, for comparison: exit wave if aberrations were removed
     const tr = Float64Array.from(S.numCorr ? exit.re : img.re), ti = Float64Array.from(S.numCorr ? exit.im : img.im);
     lowpass(tr, ti, n, dx, rk);
+    if (bias) for (let i = 0; i < n * n; i++) { const cc = Math.cos(bias.ph[i]), sn = Math.sin(bias.ph[i]), a = tr[i], b = ti[i]; tr[i] = a * cc - b * sn; ti[i] = a * sn + b * cc; }
     const truth = relPhase(tr, ti, n, c, inOv);
     // electrons per independent reconstructed pixel: one per area 1/(π rk²) of the sideband mask
     const res = 1 / rk, Npx = (S.dose * res * res) / Math.PI;
     this.disp = {
       c, n, dx, holo: crop(I, n, c), ph: rec.ph, amp: rec.amp, truePh: truth.ph, inOv, fft,
       bx, by, rb, s: 1 / qm, under, sReq: bp.s, mu, mu0: bp.mu, W: bp.W, res, sig: Math.SQRT2 / (mu * Math.sqrt(Npx)),
-      cover: inOv.reduce((a, v) => a + v, 0) / (c * c),
+      cover: inOv.reduce((a, v) => a + v, 0) / (c * c), biasGrad: bias?.grad ?? null,
     };
   }
 }
@@ -164,6 +169,9 @@ export class FocalSeries {
     const sim = this.sim, S = sim.S, n = 128, c = 112, dx = sim.fovA() / c, N = S.nFocal;
     const maps = sim.maps({ n, dx });
     const exit = P.transmission(maps.phase, S.kV);
+    // a biased specimen: only the non-uniform part of its phase survives (aligning the series removes a uniform tilt)
+    const bias = sim.biasPhase?.(n, dx, undefined, { residual: true });
+    if (bias) for (let i = 0; i < n * n; i++) { const c = Math.cos(bias.ph[i]), s = Math.sin(bias.ph[i]), a = exit.re[i], b = exit.im[i]; exit.re[i] = a * c - b * s; exit.im[i] = a * s + b * c; }
     const Fr = Float64Array.from(exit.re), Fi = Float64Array.from(exit.im);
     P.fft2(Fr, Fi, n);
     const step = S.focalStep * 10, df0 = sim.dfA();

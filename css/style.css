@@ -703,3 +703,5 @@ body.detStruct .detstruct { display: block; }
 .statuscard .stattab td.muted, .statuscard .muted { color: var(--muted); font-size: 12px; }
 .statuscard .labrow { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin: 6px 0; font-size: 13px; }
 .statuscard pre.code { background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; font: 12px/1.5 var(--mono); white-space: pre-wrap; }
+/* the biasing chip's I–V trace (bias.js) */
+canvas.ivplot { display: block; width: 100%; height: auto; aspect-ratio: 56 / 22; border-radius: 6px; margin: 4px 0 6px; }

@@ -17,6 +17,7 @@ import * as PT from './ptychotomo.js';
 import * as ENV from './environment.js';
 import * as LIQ from './liquid.js';
 import * as GAS from './gas.js';
+import * as BIAS from './bias.js';
 import { buildStructure } from './structure.js';
 import { HOLDERS, specimenT, u2Ratio, thermalStrain, radiolysisFactor, iceSublimation, DEVITRIFY_K } from './holder.js';
 
@@ -24,6 +25,18 @@ const SP = P.SPECIMENS;
 const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
+// sub-pixel shift of an n × n image by (sx, sy) pixels (bilinear, edges clamped)
+function shiftImg(I, n, sx, sy) {
+  if (Math.abs(sx) < 1e-3 && Math.abs(sy) < 1e-3) return I;
+  const out = new Float32Array(n * n);
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+    const fx = clamp(x - sx, 0, n - 1.001), fy = clamp(y - sy, 0, n - 1.001), x0 = fx | 0, y0 = fy | 0, a = fx - x0, b = fy - y0;
+    out[y * n + x] = (I[y0 * n + x0] * (1 - a) + I[y0 * n + x0 + 1] * a) * (1 - b) + (I[(y0 + 1) * n + x0] * (1 - a) + I[(y0 + 1) * n + x0 + 1] * a) * b;
+  }
+  return out;
+}
+// four-segment DPC: the half-difference of a disc shifted by u radii
+const dpcD = (u) => (Math.abs(u) >= 1 ? Math.sign(u) : (2 / Math.PI) * (u * Math.sqrt(1 - u * u) + Math.asin(u)));
 export const AP_MRAD = { none: Infinity, 40: 12, 20: 6, 10: 3, df: 2.5, zpp: Infinity };
 // Zernike phase plate: a thin film in the back focal plane with a small central hole. Unscattered electrons
 // pass the hole; scattered ones cross the film and are shifted by π/2. Cut-on frequency set by the hole.
@@ -141,7 +154,7 @@ export class Sim {
   fovA() { return this.S.fov * 10 * this.S.profile.magCal; }
   camLTrue() { return this.S.camL * this.S.profile.camLCal; } // mm
   // ------------------------------------------------------------ specimen temperature (holder.js)
-  temp() { return specimenT(this.S.holder, this.S.tempSet, this.clock || 0); } // K, at the specimen
+  temp() { return specimenT(this.S.holder, this.S.tempSet, this.clock || 0) + (this.biasSt?.dT ?? 0); } // K, at the specimen (with the bias current's Joule heating)
   isCold() { return this.temp() < 170; } // cold enough to keep ice (and slow radiolysis)
   // thermal state used by the maps: vibration amplitude relative to 293 K and thermal strain
   thermal() {
@@ -276,7 +289,10 @@ export class Sim {
       apK = Math.min(0.13, 0.45 * Math.hypot(apCenter[0], apCenter[1]));
     }
     if (S.objAp === 'zpp') apK = Infinity;
-    const I = this.lensImage(maps, { apK, apCenter, zpp: S.objAp === 'zpp' });
+    let I = this.lensImage(maps, { apK, apCenter, zpp: S.objAp === 'zpp' });
+    // a biased chip tilts the beam (bias.js): the image moves by Δf·β (in focus it does not)
+    const bb = this.biasBeta();
+    if (bb[0] || bb[1]) I = shiftImg(I, n, (this.dfA() * bb[0]) / dx, (this.dfA() * bb[1]) / dx);
     this.motionBlur(I, n, dx, S.camera === 'ded' ? 0.1 : 1);
     // Diffractogram: |FFT| of the (windowed) image shows the lens's transfer rings.
     const re = new Float64Array(n * n), im = new Float64Array(n * n);
@@ -590,6 +606,8 @@ export class Sim {
     if (!d) return;
     const W = 256, halfMM = 22; // detector half-width, mm
     const kPerPx = (2 * halfMM) / (this.camLTrue() * this.lam) / W;
+    // a biased chip deflects the beam by β: the whole pattern moves by β/λ (bias.js)
+    const [bx, by] = this.biasBeta().map((b) => b / this.lam);
     // projector distortion: the pattern is stretched by (1 + e/2) along ellipAng and squeezed across it
     const e = S.profile.ellip, ca = Math.cos((S.profile.ellipAng * Math.PI) / 180), sa = Math.sin((S.profile.ellipAng * Math.PI) / 180);
     const out = new Float32Array(W * W);
@@ -597,7 +615,7 @@ export class Sim {
       for (let x = 0; x < W; x++) {
         let kx = (x - W / 2 + 0.5) * kPerPx, ky = (y - W / 2 + 0.5) * kPerPx;
         if (e) { const u = (kx * ca + ky * sa) / (1 + e / 2), v = (-kx * sa + ky * ca) / (1 - e / 2); kx = u * ca - v * sa; ky = u * sa + v * ca; }
-        const fx = kx / d.dk + d.n / 2, fy = ky / d.dk + d.n / 2;
+        const fx = (kx - bx) / d.dk + d.n / 2, fy = (ky - by) / d.dk + d.n / 2;
         const x0 = Math.floor(fx), y0 = Math.floor(fy);
         if (x0 < 0 || y0 < 0 || x0 >= d.n - 1 || y0 >= d.n - 1) continue;
         const ax = fx - x0, ay = fy - y0, n = d.n;
@@ -722,6 +740,12 @@ export class Sim {
     }
     const quad = this._quad;
     f.dpcX ||= new Float32Array(f.N * f.N); f.dpcY ||= new Float32Array(f.N * f.N);
+    // the bias field across the scan (bias.js): β at each probe position, in mrad
+    let bias = null;
+    if (this.S.bsOn && this.biasSt?.op) {
+      const k = (1000 * this.lam) / (2 * Math.PI);
+      bias = (idx) => { const g = this.biasGrad(undefined, ((idx % f.N) - f.N / 2 + 0.5) * f.step, (((idx / f.N) | 0) - f.N / 2 + 0.5) * f.step); return [k * g[0], k * g[1]]; };
+    }
     for (let idx = from; idx < f.done; idx++) {
       const o = idx * P2;
       let s = 0, t = 0, sx = 0, sy = 0;
@@ -733,10 +757,12 @@ export class Sim {
         if (quad[p] >= 0) Q[quad[p]] += v;
       }
       f.vimg[idx] = s;
-      f.comX[idx] = t ? (sx / t) * f.mradPx : 0;
-      f.comY[idx] = t ? (sy / t) * f.mradPx : 0;
+      // a biased chip: the field at this probe position deflects the pattern by β (mrad), seen by the CoM and DPC
+      const bb = bias ? bias(idx) : null;
+      f.comX[idx] = (t ? (sx / t) * f.mradPx : 0) + (bb ? bb[0] : 0);
+      f.comY[idx] = (t ? (sy / t) * f.mradPx : 0) + (bb ? bb[1] : 0);
       const qt = Q[0] + Q[1] + Q[2] + Q[3] || 1;
-      f.dpcX[idx] = (Q[0] - Q[2]) / qt; f.dpcY[idx] = (Q[1] - Q[3]) / qt;
+      f.dpcX[idx] = (Q[0] - Q[2]) / qt + (bb ? dpcD(bb[0] / this.S.alpha4d) : 0); f.dpcY[idx] = (Q[1] - Q[3]) / qt + (bb ? dpcD(bb[1] / this.S.alpha4d) : 0);
     }
     f.vDone = f.done;
   }
@@ -1013,7 +1039,7 @@ export class Sim {
       L.shown = L.t; L.sig = sig;
       this.invalidate('damage');
     }
-    if (S.spec === 'au' && !S.zone && L.grow - L.grown >= 0.5) { L.grown = L.grow; P.regrowGold(Math.round(L.grow * 2) / 2); this.mapCache.clear(); this.invalidate('damage'); }
+    if (S.spec === 'au' && !S.zone && Math.abs(L.grow - L.grown) >= 0.5) { L.grown = L.grow; P.regrowGold(Math.round(L.grow * 2) / 2); this.mapCache.clear(); this.invalidate('damage'); }
   }
   // the gas (gas.js): images keep e^(−nσL) of their contrast; the scattered electrons spread as a background
   gasContrast(I) {
@@ -1054,6 +1080,67 @@ export class Sim {
     if (Math.abs(G.xi - xi0) > 0.01) this.stale.si = 1, this.stale.eels = 1;
     if (S.spec === 'au' && !S.zone && G.sinter - G.grown >= 0.5) { G.grown = G.sinter; P.regrowGold(Math.round(G.sinter * 2) / 2); this.mapCache.clear(); this.invalidate('damage'); }
   }
+  // ------------------------------------------------------------ biasing (bias.js)
+  // the chip's operating point, heating, failures and I–V trace advance with the clock; under liquid the electrode
+  // potential deposits or dissolves gold
+  stepBias(dt) {
+    const S = this.S;
+    if (!S.bsOn) { if (this.biasSt) { this.biasSt = null; this.invalidate('env'); } return; }
+    this.biasSt ??= { t: 0, dT: 0, broken: false, open: false, em: 0, events: [], trace: [], shown: -1, sig: '' };
+    const B = this.biasSt;
+    // a new source or circuit setting starts a new I–V trace
+    const key = [S.bsLayout, S.bsMat, S.bsGap, S.bsMode, S.bsWave, S.bsV, S.bsI, S.bsRate, S.bsLimit, S.bsRc, S.bsRs, S.bsLeak, S.thick].join('|');
+    if (key !== B.key) { B.key = key; B.trace = []; }
+    if (!(dt > 0) || S.paused) { if (!B.op) BIAS.step(B, S, specimenT(S.holder, S.tempSet, this.clock || 0), 0); return; }
+    const ev = B.events.length;
+    BIAS.step(B, S, specimenT(S.holder, S.tempSet, this.clock || 0), dt * S.speed);
+    if (S.envCell === 'liquid' && this.liq && S.spec === 'au') {
+      const ec = BIAS.electrochem(B.op.Vspec, this.temp(), S.lcPrecursor);
+      B.echem = ec;
+      this.liq.grow = clamp(this.liq.grow + ec.rate * dt * S.speed, -10, 15);
+    } else B.echem = null;
+    // refresh the views when the field has visibly changed: at most every 0.5 s, every 2 s in scanning modes
+    const sig = `${(B.op.Vspec).toPrecision(2)}|${B.broken}|${B.open}|${Math.round(B.dT)}`;
+    const every = ['stem', '4d', 'eds', 'eels', 'lstem'].includes(S.mode) ? 2 : 0.5;
+    if (B.events.length !== ev || (sig !== B.sig && B.t - B.shown > every)) {
+      B.shown = B.t; B.sig = sig;
+      this.oah.stale = true; this.lor.stale = true; this.stale.tem = 1;
+      if (this.diff) this.resampleDiff();
+      if (B.events.length !== ev || Math.abs(B.dT - (B.dTshown ?? 0)) > 5) { B.dTshown = B.dT; this.invalidate('temp'); }
+      this.version++;
+    }
+  }
+  resetBias() { this.biasSt = null; this.invalidate('env'); }
+  // the bias phase over an n × n grid of dx Å around the stage (rad): C_E [t V + P_vac], with t the film thickness
+  // (Å, or a per-pixel map); plane: the best-fit uniform gradient (rad/Å) at the centre, and the residual without it
+  biasPhase(n, dx, tA = this.S.thick * 10, { residual = false, tMap = null } = {}) {
+    const S = this.S, B = this.biasSt;
+    if (!S.bsOn || !B?.op) return null;
+    const sol = BIAS.solve(S.bsLayout), g = S.bsGap * 1e4, V = B.op.Vspec, sig = P.sigmaOf(S.kV);
+    const vac = S.bsStray ? BIAS.vacuum(sol, tA / g) : null, ph = new Float32Array(n * n);
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+      const X = (S.cx + (x - n / 2 + 0.5) * dx) / g, Y = (S.cy + (y - n / 2 + 0.5) * dx) / g, i = y * n + x;
+      const t = tMap ? tMap[i] : tA;
+      ph[i] = sig * V * (t * BIAS.sample(sol, sol.u, X, Y) + (vac ? g * BIAS.sample(sol, vac, X, Y) : 0));
+    }
+    const gr = this.biasGrad(tA);
+    if (residual) {
+      let m = 0;
+      for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) { const i = y * n + x; ph[i] -= gr[0] * (x - n / 2 + 0.5) * dx + gr[1] * (y - n / 2 + 0.5) * dx; m += ph[i]; }
+      m /= n * n; for (let i = 0; i < n * n; i++) ph[i] -= m;
+    }
+    return { ph, grad: gr };
+  }
+  // the phase gradient at the beam (rad/Å) and the deflection β = λ∇φ/2π (rad)
+  biasGrad(tA = this.S.thick * 10, ox = 0, oy = 0) {
+    const S = this.S, B = this.biasSt;
+    if (!S.bsOn || !B?.op) return [0, 0];
+    const sol = BIAS.solve(S.bsLayout), g = S.bsGap * 1e4, V = B.op.Vspec, sig = P.sigmaOf(S.kV), h = 0.002;
+    const vac = S.bsStray ? BIAS.vacuum(sol, tA / g) : null, X = (S.cx + ox) / g, Y = (S.cy + oy) / g;
+    const f = (a, b) => tA * BIAS.sample(sol, sol.u, a, b) + (vac ? g * BIAS.sample(sol, vac, a, b) : 0);
+    return [(sig * V * (f(X + h, Y) - f(X - h, Y))) / (2 * h * g), (sig * V * (f(X, Y + h) - f(X, Y - h))) / (2 * h * g)];
+  }
+  biasBeta(tA) { const [gx, gy] = this.biasGrad(tA), k = this.lam / (2 * Math.PI); return [k * gx, k * gy]; }
   resetGas() { if (SP.au.grownBy) P.regrowGold(0); this.gasSt = null; this.mapCache.clear(); this.invalidate('env'); }
   resetLiquid() { if (SP.au.grownBy) P.regrowGold(0); this.liq = null; this.mapCache.clear(); this.invalidate('env'); }
   // TEM: electrons that lost energy in the liquid are blurred by chromatic aberration (their share e^(−t/λ) is
@@ -1649,6 +1736,7 @@ export class Sim {
     if (m === 'ptychotomo') this.stepPT();
     this.stepLiquid(dt);
     this.stepGas(dt);
+    this.stepBias(dt);
     if (m === 'oah' && this.oah.stale) { this.oah.compute(); this.version++; }
     if (m === 'oah') this.main = this.oah.disp ? { arr: this.oah.disp.holo, w: this.oah.disp.c, h: this.oah.disp.c } : null;
     if (m === 'ilh') {
