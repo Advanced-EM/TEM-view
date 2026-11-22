@@ -14,6 +14,7 @@ import { InlineBackend } from './compute.js';
 import * as TOMO from './tomo.js';
 import * as SPA from './spa.js';
 import * as PT from './ptychotomo.js';
+import * as ENV from './environment.js';
 import { buildStructure } from './structure.js';
 import { HOLDERS, specimenT, u2Ratio, thermalStrain, radiolysisFactor, iceSublimation, DEVITRIFY_K } from './holder.js';
 
@@ -200,14 +201,15 @@ export class Sim {
     const th = this.thermal(), ice = this.ice();
     // a specimen built around the stage position (the megalibrary) builds the particle under the beam first
     this.spec.locate?.(S.cx, S.cy, S.tiltX, S.tiltY);
-    const key = [S.spec, this.spec.zoneKey ?? '', this.spec.ver ?? 0, th.u2r, th.eps, Math.round(ice.t), ice.cryst ? 1 : 0, this.spec.damageVer ?? 0, S.cx.toFixed(2), S.cy.toFixed(2), S.thick, S.tiltX, S.tiltY, opts.n, opts.dx.toFixed(4), !!opts.elements, !!opts.noTilt, opts.part ?? ''].join('|');
+    const extra = ENV.slices(S); // the environment's layers in the beam path (window membranes)
+    const key = [S.spec, this.spec.zoneKey ?? '', this.spec.ver ?? 0, JSON.stringify(extra), th.u2r, th.eps, Math.round(ice.t), ice.cryst ? 1 : 0, this.spec.damageVer ?? 0, S.cx.toFixed(2), S.cy.toFixed(2), S.thick, S.tiltX, S.tiltY, opts.n, opts.dx.toFixed(4), !!opts.elements, !!opts.noTilt, opts.part ?? ''].join('|');
     let m = this.mapCache.get(key);
     if (!m) {
       const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
       m = P.projectMaps(this.spec, {
         cx: S.cx, cy: S.cy, n: opts.n, dx: opts.dx, thick: S.thick * 10,
         tiltX: (S.tiltX * Math.PI) / 180, tiltY: (S.tiltY * Math.PI) / 180, elements: opts.elements, noTilt: opts.noTilt, part: opts.part,
-        T: th.T, u2r: th.u2r, eps: th.eps, iceT: ice.t, iceCryst: ice.cryst,
+        T: th.T, u2r: th.u2r, eps: th.eps, iceT: ice.t, iceCryst: ice.cryst, extra,
       });
       this._mapsMs = (typeof performance !== 'undefined' ? performance.now() : 0) - t0;
       this.mapCache.set(key, m);
@@ -443,9 +445,10 @@ export class Sim {
   // ------------------------------------------------------------ 3D ED / MicroED (ed3d.js)
   // The detector: 56 mm across (512 × 512 binned pixels of 0.11 mm) at the camera length; its edge sets the resolution.
   edParams() {
-    const S = this.S, spec = this.spec;
-    return { method: S.edMethod, start: S.edStart, end: S.edEnd, speed: S.edSpeed, fps: S.edFps, step: S.edStep, exposure: S.edExp, doseRate: S.edDoseRate, axis: S.edAxis,
-      pedPhi: S.pedPhi, t: (spec.slabT ?? S.thick * 10), lam: this.lam, Dc: spec.beamSensitive ? this.critDose() : Infinity, crystalArea: Math.PI * 1000 ** 2, mosaic: 0.05 };
+    const S = this.S, spec = this.spec, lim = ENV.maxTilt(S); // the holder's tilt range bounds the rotation
+    return { method: S.edMethod, start: Math.max(-lim, S.edStart), end: Math.min(lim, S.edEnd), speed: S.edSpeed, fps: S.edFps, step: S.edStep, exposure: S.edExp, doseRate: S.edDoseRate, axis: S.edAxis,
+      pedPhi: S.pedPhi, t: (spec.slabT ?? S.thick * 10), lam: this.lam, Dc: spec.beamSensitive ? this.critDose() : Infinity, crystalArea: Math.PI * 1000 ** 2, mosaic: 0.05,
+      bgScale: 1 + 25 * ENV.scatteredFraction(S) }; // the windows' diffuse scattering under the spots
   }
   computeED3D() {
     const S = this.S, spec = this.spec, cr = spec.cryst ?? P.CRYST[spec.id], o = this.edParams();
@@ -478,7 +481,7 @@ export class Sim {
   startED3D() { this.stepED3D(0); if (!this.ed || this.ed.none) return; this.ed.collected = 0; this.ed.running = true; this.edStats(); this.version++; }
   // a series plays in ~10 s of exhibit time (the real time is in plan.time_s)
   stepED3D(dt) {
-    const S = this.S, key = JSON.stringify([this.spec.zoneKey ?? S.spec, S.kV, S.thick, this.camLTrue().toFixed(1), S.edMethod, S.edStart, S.edEnd, S.edSpeed, S.edFps, S.edStep, S.edExp, S.edDoseRate, S.edAxis, S.pedPhi, this.spec.beamSensitive ? this.critDose().toFixed(2) : 0]);
+    const S = this.S, key = JSON.stringify([this.spec.zoneKey ?? S.spec, S.kV, S.thick, this.camLTrue().toFixed(1), S.edMethod, S.edStart, S.edEnd, S.edSpeed, S.edFps, S.edStep, S.edExp, S.edDoseRate, S.edAxis, S.pedPhi, this.spec.beamSensitive ? this.critDose().toFixed(2) : 0, S.envWin, S.envWinT, S.holder]);
     if (this.ed?.key !== key) { this.computeED3D(); this.ed.key = key; this.version++; }
     const e = this.ed;
     if (e.none) return;
@@ -795,7 +798,9 @@ export class Sim {
   // this.tomo: { ph, o, angles, ser, collected, running, rec: { x, iter, iterations, resid }, stats }
   tomoParams() {
     const S = this.S, beads = S.tomoPhantom === 'beads';
-    return { N: S.tomoN, signal: S.tomoSignal, scheme: S.tomoScheme, max: S.tomoMax, step: S.tomoStep, dose: S.tomoDose, jitter: S.tomoJitter, Dc: !beads && this.spec.beamSensitive ? +this.critDose().toFixed(2) : null };
+    const W = ENV.windowsOf(S);
+    return { N: S.tomoN, signal: S.tomoSignal, scheme: S.tomoScheme, max: Math.min(S.tomoMax, ENV.maxTilt(S)), step: S.tomoStep, dose: S.tomoDose, jitter: S.tomoJitter, Dc: !beads && this.spec.beamSensitive ? +this.critDose().toFixed(2) : null,
+      win: W ? +(W.w.dens * W.total * W.w.z17).toFixed(3) : 0 }; // the windows' Σ Z^1.7 per Å² at 0° (HAADF background, ∝ 1/cos θ)
   }
   buildTomoPhantom() {
     const S = this.S;
@@ -865,7 +870,7 @@ export class Sim {
     this.version++;
     return { N, resampled: N !== n };
   }
-  tomoSeries() { const T = this.tomo, o = T.o; return TOMO.seriesInit({ ph: T.ph, angles: T.angles, signal: o.signal, dosePerImage: o.dose / T.angles.length, Dc: o.Dc ?? Infinity, jitter: o.jitter, seed: 7 + (T.runs ?? 0) }); }
+  tomoSeries() { const T = this.tomo, o = T.o; return TOMO.seriesInit({ ph: T.ph, angles: T.angles, signal: o.signal, dosePerImage: o.dose / T.angles.length, Dc: o.Dc ?? Infinity, jitter: o.jitter, seed: 7 + (T.runs ?? 0), winBg: o.win * T.ph.vox * T.ph.vox }); }
   // record the series (instant: at once, for scripts, agents and tests)
   startTomo({ instant = false } = {}) {
     this.stepTomo(0);
@@ -910,7 +915,7 @@ export class Sim {
   // A test object (atoms in a 16 Å cube, two of them stacked along the beam) scanned at several tilts; each tilt is
   // reconstructed by MS-ePIE and the slices are fused. Collect runs it on the compute backend (a minute or so).
   // this.pt: { key, o, out (ptychotomo.ptResult snapshots), task, full, done, t0, ms }
-  ptParams() { const S = this.S; return { kV: S.kV, alpha: S.ptAlpha, tilts: Math.round(S.ptTilts), maxTilt: S.ptMax, dose: S.ptDose, iters: Math.round(S.ptIters), fusion: S.ptFusion }; }
+  ptParams() { const S = this.S, W = ENV.windowsOf(S); return { kV: S.kV, alpha: S.ptAlpha, tilts: Math.round(S.ptTilts), maxTilt: Math.min(S.ptMax, ENV.maxTilt(S)), dose: S.ptDose, iters: Math.round(S.ptIters), fusion: S.ptFusion, winPhase: W ? +(0.02 * Math.sqrt(W.total / 400)).toFixed(4) : 0 }; }
   stepPT() {
     const o = this.ptParams(), key = JSON.stringify(o);
     let A = this.pt;
@@ -944,7 +949,8 @@ export class Sim {
     const S = this.S, bin = S.spaBin === 2 ? 2 : 1, cp = 4, sample = SPA.SAMPLES[S.spaSample] ? S.spaSample : 'apo';
     const dmgScale = (P.betaOf(S.kV) / P.betaOf(300)) ** 2 * radiolysisFactor(this.temp(), cp) / radiolysisFactor(95, cp);
     return { sample, count: Math.round(S.spaN), dose: S.spaDose, df: S.spaDf, zpp: !!S.spaZpp, pref: S.spaPref, angErr: S.spaAngErr, N: 64 / bin, px: SPA.SAMPLES[sample].px * bin, mic: 512 / bin,
-      kV: S.kV, Cs: this.CsA() / 1e7, focalSpread: this.focalSpread(), conv: this.convTEM(), ice: clamp(S.thick * 10, 130, 3000), dmgScale: +dmgScale.toPrecision(3) };
+      kV: S.kV, Cs: this.CsA() / 1e7, focalSpread: this.focalSpread(), conv: this.convTEM(), ice: clamp(S.thick * 10, 130, 3000), dmgScale: +dmgScale.toPrecision(3),
+      window: (() => { const W = ENV.windowsOf(S); return W ? { t: W.total, dens: W.w.dens, zeff: W.w.zeff } : null; })() };
   }
   stepSPA() {
     const S = this.S, o = this.spaParams(), key = this.spaKey(o);
@@ -964,6 +970,11 @@ export class Sim {
       if (A.task.finished && !A.task.queue?.length) { A.done = true; if (A.full) A.ms = now() - A.t0; this.version++; }
     }
   }
+  // the environment (environment.js) for engines with their own models: the windows' elastically scattered fraction
+  // (diffraction background) and their inelastic t/λ
+  envScatter() { return ENV.scatteredFraction(this.S); }
+  envTau() { return ENV.inelastic(this.S).reduce((a, c) => a + c.tau, 0); }
+  envWindowMass() { const W = ENV.windowsOf(this.S); return W ? W.w.dens * W.total : 0; } // atoms per Å² in the windows
   spaKey(o = this.spaParams()) { const { dmgScale, ...rest } = o; return JSON.stringify(rest); }
   // collect and process (instant: at once, for scripts, agents and tests)
   startSPA({ instant = false } = {}) {
@@ -1088,6 +1099,9 @@ export class Sim {
     const spec = new Float32Array(nb);
     const compSym = {};
     for (const e of si.els) compSym[e.sym] = (compSym[e.sym] || 0) + si.comp[e.key];
+    // the environment's windows: their atoms against the specimen's (atoms per Å² along the beam), as extra lines
+    const wa = ENV.windowAtoms(S), specAtoms = (si.totN.reduce((a, b) => a + b, 0) / si.totN.length) / (si.dx * si.dx) * 1.45;
+    for (const [el, a] of Object.entries(wa)) compSym[el] = (compSym[el] || 0) + a / Math.max(specAtoms, 1e-3);
     let zMean = 0;
     for (const e of si.els) zMean += si.comp[e.key] * P.EL[e.idx].Z;
     const addLine = (E, amp) => {
@@ -1156,7 +1170,7 @@ export class Sim {
     const edges = [];
     for (const ed of P.EDGES) { const c = site.comp[ed.key]; if (c) edges.push({ edge: ed, w: tau * c, peaks: spec.elnes?.[ed.key]?.(ctx) }); }
     const m = { tau, plasmons: spec.plasmon, edges, extraLoss: spec.extraLoss ? (E, r) => spec.extraLoss(E, r) : null, kV: S.kV, beta: S.eelsBeta, zlp: this.zlp(), realistic: S.clarity === 'real', bg: { amp: 0.012, s: 3.1 } };
-    return EELS.addInelasticComponents(m, this.inelastic ?? []);
+    return EELS.addInelasticComponents(m, [...ENV.inelastic(S), ...(this.inelastic ?? [])]); // the environment's windows, then any other layers
   }
   // In situ hook (M13–M15): extra inelastic layers in the beam path, e.g. windows, water, gas:
   // [{ label, tau, plasmons: [{Ep, G, frac}], edges: [{ key, frac, name? }] }]

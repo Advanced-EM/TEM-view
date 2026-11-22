@@ -169,8 +169,9 @@ export function backproject(proj, N, thetaDeg, vol, w = 1) {
 export const HAADF_ETA = 1.2e-5;
 export function series(o) { const st = seriesInit(o); while (seriesNext(st)); return st; }
 // the same, one projection at a time (the exhibit records them as the holder turns)
-export function seriesInit({ ph, angles, signal = 'haadf', dosePerImage = 1e4, Dc = Infinity, floor = 0.7, jitter = 0, seed = 7, eta = HAADF_ETA, noise = true }) {
-  const rnd = rng(seed), st = { ph, N: ph.N, angles, signal, dosePerImage, Dc, floor, jitter, noise, rnd, countsPer: dosePerImage * eta, proj: [], shifts: [], dose: [], totalDose: 0, massLeft: 1, tmp: new Float32Array(ph.N * ph.N) };
+// winBg: the window membranes' Σ Z^1.7 per pixel at 0° (environment.js): flat films, so it grows as 1/cos θ
+export function seriesInit({ ph, angles, signal = 'haadf', dosePerImage = 1e4, Dc = Infinity, floor = 0.7, jitter = 0, seed = 7, eta = HAADF_ETA, noise = true, winBg = 0 }) {
+  const rnd = rng(seed), st = { ph, N: ph.N, angles, signal, dosePerImage, Dc, floor, jitter, noise, rnd, winBg, countsPer: dosePerImage * eta, proj: [], shifts: [], dose: [], totalDose: 0, massLeft: 1, tmp: new Float32Array(ph.N * ph.N) };
   if (signal === 'bf') {
     // diffraction contrast differs from grain to grain: the crystalline material is split into GRAINS classes by
     // blocks of ~1/12 of the box (a grain or a particle), each with its own Bragg phase
@@ -201,6 +202,7 @@ export function seriesNext(st) {
     }
   } else p.set(st.tmp);
   if (mass !== 1) for (let i = 0; i < p.length; i++) p[i] *= mass; // mass lost to the dose received so far
+  if (st.winBg) { const b = st.winBg / Math.max(0.17, Math.cos((th * Math.PI) / 180)); for (let i = 0; i < p.length; i++) p[i] += b; } // the windows, thicker in projection at high tilt
   // a random whole-pixel shift (alignment error)
   const sx = st.jitter ? Math.round(gauss(rnd) * st.jitter) : 0, sv = st.jitter ? Math.round(gauss(rnd) * st.jitter) : 0;
   st.shifts.push([sx, sv]);

@@ -13,6 +13,7 @@ import { footprintFor, fmtBytes, fmtTime, PLAN_FIELDS, PLAN_KINDS } from './foot
 import { createSpecimenUI } from './specui.js';
 import { defaultBackend } from './compute.js';
 import { SAMPLES } from './spa.js';
+import * as ENVW from './environment.js';
 import { evaluate, PROFILES, LIMIT_TEXT, capFor } from './resources.js';
 import { RemoteBackend } from './remote.js';
 import { buildBundle, readResults } from './bundle.js';
@@ -144,6 +145,14 @@ function renderStatus(checking = false) {
   }));
 }
 setTimeout(() => checkResources(), 2500); // measure once the exhibit has settled (no connector probing until Status opens)
+
+// the environment in one line: holder, windows and what they add (environment.js)
+function envNote() {
+  const W = ENVW.windowsOf(S), e = ENVW.envOf(S);
+  if (!W) return `${e.short}: tilts to ±${e.maxTilt}°${e.cryo ? ', cools the specimen' : ''}. Add windows to see what a cell's membranes do to every technique.`;
+  const tau = ENVW.inelastic(S)[0].tau, f = ENVW.scatteredFraction(S);
+  return `${W.w.label} windows, 2 × ${(W.each / 10).toFixed(W.w.unit === 'layers' ? 2 : 0)} nm in the beam path: they add t/λ ≈ ${tau.toFixed(2)} (EELS plural scattering, ${Object.keys(W.w.frac).join(' and ')} edges, EDS lines), scatter ${Math.round(100 * f)} % of the beam into a diffuse background, and add amorphous phase noise to images. Tilting lengthens the path through them. ${e.short} tilts to ±${e.maxTilt}°.`;
+}
 
 // ------------------------------------------------------------------ Tier 3: job bundles and results (bundle.js)
 async function exportBundle() {
@@ -375,6 +384,11 @@ const CONTROLS = [
   { buttons: [['libPrev', '← Particle'], ['libNext', 'Particle →'], ['libRow', 'Next row']], modes: NOT_LOR, show: () => S.spec === 'lib' },
   { buttons: [['libRand', 'Random particle'], ['libAuCo', 'Au–Co, phase-separated'], ['libChip', 'Whole chip']], modes: NOT_LOR, show: () => S.spec === 'lib' },
   { chips: 'holder', label: 'Specimen holder', opts: Object.entries(HOLDERS).map(([k, v]) => [k, v.short]) },
+  // the environment (environment.js): window membranes above and below the specimen, seen by every technique
+  { chips: 'envWin', label: 'Windows (one above, one below the specimen)', small: true, opts: Object.entries(ENVW.WINDOWS).map(([k, v]) => [k, v.label]) },
+  { slider: 'envWinT', label: 'Window thickness, each', show: () => S.envWin !== 'none', dyn: () => { const w = ENVW.WINDOWS[S.envWin] ?? ENVW.WINDOWS.sinx; return { min: w.range[0], max: w.range[1], step: 1 }; },
+    fmt: (v) => (S.envWin === 'graphene' ? `${Math.round(v)} layer${Math.round(v) > 1 ? 's' : ''} (${(Math.round(v) * 0.335).toFixed(2)} nm)` : `${(+v).toFixed(0)} nm`) },
+  { pFn: () => envNote() },
   { slider: 'tempSet', label: 'Temperature setpoint', dyn: () => { const H = HOLDERS[S.holder]; return { min: H.min, max: H.max, step: H.step, log: H.log }; }, fmt: (v) => fmtT(v), show: () => S.holder !== 'room' },
   { pFn: () => `Specimen at ${fmtT(sim.temp())}${S.holder === 'room' ? '' : ` (setpoint ${fmtT(S.tempSet)}; the grid runs ${S.holder === 'heat' ? 'about 1 % hotter than the reading' : 'warmer than the holder tip'} and fluctuates by ±${HOLDERS[S.holder].jitter} K)`}. Drift ${sim.driftSpeed().toFixed(2)} Å/s.` },
   { buttons: [['newGrid', 'Load a fresh grid']], modes: NOT_LOR, show: () => S.spec === 'bio' },
@@ -509,7 +523,7 @@ const CONTROLS = [
   { chips: 'tomoPhantom', label: 'Object', small: true, modes: 'tomo', opts: [['specimen', 'This specimen'], ['beads', 'Gold test beads']] },
   { chips: 'tomoSignal', label: 'Signal', small: true, modes: 'tomo', opts: [['haadf', 'HAADF-STEM'], ['bf', 'BF-TEM']] },
   { chips: 'tomoScheme', label: 'Tilt scheme', small: true, modes: 'tomo', opts: [['linear', 'Linear'], ['saxton', 'Saxton (finer at high tilt)']] },
-  { slider: 'tomoMax', label: 'Maximum tilt', min: 20, max: 80, step: 1, fmt: (v) => `±${v}°`, modes: 'tomo', ends: ['in situ holder', '', 'tomography holder'] },
+  { slider: 'tomoMax', label: 'Maximum tilt', min: 20, max: 80, step: 1, fmt: (v) => `±${v}°`, modes: 'tomo', ends: ['in situ holder', '', 'tomography holder'], dyn: () => ({ max: ENVW.maxTilt(S) }) },
   { slider: 'tomoStep', label: 'Tilt step', min: 0.5, max: 10, step: 0.5, fmt: (v) => `${(+v).toFixed(1)}°`, modes: 'tomo' },
   { slider: 'tomoDose', label: 'Dose for the whole series', min: 1, max: 1e7, log: true, fmt: (v) => `${(+v).toExponential(1)} e⁻/Å²`, modes: 'tomo', ends: ['cryo-ET', '', 'robust metal'] },
   { slider: 'tomoJitter', label: 'Stage jitter between tilts', min: 0, max: 5, step: 0.1, fmt: (v) => `${(+v).toFixed(1)} px rms`, modes: 'tomo' },

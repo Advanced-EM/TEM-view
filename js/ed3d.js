@@ -63,7 +63,7 @@ export function collect(refl, o) {
   const ePerFrame = p.dosePerFrame * (o.crystalArea ?? 3e6), sig = Math.hypot(0.6 / o.t, ((o.mosaic ?? 0.05) * DEG) * 0.5); // relrod width (Å⁻¹) per unit g (mosaic part scaled below)
   const frames = Array.from({ length: p.frames }, () => []);
   const decay = (f, g) => (Number.isFinite(o.Dc) ? Math.exp(-((f + 0.5) * p.dosePerFrame) * (0.3 + 0.7 * (g / 0.5) ** 2) / o.Dc) : 1);
-  const bg = (g) => 2e-5 * Math.exp(-g / 1.0) * ePerFrame; // diffuse (inelastic, thermal) background under a spot
+  const bg = (g) => 2e-5 * Math.exp(-g / 1.0) * ePerFrame * (o.bgScale ?? 1); // diffuse (inelastic, thermal; windows: bgScale) background under a spot
   refl.forEach((R, i) => {
     const A = dot(R.v, zh), B = dot(R.v, v), r = Math.hypot(A, B), c = (lam * R.g * R.g) / 2, phg = Math.atan2(B, A) / DEG;
     if (o.method === 'cred') {

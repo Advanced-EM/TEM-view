@@ -26,18 +26,26 @@ export const AB_TERMS = [
 
 export class Ronch {
   constructor(sim) { this.sim = sim; this.stale = true; }
+  // the amorphous film (rms phase 0.45 rad) plus, with window membranes in the holder, a second independent phase
+  // screen whose rms grows as √(mass thickness) against the film's (≈ 10 nm of carbon)
   film(n, dx) {
-    if (this._film && this._fdx === dx) return this._film;
-    const rng = P.mulberry32(99), a = new Float32Array(n * n);
-    for (let i = 0; i < n * n; i++) a[i] = rng() - 0.5;
-    blur(a, n, 0.75 / dx);
-    let m = 0, v = 0;
-    for (let i = 0; i < n * n; i++) m += a[i];
-    m /= n * n;
-    for (let i = 0; i < n * n; i++) { a[i] -= m; v += a[i] * a[i]; }
-    const sc = 0.45 / Math.sqrt(v / (n * n));
-    for (let i = 0; i < n * n; i++) a[i] *= sc;
-    this._film = a; this._fdx = dx;
+    const wa = this.sim.envWindowMass?.() ?? 0, key = `${dx}|${wa.toFixed(3)}`;
+    if (this._film && this._fkey === key) return this._film;
+    const screen = (seed, rmsTarget) => {
+      const rng = P.mulberry32(seed), a = new Float32Array(n * n);
+      for (let i = 0; i < n * n; i++) a[i] = rng() - 0.5;
+      blur(a, n, 0.75 / dx);
+      let m = 0, v = 0;
+      for (let i = 0; i < n * n; i++) m += a[i];
+      m /= n * n;
+      for (let i = 0; i < n * n; i++) { a[i] -= m; v += a[i] * a[i]; }
+      const sc = rmsTarget / Math.sqrt(v / (n * n));
+      for (let i = 0; i < n * n; i++) a[i] *= sc;
+      return a;
+    };
+    const a = screen(99, 0.45);
+    if (wa > 0) { const w = screen(4242, 0.45 * Math.sqrt(wa / 10)); for (let i = 0; i < n * n; i++) a[i] += w[i]; }
+    this._film = a; this._fkey = key; this._fdx = dx;
     return a;
   }
   compute() {
@@ -312,6 +320,16 @@ export class CBED {
         for (const [ex, ey, dx, dy] of cone) v += at(thx - dx, thy - dy, ex, ey);
         out[j * W + i] = v / cone.length;
       }
+    // window membranes (environment.js): the fraction they scatter leaves the disks and spreads as a broad diffuse
+    // halo (amorphous, peaked near 1/2.5 Å⁻¹)
+    const wf = sim.envScatter?.() ?? 0;
+    if (wf > 0) {
+      const lam = sim.lam, k0 = 1 / 2.5;
+      for (let j = 0; j < W; j++) for (let i = 0; i < W; i++) {
+        const thx = ((i + 0.5) / W * 2 - 1) * span, thy = ((j + 0.5) / W * 2 - 1) * span, k = Math.hypot(thx, thy) / lam;
+        out[j * W + i] = out[j * W + i] * (1 - wf) + wf * 0.08 * (Math.exp(-((k - k0) ** 2) / 0.02) + 0.5 * Math.exp(-k / 0.15));
+      }
+    }
     this.disp = { arr: out, W, span, a, lac, grainC, ped: !!ped };
     this.rot = rotated;
     this.fringeFit(rotated, grainC, t);

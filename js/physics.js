@@ -1227,7 +1227,7 @@ for (const M of Object.values(MAT)) M.pick = (r) => { for (const [e, f] of M.mix
 // Splat atoms onto an n×n grid (pixel size dx, centered at cx,cy). Tilting a crystal
 // smears each column along the tilt direction by L·tanθ, which is what kills lattice contrast off-axis.
 // part: 'cryst' or 'amorph' projects only that component (used to stack slices in depth)
-export function projectMaps(spec, { cx, cy, n, dx, thick, tiltX = 0, tiltY = 0, elements = false, noTilt = false, part = null, T = 293, u2r = 1, eps = 0, iceT = thick, iceCryst = false }) {
+export function projectMaps(spec, { cx, cy, n, dx, thick, tiltX = 0, tiltY = 0, elements = false, noTilt = false, part = null, T = 293, u2r = 1, eps = 0, iceT = thick, iceCryst = false, extra = [] }) {
   const N2 = n * n;
   const phase = new Float32Array(N2), zHi = new Float32Array(N2), zLo = new Float32Array(N2);
   const elem = elements ? EL.map(() => new Float32Array(N2)) : null;
@@ -1344,6 +1344,25 @@ export function projectMaps(spec, { cx, cy, n, dx, thick, tiltX = 0, tiltY = 0, 
             for (const [e, fr] of M.mix) splat((xc - x0) / dx - 0.5, (yc - y0) / dx - 0.5, sC2, 0, e, VP[e] * W * fr, ZH[e] * W * fr, ZL[e] * W * fr, W * fr);
           }
         }
+      }
+  }
+  // the environment's layers (environment.js slices(): window membranes), under every specimen: amorphous, so a
+  // pseudo-atom texture (only ~1/√N strong through a thick film) on a smooth mass-conserving continuum, seeded per
+  // cell so it stays put as the stage moves
+  for (const [mat, t] of extra) {
+    const M = MAT[mat], cell = M?.cell;
+    if (!M || !(t > 0)) continue;
+    const i0 = Math.floor(x0 / cell) - 1, i1 = Math.floor((x0 + n * dx) / cell) + 1, j0 = Math.floor(y0 / cell) - 1, j1 = Math.floor((y0 + n * dx) / cell) + 1;
+    const tex = Math.min(1, 1.5 / Math.sqrt(M.dens * cell * cell * t)), sC = (0.6 * cell) / dx, sC2 = sC * sC;
+    for (let j = j0; j <= j1; j++)
+      for (let i = i0; i <= i1; i++) {
+        const rng = mulberry32(hash2(i, j, 131));
+        for (let k = 0, cnt = rng() < 0.45 ? 2 : 1; k < cnt; k++) {
+          const x = (i + rng()) * cell, y = (j + rng()) * cell, e = M.pick(rng()), N = ((M.dens * cell * cell * t) / 1.45) * (0.75 + 0.5 * rng()) * tex;
+          splat((x - x0) / dx - 0.5, (y - y0) / dx - 0.5, sB2, 0, e, VP[e] * N, ZH[e] * N, ZL[e] * N, N);
+        }
+        const W = ((1 - tex) * M.dens * cell * cell * t * sB2) / sC2, xc = (i + 0.5) * cell, yc = (j + 0.5) * cell;
+        for (const [e, fr] of M.mix) splat((xc - x0) / dx - 0.5, (yc - y0) / dx - 0.5, sC2, 0, e, VP[e] * W * fr, ZH[e] * W * fr, ZL[e] * W * fr, W * fr);
       }
   }
   return { phase, zHi, zLo, elem, n, dx, x0, y0 };

@@ -49,6 +49,9 @@ export const defaultState = () => ({
   spaSample: 'apo', spaN: 1000, spaDose: 40, spaDf: 1.5, spaZpp: false, spaPref: 0, spaAngErr: 2, spaBin: 1, spaView: 'mic',
   // zone axis [u, v, w] of a built-in crystal along the beam (zone.js); null: the specimen as built
   zone: null,
+  // the environment's window membranes (environment.js): none | sinx | graphene | carbon, thickness per window (nm;
+  // graphene: layers)
+  envWin: 'none', envWinT: 20,
   // where the 4D-STEM scan and tomography run in a browser with WebGPU: 'auto' (the GPU, gpu.js) | 'off' (JS)
   gpu: 'auto',
   // acquisition plan overrides by technique (footprint.js): scan size, detector pixels, bit depth, dwell, ...
@@ -65,7 +68,7 @@ export const SESSION_KEYS = [
   'eelsSource', 'eelsBeta', 'eelsDet', 'eelsYScale', 'eelsFit', 'eelsPre', 'eelsDeconv', 'eelsPx', 'eelsLine',
   'pedOn', 'pedPhi', 'pedSteps', 'pedDescan', 'zone',
   'edMethod', 'edStart', 'edEnd', 'edSpeed', 'edFps', 'edStep', 'edExp', 'edDoseRate', 'edAxis', 'edMerge', 'edSlice', 'edLayer',
-  'tomoPhantom', 'tomoN', 'tomoSignal', 'tomoScheme', 'tomoMax', 'tomoStep', 'tomoDose', 'tomoJitter', 'tomoAlign', 'tomoRecon', 'tomoFilter', 'tomoIter', 'tomoView', 'tomoDepth', 'ptTilts', 'ptMax', 'ptAlpha', 'ptDose', 'ptIters', 'ptFusion', 'ptView', 'spaSample', 'spaN', 'spaDose', 'spaDf', 'spaZpp', 'spaPref', 'spaAngErr', 'spaBin', 'spaView', 'ab', 'ronchAp', 'cbedKind', 'alphaCB', 'alphaLA', 'strain', 'holz',
+  'tomoPhantom', 'tomoN', 'tomoSignal', 'tomoScheme', 'tomoMax', 'tomoStep', 'tomoDose', 'tomoJitter', 'tomoAlign', 'tomoRecon', 'tomoFilter', 'tomoIter', 'tomoView', 'tomoDepth', 'envWin', 'envWinT', 'ptTilts', 'ptMax', 'ptAlpha', 'ptDose', 'ptIters', 'ptFusion', 'ptView', 'spaSample', 'spaN', 'spaDose', 'spaDf', 'spaZpp', 'spaPref', 'spaAngErr', 'spaBin', 'spaView', 'ab', 'ronchAp', 'cbedKind', 'alphaCB', 'alphaLA', 'strain', 'holz',
   'biprism', 'sbR', 'numCorr', 'holoView', 'nFocal', 'focalStep', 'ilhView', 'holder', 'tempSet', 'profile', 'mis',
   'magSpec', 'lorThick', 'lorFov', 'lorDf', 'lorDiv', 'lorView', 'lorFouc', 'lorApR', 'lorField', 'lorChir', 'lorPol', 'lstemView', 'lorAlpha',
 ];

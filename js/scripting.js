@@ -35,6 +35,7 @@ const SETTINGS = {
   lorentz_fov_um: 'field of view in µm (Lorentz modes)', film_thickness_nm: 'magnetic film thickness', field_mT: 'objective-lens field along the beam',
   divergence_urad: 'illumination divergence (ltem)', foucault: '+x, -x, +y, -y: the deflection the Foucault aperture passes', dpc_view: 'color, x, y, sum (lstem)',
   probe_urad: 'Lorentz-STEM probe semi-angle',
+  windows: 'none, sinx, graphene or carbon: membranes above and below the specimen', window_thickness: 'per window, nm (graphene: layers)',
   pt_tilts: '1, 3, 5, 7 or 9', pt_max_tilt_deg: 'maximum tilt, 10–75°', pt_alpha_mrad: 'probe semi-angle, 10–20 mrad', pt_dose: 'e⁻/Å² for all tilts', pt_iterations: 'MS-ePIE iterations per tilt', pt_fusion: 'sirt or average', pt_view: 'xz, xy or slices',
   spa_sample: 'apo (apoferritin, 480 kDa, octahedral) or bgal (β-galactosidase, 465 kDa, D2)', spa_particles: 'particles to average, 100–20000', spa_dose: 'e⁻/Å² per micrograph', spa_defocus_um: 'mean underfocus, µm', spa_zernike: 'True: Zernike phase plate', spa_preferred: 'fraction lying in one orientation, 0–0.95', spa_alignment_error_deg: 'rms orientation error, °', spa_binning: '1 (3.2 Å pixels) or 2 (6.4 Å)', spa_view: 'mic, ctf, classes or map',
   tomo_object: 'specimen or beads (gold test beads)', tomo_volume: '64, 96, 128 or 256 voxels per side (256: WebGPU in the exhibit; slow in JS)', tomo_signal: 'haadf or bf', tomo_scheme: 'linear or saxton', tomo_max_tilt_deg: 'maximum tilt, 20–80°', tomo_step_deg: 'tilt step (at 0° for saxton)',
@@ -82,6 +83,9 @@ export function settingsToOps(a) {
   // 3D ED
   const edMap = { ed_method: 'edMethod', ed_speed_deg_s: 'edSpeed', ed_fps: 'edFps', ed_step_deg: 'edStep', ed_exposure_s: 'edExp', ed_dose_rate: 'edDoseRate', ed_axis_deg: 'edAxis', ed_merge: 'edMerge' };
   for (const [k, key] of Object.entries(edMap)) if (a[k] !== undefined) ops.push({ op: 'set', k: key, v: typeof a[k] === 'string' ? a[k] : +a[k] });
+  // the environment's windows (environment.js)
+  if (a.windows !== undefined) ops.push({ op: 'chip', k: 'envWin', v: String(a.windows) });
+  if (a.window_thickness !== undefined) ops.push({ op: 'set', k: 'envWinT', v: +a.window_thickness });
   // ptychographic tomography
   const ptMap = { pt_tilts: 'ptTilts', pt_max_tilt_deg: 'ptMax', pt_alpha_mrad: 'ptAlpha', pt_dose: 'ptDose', pt_iterations: 'ptIters', pt_fusion: 'ptFusion', pt_view: 'ptView' };
   for (const [k, key] of Object.entries(ptMap)) if (a[k] !== undefined) ops.push({ op: 'set', k: key, v: typeof a[k] === 'string' ? a[k] : +a[k] });

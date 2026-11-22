@@ -25,7 +25,8 @@ function poisson(l, rng) {
   if (l < 30) { const L = Math.exp(-l); let k = 0, q = 1; do { k++; q *= rng(); } while (q > L); return k - 1; }
   return Math.max(0, Math.round(l + Math.sqrt(l) * Math.sqrt(-2 * Math.log(1 - rng())) * Math.cos(2 * Math.PI * rng())));
 }
-export const PT_DEFAULTS = { kV: 300, alpha: 20, N: 64, dx: 0.25, K: 4, scan: 24, n4: 32, tilts: 7, maxTilt: 60, iters: 8, dose: 1e5, seed: 5, object: 'test', fusion: 'sirt', sirtIter: 30 };
+// winPhase: the window membranes' amorphous phase (rad rms per pixel), added to the top and bottom slices
+export const PT_DEFAULTS = { winPhase: 0, kV: 300, alpha: 20, N: 64, dx: 0.25, K: 4, scan: 24, n4: 32, tilts: 7, maxTilt: 60, iters: 8, dose: 1e5, seed: 5, object: 'test', fusion: 'sirt', sirtIter: 30 };
 
 // ---------------------------------------------------------------- the object
 // atoms as Gaussian blobs of projected phase (σ 0.45 Å); w: phase weight (1 ≈ a heavy atom, ~0.3 rad peak)
@@ -172,6 +173,7 @@ const STAGES = {
   data(st) {
     const { p, N, geom } = st, th = st.angles[st.t], G = geom.gridN, off = Math.round((G - N) / 2);
     const slabs = slabProject(st.truth, N, p.K, th);
+    if (p.winPhase > 0) for (const k of [0, p.K - 1]) { const s = slabs[k]; for (let i = 0; i < s.length; i++) s[i] += p.winPhase * Math.sqrt(-2 * Math.log(1 - st.rng())) * Math.cos(2 * Math.PI * st.rng()); } // windows above and below
     const slices = slabs.map((s) => {
       const re = new Float64Array(G * G).fill(1), im = new Float64Array(G * G);
       for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) { const ph = s[x + N * y], q = x + off + G * (y + off); re[q] = Math.cos(ph); im[q] = Math.sin(ph); }

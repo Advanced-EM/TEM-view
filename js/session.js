@@ -17,7 +17,7 @@ import { planFor, validPlanValue } from './footprint.js';
 
 export const SESSION_FORMAT = 'tem-view-session/2';
 export const ACQ_KEYS = ['kV', 'dose', 'camera', 'clarity']; // plus acq.plan (footprint.js overrides by technique)
-export const ENV_KEYS = ['holder', 'tempSet'];
+export const ENV_KEYS = ['holder', 'tempSet', 'envWin', 'envWinT'];
 const MOD_IDS = new Set(MODIFIERS.map((m) => m.id));
 
 // modifiers in effect for a state. The Zernike plate still lives in the objective-aperture slot of the
@@ -64,6 +64,7 @@ export function readSession(o, base = defaultState()) {
     const v = st[k];
     if (k === 'mode') { if (isMode(v)) out.mode = v; else warnings.push(`unknown technique ${v}`); }
     else if (k === 'holder') { if (HOLDERS[v]) out.holder = v; else warnings.push(`unknown holder ${v}`); }
+    else if (k === 'envWin') { if (['none', 'sinx', 'graphene', 'carbon'].includes(v)) out.envWin = v; else warnings.push(`unknown window ${v}`); }
     else if (k === 'profile') out.profile = sanitizeProfile(v);
     else if (k === 'spec') { if (P.SPECIMENS[v]) out.spec = v; else warnings.push(`unknown specimen ${v}`); }
     else if (k === 'mis') out.mis = v && typeof v === 'object' ? v : null;

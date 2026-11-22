@@ -264,7 +264,8 @@ export function spaInit(o = {}) {
   const p = { ...SPA_DEFAULTS, ...o }, N = p.N;
   const c = ctfParams(p), sig = sigmaOf(p.kV);
   // electrons per pixel through the energy filter (inelastic scattering in the ice removes the rest)
-  const nPix = p.dose * p.px * p.px * Math.exp(-p.ice / (10 * imfp(p.kV, 7)));
+  // window membranes (environment.js) add their own inelastic loss and structural noise
+  const win = p.window, nPix = p.dose * p.px * p.px * Math.exp(-p.ice / (10 * imfp(p.kV, 7)) - (win ? win.t / (10 * imfp(p.kV, win.zeff)) : 0));
   return {
     p, c, sig, nPix, stage: 'setup', rng: mulberry32(p.seed), N, M: 2 * N,
     stack: [], groups: [], made: 0, junkMade: 0, accepted: 0, rejected: { junk: 0, good: 0 }, ctfErr: [],
@@ -445,7 +446,8 @@ function prepareBox(st, b, Tm) {
 // 0.03 rad rms per 2.4 Å pixel, growing as √thickness and falling as 1/pixel size (the same noise per unit area),
 // white up to the 3.7 Å ice ring. This structured noise is what makes the Thon rings visible in the power spectrum.
 // Returns |n| per Fourier coefficient (E|n|² = (rms·M)²).
-function iceAmp(st, M) { const a = 0.03 * (2.4 / st.p.px) * Math.sqrt(st.p.ice / 300) * M; return (k) => (k < 1 / 3.7 ? a : a * 0.3); }
+// windows count as extra ice for the texture: thickness × their density and mean Z relative to water's
+function iceAmp(st, M) { const w = st.p.window, eq = st.p.ice + (w ? (w.t * (w.dens / 0.033) * w.zeff) / 7.4 : 0), a = 0.03 * (2.4 / st.p.px) * Math.sqrt(eq / 300) * M; return (k) => (k < 1 / 3.7 ? a : a * 0.3); }
 function iceTable(st, M) {
   const f = iceAmp(st, M), t = new Float64Array(M * M), px = st.p.px;
   for (let j = 0; j < M; j++) for (let i = 0; i < M; i++) { const k = Math.hypot(fq(i, M), fq(j, M)) / (M * px); t[i + M * j] = k < 1 / (2 * px) ? f(k) : 0; }

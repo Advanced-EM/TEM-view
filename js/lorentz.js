@@ -172,12 +172,12 @@ export class Lorentz {
       const tt = M.t[i] / (cx * cy), mxp = M.mx[i] * cx + M.mz[i] * Math.sin(S.tiltX * DEG), myp = M.my[i] * cy + M.mz[i] * Math.sin(S.tiltY * DEG);
       gx[i] = kG * tt * myp; gy[i] = -kG * tt * mxp;
     }
-    const phM = integrate(gx, gy, n, dx), sig = P.sigmaOf(S.kV);
+    const phM = integrate(gx, gy, n, dx), sig = P.sigmaOf(S.kV), envTau = sim.envTau?.() ?? 0;
     const ph = new Float32Array(n * n), amp = new Float32Array(n * n);
     for (let i = 0; i < n * n; i++) {
       const tt = M.t[i] / (cx * cy);
       ph[i] = phM[i] + sig * sp.V0 * tt;
-      amp[i] = Math.exp(-tt / (2 * sp.L * 10));
+      amp[i] = Math.exp(-tt / (2 * sp.L * 10) - envTau / 2); // envTau: inelastic loss in window membranes (energy-filtered)
     }
     // largest deflection anywhere (rad) and the saturation one, β = λ |∇φ| / 2π
     const betaS = deflection(S, sim.temp(), S.kV);

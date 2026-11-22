@@ -297,6 +297,11 @@ export function changeText(key, S, sim) {
       return ['Pristine again', 'All sputtered atoms are back. At 60–80 kV the lattice survives indefinitely; above the ~86 kV knock-on threshold, holes nucleate at defects and grow from their edges, where atoms have fewer bonds and a lower displacement threshold.'];
     case 'damage': return null;
     case 'holder': case 'tempSet': return holderText(S, sim);
+    case 'envWin': case 'envWinT': {
+      if (S.envWin === 'none') return ['No windows', 'The beam meets only the specimen and its own support, as on an ordinary grid.'];
+      const w = { sinx: 'amorphous silicon nitride', graphene: 'graphene', carbon: 'amorphous carbon' }[S.envWin];
+      return ['Window membranes', `Liquid, gas and heating cells hold the specimen between two thin <b>${w}</b> windows, one above and one below. Every electron crosses both: they add <b>amorphous phase noise</b> to images, a <b>diffuse background</b> to diffraction patterns, energy loss to <b>EELS</b> (their plasmon and ${S.envWin === 'sinx' ? 'Si L and N K edges' : 'C K edge'}) and their own <b>X-ray lines</b> to EDS. Thinner windows image better but withstand less pressure; tilting lengthens the path through them.`];
+    }
     case 'newGrid': return ['Fresh grid', 'A new grid, plunge-frozen and never warmed: vitreous ice again, no dose so far. The holder drifts for a while after insertion.'];
     case 'cryo': return holderText(S, sim);
     case 'profile': return ['Instrument profile', `The twin now models a <b>${S.profile.name}</b>: energy spread ${S.profile.dE} eV, C<sub>c</sub> ${S.profile.Cc} mm, uncorrected C<sub>s</sub> ${S.profile.CsUnc} mm${S.profile.corrector ? ', with an aberration corrector' : ''}. With these, the focal spread is <b>${sim.focalSpread().toFixed(0)} Å</b> and the information limit <b>${f2(sim.infoLimit())} Å</b> at ${S.kV} kV. Its magnification, camera length, scan, EDS and holography calibrations start at their nominal values; the calibration dialog measures each of them from your data, mode by mode.`];
