@@ -49,7 +49,7 @@ function png(name, arr, w, h, { map = 'grey', lo, hi, scale = 1, invert = false,
 }
 // a line plot: series [{ pts: [[x, y]], color, label, dash, dots }], axes labels, optional reference lines
 const esc = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;');
-function svgPlot(name, series, { xlab, ylab, xlim, ylim, hlines = [], vlines = [], w = 520, h = 300, logy = false } = {}) {
+function svgPlot(name, series, { xlab, ylab, xlim, ylim, hlines = [], vlines = [], w = 520, h = 300, logy = false, legend = 'tr' } = {}) {
   const L = 56, R = 14, T = 14, B = 42, all = series.flatMap((s) => s.pts);
   const [x0, x1] = xlim ?? [Math.min(...all.map((p) => p[0])), Math.max(...all.map((p) => p[0]))];
   const fy = (y) => (logy ? Math.log10(y) : y);
@@ -62,12 +62,18 @@ function svgPlot(name, series, { xlab, ylab, xlim, ylim, hlines = [], vlines = [
   s += `<line x1="${L}" x2="${w - R}" y1="${h - B}" y2="${h - B}" stroke="#55606e"/><line x1="${L}" x2="${L}" y1="${T}" y2="${h - B}" stroke="#55606e"/>`;
   for (const v of hlines) s += `<line x1="${L}" x2="${w - R}" y1="${Y(v.y)}" y2="${Y(v.y)}" stroke="${v.color ?? '#999'}" stroke-dasharray="4 4"/><text x="${w - R - 4}" y="${Y(v.y) - 4}" text-anchor="end" fill="${v.color ?? '#777'}">${esc(v.label ?? '')}</text>`;
   for (const v of vlines) s += `<line x1="${X(v.x)}" x2="${X(v.x)}" y1="${T}" y2="${h - B}" stroke="${v.color ?? '#999'}" stroke-dasharray="4 4"/><text x="${X(v.x) + 4}" y="${T + 12}" fill="${v.color ?? '#777'}">${esc(v.label ?? '')}</text>`;
-  series.forEach((sr, i) => {
+  // the data are clipped to the axes; the legend sits in a backed box in the corner `legend` (tr, tl, br, bl)
+  s += `<clipPath id="plotArea"><rect x="${L}" y="${T}" width="${w - L - R}" height="${h - T - B}"/></clipPath><g clip-path="url(#plotArea)">`;
+  series.forEach((sr) => {
     const pts = sr.pts.filter((p) => Number.isFinite(p[1]) && (!logy || p[1] > 0));
     if (sr.dots) for (const p of pts) s += `<circle cx="${X(p[0]).toFixed(1)}" cy="${Y(p[1]).toFixed(1)}" r="2.6" fill="${sr.color}"/>`;
     else s += `<polyline fill="none" stroke="${sr.color}" stroke-width="2" ${sr.dash ? 'stroke-dasharray="6 4"' : ''} points="${pts.map((p) => `${X(p[0]).toFixed(1)},${Y(p[1]).toFixed(1)}`).join(' ')}"/>`;
-    s += `<rect x="${L + 10}" y="${T + 6 + i * 16}" width="12" height="3" fill="${sr.color}"/><text x="${L + 28}" y="${T + 11 + i * 16}" fill="#222">${esc(sr.label)}</text>`;
   });
+  s += '</g>';
+  const lw = 26 + 6.2 * Math.max(...series.map((sr) => sr.label.length)), lh = 8 + 16 * series.length;
+  const lx = legend.includes('l') ? L + 8 : w - R - 8 - lw, ly = legend.includes('t') ? T + 6 : h - B - 6 - lh;
+  s += `<rect x="${lx}" y="${ly}" width="${lw}" height="${lh}" fill="#fff" fill-opacity="0.92" stroke="#d5dae1"/>`;
+  series.forEach((sr, i) => { s += `<rect x="${lx + 8}" y="${ly + 10 + i * 16}" width="12" height="3" fill="${sr.color}"/><text x="${lx + 26}" y="${ly + 15 + i * 16}" fill="#222">${esc(sr.label)}</text>`; });
   s += `<text x="${(L + w - R) / 2}" y="${h - 8}" text-anchor="middle" fill="#222">${esc(xlab)}</text><text transform="translate(14 ${(T + h - B) / 2}) rotate(-90)" text-anchor="middle" fill="#222">${esc(ylab)}</text></svg>`;
   writeFileSync(new URL(name, OUT), s);
   console.log(`fig/${name}`);
@@ -87,10 +93,11 @@ if (!only || only === 'insitu') {
     const run = (rate) => C.simulateSeries({ ...base, lcRate: rate }, times).map((r) => [r.t, r.supersat]);
     const thr = LIQ.nucleationThreshold({ ...base, lcRate: 3.37 });
     svgPlot('sop5_nucleation.svg', [{ pts: run(3.37), color: ORANGE, label: '3.37 e⁻/Å²/s' }, { pts: run(1), color: BLUE, label: '1 e⁻/Å²/s' }, { pts: run(0.4), color: GREY, label: `0.4 e⁻/Å²/s (below ${thr.toFixed(2)})` }],
-      { xlab: 'time (s)', ylab: 'reduced silver / amount to nucleate', ylim: [0, 1.6], hlines: [{ y: 1, label: 'first nucleus', color: '#b33' }] }); }
+      { xlab: 'time (s)', ylab: 'reduced silver / amount to nucleate', ylim: [0, 1.6], legend: 'br', hlines: [{ y: 1, label: 'first nucleus', color: '#b33' }] }); }
   // coarsening of gold on a heating chip: a ramp to 1250 K in O₂ and N₂
-  { const mk = (gas) => { const S = { ...defaultState(), spec: 'au', holder: 'heat', envCell: 'gas', gcGeom: 'windowed', gcGas: gas, gcP: 500, tempSet: 300, timeline: [{ key: 'tempSet', t0: 10, t1: 110, to: 1250 }] }; return C.simulateSeries(S, Array.from({ length: 151 }, (_, i) => i * 2)).map((r) => [r.T_K, r.sinter_A]); };
-    svgPlot('sop5_coarsening.svg', [{ pts: mk('O2'), color: ORANGE, label: 'O₂, 500 mbar' }, { pts: mk('N2'), color: BLUE, label: 'N₂, 500 mbar' }], { xlab: 'temperature (K)', ylab: 'radius gained (Å)', xlim: [800, 1260] }); }
+  { const mk = (gas) => { const S = { ...defaultState(), spec: 'au', holder: 'heat', envCell: 'gas', gcGeom: 'windowed', gcGas: gas, gcP: 500, tempSet: 300, timeline: [{ key: 'tempSet', t0: 10, t1: 110, to: 1250 }] }; return C.simulateSeries(S, Array.from({ length: 151 }, (_, i) => i * 2)).map((r) => [r.t, r.sinter_A]); };
+    svgPlot('sop5_coarsening.svg', [{ pts: mk('O2'), color: ORANGE, label: 'O₂, 500 mbar' }, { pts: mk('N2'), color: BLUE, label: 'N₂, 500 mbar' }],
+      { xlab: 'time (s): 300 K → 1250 K from 10 to 110 s, then held', ylab: 'radius gained (Å)', legend: 'tl', vlines: [{ x: 110, label: '1250 K reached', color: '#b33' }] }); }
   // calibrating to your own data: a series made with known parameters, fitted back
   { const S = { ...defaultState(), spec: 'au', holder: 'heat', envCell: 'gas', gcGeom: 'windowed', gcGas: 'N2', gcP: 100, tempSet: 1000, timeline: [{ key: 'tempSet', t0: 0, t1: 7200, to: 1300 }] };
     for (const [k, v] of Object.entries({ sinter_A: 2500, sinter_Ea: 1.35 })) K.P[k].v = v;
@@ -131,12 +138,12 @@ if (!only || only === 'spa') {
     png('sop6_classes.png', tile, cols * N, rows * N, { lo: 0, hi: 1, scale: 2, invert: true }); }
   if (o.mapAvg) { const N = o.N, r = TOMO.render3D(o.mapAvg, N, 25, 20, { mode: 'sum' }); png('sop6_map.png', r, N, N, { map: 'magma', scale: 5 }); }
   if (o.fsc) svgPlot('sop6_fsc.svg', [{ pts: o.fsc.curve.map((c) => [c.k, c.fsc]), color: BLUE, label: `global: ${o.fsc.res.toFixed(1)} Å` }, { pts: o.fscZ.curve.map((c) => [c.k, c.fsc]), color: ORANGE, label: `along z: ${o.fscZ.res.toFixed(1)} Å`, dash: true }, { pts: o.fscXY.curve.map((c) => [c.k, c.fsc]), color: GREEN, label: `across: ${o.fscXY.res.toFixed(1)} Å`, dash: true }],
-    { xlab: 'spatial frequency (1/Å)', ylab: 'FSC', ylim: [-0.1, 1.05], hlines: [{ y: 0.143, label: '0.143', color: '#b33' }] });
+    { xlab: 'spatial frequency (1/Å)', ylab: 'FSC', ylim: [-0.1, 1.05], legend: 'bl', hlines: [{ y: 0.143, label: '0.143', color: '#b33' }] });
   console.log(`  SPA: ${o.accepted} kept of ${o.made}, ${o.fsc?.res.toFixed(2)} Å; picks precision ${m.precision?.toFixed(2)}, recall ${m.recall?.toFixed(2)}`);
   // preferred orientation: the same data with 80 % top views
   const p2 = SPA.spaResult(SPA.runSPA({ sample: 'apo', count: 2000, dose: 40, df: 1.5, pref: 0.8, seed: 11 }));
   if (p2.fsc) svgPlot('sop6_pref.svg', [{ pts: p2.fsc.curve.map((c) => [c.k, c.fsc]), color: BLUE, label: `global: ${p2.fsc.res.toFixed(1)} Å` }, { pts: p2.fscZ.curve.map((c) => [c.k, c.fsc]), color: ORANGE, label: `along the beam: ${p2.fscZ.res.toFixed(1)} Å` }, { pts: p2.fscXY.curve.map((c) => [c.k, c.fsc]), color: GREEN, label: `across: ${p2.fscXY.res.toFixed(1)} Å` }],
-    { xlab: 'spatial frequency (1/Å)', ylab: 'FSC', ylim: [-0.1, 1.05], hlines: [{ y: 0.143, label: '0.143', color: '#b33' }] });
+    { xlab: 'spatial frequency (1/Å)', ylab: 'FSC', ylim: [-0.1, 1.05], legend: 'bl', hlines: [{ y: 0.143, label: '0.143', color: '#b33' }] });
 }
 
 // ---------------------------------------------------------------- SOP-07: 3D ED
@@ -163,6 +170,6 @@ if (!only || only === 'ed3d') {
     const refl = ED.reflections(Z.zoneCryst('mapb', [1, 2, 5]), 1.1, 200, 1500), rates = [-5, -4.5, -4, -3.5, -3, -2.5, -2, -1.5, -1, -0.5, 0, 0.5];
     const k = (rate, Dc) => { const d = ED.statistics(refl, ED.collect(refl, { ...base, doseRate: 10 ** rate, Dc }), { merge: 'friedel', gMax: 1.1 }).dLimit; return d ? 1 / d : 0; };
     svgPlot('sop7_dose.svg', [{ pts: rates.map((r) => [r, k(r, 25)]), color: ORANGE, label: 'beam-sensitive (D_c 25 e⁻/Å²)' }, { pts: rates.map((r) => [r, k(r, Infinity)]), color: BLUE, label: 'robust crystal', dash: true }],
-      { xlab: 'log₁₀ dose rate (e⁻/Å²/s), 80 s series', ylab: 'resolution reached, 1/d (1/Å)', ylim: [0, 1.15] }); }
+      { xlab: 'log₁₀ dose rate (e⁻/Å²/s), 80 s series', ylab: 'resolution reached, 1/d (1/Å)', ylim: [0, 1.3], legend: 'br', hlines: [{ y: 1.1, label: 'detector edge (0.91 Å)', color: '#888' }] }); }
   console.log(`  ED: ${e.name}, ${e.series.plan.frames} frames, ${(100 * e.stats.completeness).toFixed(1)} % complete, d ${e.stats.dLimit?.toFixed(2)} Å`);
 }

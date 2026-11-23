@@ -10,6 +10,7 @@
 import * as P from './physics.js';
 import { abtemRequest } from './abtem.js';
 import { collectData, toNpz } from './export.js';
+import * as SPI from './specimage.js';
 import { analyze, ANALYSES } from './analyze.js';
 import { parseCommand } from './voice.js';
 import { SCENARIOS } from './scenarios.js';
@@ -45,6 +46,7 @@ const SETTINGS = {
   precession_mrad: 'precession semi-angle φ in mrad, 0 for off (SAED, CBED)', precession_steps: 'azimuth steps around the cone', descan_error_pct: 'descan error, % of φ',
   eels_offset_eV: 'energy at the first channel', eels_dispersion: '0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1 eV per channel', eels_window_eV: '[centre, width] of the energy window',
   eels_beta_mrad: 'collection semi-angle β, 1–100 mrad', eels_source: 'profile, schottky, cfeg, mono', eels_detector: 'ccd, direct', dual_eels: 'True or False',
+  si_scan: 'spectrum image: 16, 32 or 64 pixels per side', si_dwell_ms: 'spectrum image: dwell per pixel, ms', si_current_pA: 'spectrum image: EDS probe current, pA (EELS uses eels_current_pA)', si_view: 'live or si (show the recorded spectrum image)',
   eels_current_pA: 'probe current', eels_exposure_s: 'exposure per readout', eels_probe: '[i, j] spectrum-image pixel (0–127), or None for the whole field',
 };
 
@@ -104,8 +106,8 @@ export function settingsToOps(a) {
   if (a.precession_steps !== undefined) ops.push({ op: 'set', k: 'pedSteps', v: +a.precession_steps });
   if (a.descan_error_pct !== undefined) ops.push({ op: 'set', k: 'pedDescan', v: +a.descan_error_pct });
   // the EELS spectrometer
-  const eelsSet = { eels_offset_eV: 'eelsOffset', eels_beta_mrad: 'eelsBeta', eels_current_pA: 'eelsCurrent', eels_exposure_s: 'eelsExp' };
-  for (const [k, key] of Object.entries(eelsSet)) if (a[k] !== undefined) ops.push({ op: 'set', k: key, v: +a[k] });
+  const eelsSet = { eels_offset_eV: 'eelsOffset', eels_beta_mrad: 'eelsBeta', eels_current_pA: 'eelsCurrent', eels_exposure_s: 'eelsExp', si_scan: 'siN', si_dwell_ms: 'siDwell', si_current_pA: 'siCurrent', si_view: 'siView' };
+  for (const [k, key] of Object.entries(eelsSet)) if (a[k] !== undefined) ops.push({ op: 'set', k: key, v: typeof a[k] === 'string' ? a[k] : +a[k] });
   if (a.eels_dispersion !== undefined) { if (![0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1].includes(+a.eels_dispersion)) throw new Error('eels_dispersion must be 0.01, 0.025, 0.05, 0.1, 0.25, 0.5 or 1'); ops.push({ op: 'set', k: 'eelsDisp', v: +a.eels_dispersion }); }
   if (a.eels_window_eV !== undefined) { const [c, w] = a.eels_window_eV; ops.push({ op: 'set', k: 'eelsWin', v: +c }); if (w !== undefined) ops.push({ op: 'set', k: 'eelsWidth', v: +w }); }
   if (a.eels_source !== undefined) { if (!['profile', 'schottky', 'cfeg', 'mono'].includes(a.eels_source)) throw new Error('eels_source must be profile, schottky, cfeg or mono'); ops.push({ op: 'set', k: 'eelsSource', v: a.eels_source }); }
@@ -142,6 +144,8 @@ export class ScriptCore {
     // series techniques: record the whole series (and reconstruct a tomogram) unless steps are given
     if (steps == null && S.mode === 'tomo') { this.sim.update(0); const T = this.sim.tomo; if (T.ser.proj.length < T.angles.length) this.sim.startTomo({ instant: true }); else if (T.recKey !== this.sim.tomoRecKey() || !T.taskDone) this.sim.reconstructTomo({ instant: true }); }
     if (steps == null && S.mode === 'spa') { this.sim.update(0); const A = this.sim.spa; if (!A?.full || !A.done || A.key !== this.sim.spaKey()) this.sim.startSPA({ instant: true }); }
+    // EDS / EELS with si_view="si": record a spectrum image (again only when its plan changed)
+    if (steps == null && (S.mode === 'eds' || S.mode === 'eels') && S.siView === 'si') { this.sim.update(0); const A = this.sim.siAcq, p = SPI.siPlan(this.sim), same = A?.done && ['mode', 'n', 'dwell', 'current_pA', 'E0', 'dE'].every((k) => A.plan[k] === p[k]); if (!same) this.sim.startSI({ instant: true }); }
     if (steps == null && S.mode === 'ed3d') { this.sim.update(0); const e = this.sim.ed; if (e && !e.none && e.collected < e.series.plan.frames) { this.sim.startED3D(); this.sim.stepED3D(1e6); } }
     for (let i = 0; i < N; i++) {
       this.sim.update(0.05);

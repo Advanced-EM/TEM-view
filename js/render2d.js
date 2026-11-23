@@ -8,6 +8,7 @@ import { edgeStats, fourierRatio } from './eels.js';
 import * as ED from './ed3d.js';
 import * as TOMO from './tomo.js';
 import * as LIQX from './liquid.js';
+import * as SPI from './specimage.js';
 
 const C = {
   accent: '#6fd6ff', warm: '#ffb45e', text: '#e9edf2', muted: '#8a94a3', dim: '#566070',
@@ -994,7 +995,52 @@ export function hsv(h, s, v) {
 const hex = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
 const symColor = (sym) => P.EL.find((e) => e.sym === sym && !e.pseudo)?.color ?? '#d9a066';
 
+// the recorded spectrum image (specimage.js): the map of the chosen element or energy window (main, rows still to be
+// scanned left dark), the clicked pixel's spectrum over the scan's mean spectrum, the window shaded (secondary)
+function siWindow(S, A) {
+  if (A.plan.mode === 'eds') { const w = S.edsSel !== 'all' && SPI.edsWindow(S, S.edsSel); return w ? { a: w[0], b: w[1], name: `${S.edsSel} ${w[2].line} (${w[2].E.toFixed(2)} keV)`, bgsub: S.bgsub } : { a: 0.2, b: A.plan.nch * A.plan.dE, name: 'all X-rays', bgsub: false }; }
+  return { a: S.eelsWin - S.eelsWidth / 2, b: S.eelsWin + S.eelsWidth / 2, name: `${(S.eelsWin - S.eelsWidth / 2).toFixed(1)}–${(S.eelsWin + S.eelsWidth / 2).toFixed(1)} eV`, bgsub: S.bgsub };
+}
+function drawSI(sim, S, m, s) {
+  const A = sim.siAcq, { ctx, W, H, dpr } = m, { n, nch, mode, unit } = A.plan, win = siWindow(S, A);
+  const key = `${A.rows}|${win.a}|${win.b}|${win.bgsub}`;
+  if (A._mapKey !== key) { A._map = SPI.windowMap(A, win.a, win.b, { bgsub: win.bgsub }); A._mapKey = key; }
+  const map = A._map, rec = map.subarray(0, Math.max(1, A.rows) * n), [lo, hi] = range(rec, 0.01, 0.995), side = Math.min(W, H), x0 = (W - side) / 2, y0 = (H - side) / 2;
+  paint(ctx, map, n, n, [x0, y0, side, side], { lo, hi: hi > lo ? hi : lo + 1, lut: real(S) ? LUT.gray : LUT.magma });
+  if (A.rows < n) { ctx.fillStyle = 'rgba(6,8,11,0.85)'; ctx.fillRect(x0, y0 + (side * A.rows) / n, side, side * (1 - A.rows / n)); }
+  const px = S.siPx;
+  if (px) { const c = side / n; ctx.strokeStyle = C.warm; ctx.lineWidth = 1.5 * dpr; ctx.strokeRect(x0 + px[0] * c, y0 + px[1] * c, c, c); }
+  layout.si = { x0, y0, side, n };
+  label(ctx, `${mode.toUpperCase()} spectrum image · ${win.name}${win.bgsub ? ' · background subtracted' : ''}`, 10 * dpr, 16 * dpr, dpr, { color: C.accent, size: 9 });
+  label(ctx, `${n} × ${n} · ${(A.plan.px / 10).toPrecision(3)} nm/px · ${A.running ? `row ${A.rows}/${n}` : A.rows === n ? 'complete' : `stopped at row ${A.rows}`} · click a pixel`, 10 * dpr, 34 * dpr, dpr, { color: C.muted, size: 9 });
+  // secondary: spectra
+  const q = s.ctx, dq = s.dpr, gx = 46 * dq, gy = 22 * dq, gw = s.W - gx - 14 * dq, gh = s.H - gy - 34 * dq;
+  q.fillStyle = '#06080b'; q.fillRect(gx, gy, gw, gh);
+  if (!A.rows) { label(q, 'recording the first row…', gx + 8 * dq, gy + 16 * dq, dq, { color: C.muted, size: 9 }); return; }
+  const mean = SPI.meanSpectrum(A), pix = px && px[1] < A.rows ? SPI.spectrumAt(A, px[0], px[1]) : null;
+  // x range: EDS 0–(last line + margin); EELS the recorded range
+  const c0 = mode === 'eds' ? SPI.channelOf(A, 0.1) : 0, c1 = nch - 1;
+  let ymax = 0; for (let c = c0; c <= c1; c++) ymax = Math.max(ymax, mean[c], pix ? pix[c] : 0);
+  const logy = mode === 'eels' || S.eelsYScale === 'log', fy = (v) => (logy ? Math.log10(Math.max(v, 0.5)) : v), top = fy(ymax * 1.1), bot = logy ? fy(0.5) : 0;
+  const X = (c) => gx + ((c - c0) / (c1 - c0)) * gw, Y = (v) => gy + gh - ((fy(v) - bot) / (top - bot || 1)) * gh;
+  const wa = SPI.channelOf(A, win.a), wb = SPI.channelOf(A, win.b);
+  q.fillStyle = 'rgba(111,214,255,0.12)'; q.fillRect(X(wa), gy, Math.max(1, X(wb) - X(wa)), gh);
+  const plot = (arr, col, lw) => { q.strokeStyle = col; q.lineWidth = lw * dq; q.beginPath(); for (let c = c0; c <= c1; c++) { const x = X(c), y = Y(arr[c]); c === c0 ? q.moveTo(x, y) : q.lineTo(x, y); } q.stroke(); };
+  plot(mean, 'rgba(233,237,242,0.55)', 1.2);
+  if (pix) plot(pix, C.warm, 1);
+  // energy axis
+  font(q, 8, dq); q.fillStyle = C.muted; q.textAlign = 'center'; q.textBaseline = 'top';
+  const Ea = SPI.energyOf(A, c0), Eb = SPI.energyOf(A, c1), step = [0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500].find((v) => (Eb - Ea) / v <= 8) ?? 1000;
+  for (let E = Math.ceil(Ea / step) * step; E <= Eb; E += step) { const x = X(SPI.channelOf(A, E)); q.fillRect(x, gy + gh, 1, 3 * dq); q.fillText(`${+E.toFixed(2)}`, x, gy + gh + 5 * dq); }
+  q.textAlign = 'left';
+  label(q, `${mode === 'eels' ? 'energy loss' : 'X-ray energy'} (${unit}) · ${logy ? 'log counts' : 'counts'} per channel`, gx, gy + gh + 18 * dq, dq, { color: C.muted, size: 8 });
+  label(q, `mean of ${A.rows * n} pixels`, gx + 6 * dq, gy + 10 * dq, dq, { color: C.text, size: 8 });
+  if (pix) label(q, `pixel (${px[0]}, ${px[1]})`, gx + 6 * dq, gy + 24 * dq, dq, { color: C.warm, size: 8 });
+  else label(q, 'click the map for a pixel\'s spectrum', gx + 6 * dq, gy + 24 * dq, dq, { color: C.muted, size: 8 });
+}
+
 function drawEDS(sim, S, m, s) {
+  if (S.siView === 'si' && sim.siAcq?.plan.mode === 'eds') return drawSI(sim, S, m, s);
   const e = sim.eds, a = sim.acc, si = sim.si;
   if (!e || !a) return;
   const { ctx, W, H, dpr } = m, n = si.n, dst = [0, 0, W, H];
@@ -1070,6 +1116,7 @@ function drawEDS(sim, S, m, s) {
 }
 
 function drawEELS(sim, S, m, s) {
+  if (S.siView === 'si' && sim.siAcq?.plan.mode === 'eels') return drawSI(sim, S, m, s);
   const e = sim.eels, a = sim.accE, si = sim.si;
   if (!e || !a) return;
   const { ctx, W, H, dpr } = m, n = si.n, dst = [0, 0, W, H];

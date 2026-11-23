@@ -45,6 +45,8 @@ jobs:
         run: node tools/kinetics-check.mjs
       - name: Calibration of the in situ kinetics (published profile, refit, process model vs simulator, own-data round trip)
         run: node tools/insitu-cal-check.mjs
+      - name: Spectrum images, EDS and EELS (plan, counts, element maps, background subtraction, saturation, export)
+        run: node tools/si-check.mjs
       - name: Gas cell and ETEM (contrast follows exp(-n sigma L), spectra, burst, reactions)
         run: node tools/gas-check.mjs
       - name: Biasing (holographic phase across the gap = the specimen's voltage; circuit, failures, heating, deflection)

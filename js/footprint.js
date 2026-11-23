@@ -26,6 +26,7 @@
 //                     the WebGPU rate); local GPU: ≤ the worker's memory and ≤ 2 h; HPC otherwise
 import { beamThickness } from './structure.js';
 
+import * as SPI from './specimage.js';
 export const E_CHARGE = 1.602176634e-19;
 export const BROWSER_BYTES = 512 * 2 ** 20;
 export const WEBGPU_BYTES = 1.5 * 2 ** 30; // with WebGPU and a large-buffer adapter (gpu.js)
@@ -273,6 +274,11 @@ export function footprintFor(S, sim, extra = {}) {
     const F = sim.tomo?.angles?.length ?? Math.floor(S.tomoMax / S.tomoStep) * 2 + 1;
     Object.assign(plan, { tilts: F, recon: S.tomoRecon, iters: S.tomoIter });
     return footprint('tomo', plan, contextFor(S, sim, { dose: S.tomoDose / F, ...extra }));
+  }
+  if ((S.mode === 'eds' || S.mode === 'eels') && sim?.fovA) { // the spectrum image as set: scan, channels, dwell and current
+    const q = SPI.siPlan(sim, S);
+    Object.assign(plan, { scan: q.n, channels: q.nch, dwell_us: Math.round(q.dwell * 1e6), current_pA: q.current_pA });
+    return footprint(S.mode, plan, contextFor(S, sim, { current_pA: q.current_pA, ...extra }));
   }
   return footprint(S.mode, plan, contextFor(S, sim, extra));
 }

@@ -20,6 +20,7 @@ import * as BIAS from './bias.js';
 import * as INSITU from './insitu.js';
 import * as OBS from './observables.js';
 import { syncCalibration } from './insitu-cal.js';
+import * as SPI from './specimage.js';
 import { buildStructure } from './structure.js';
 import { HOLDERS, specimenT, u2Ratio, thermalStrain, radiolysisFactor, iceSublimation, DEVITRIFY_K } from './holder.js';
 
@@ -196,14 +197,15 @@ export class Sim {
       edMethod: [], edStart: [], edEnd: [], edSpeed: [], edFps: [], edStep: [], edExp: [], edDoseRate: [], edAxis: [], edMerge: [], edSlice: [], edLayer: [],
       pedOn: ['diff', 'fd', 'vimg'], pedPhi: ['diff', 'fd', 'vimg'], pedSteps: ['diff', 'fd', 'vimg'], pedDescan: ['diff', 'fd', 'vimg'],
       eelsSource: ['eels'], eelsBeta: ['eels'], eelsDet: ['eels'], eelsPx: ['eels'], eelsYScale: [], eelsFit: [], eelsPre: [], eelsDeconv: [], eelsLine: [],
-      dose: ['si'], edsSel: [], mode: [],
+      dose: ['si'], edsSel: [], mode: [], siN: [], siDwell: [], siCurrent: [], siView: [], siPx: [],
       // progressive beam damage: refresh images and patterns in place, but don't restart 4D scans or spectrum accumulation
       damage: ['tem', 'stem', 'diff', 'probe'],
       drift: ['tem', 'stem'],
       // temperature: the projected specimen changes (vibrations, expansion), so everything is recomputed
     };
     for (const k of map[key] ?? all) this.stale[k] = 1;
-    const view = ['mode', 'edsSel', 'camera', 'beamStop', 'vdet', 'bgsub', 'eelsWin', 'eelsRange', 'eelsDisp', 'eelsOffset', 'eelsExp', 'eelsExpLow', 'eelsCurrent', 'dualEels', 'eelsSource', 'eelsBeta', 'eelsDet', 'eelsPx', 'eelsYScale', 'eelsFit', 'eelsPre', 'eelsDeconv', 'eelsLine', 'holoView', 'ilhView'];
+    if (key === 'spec') this.siAcq = null; // a recorded spectrum image belongs to the specimen it was taken on
+    const view = ['siN', 'siDwell', 'siCurrent', 'siView', 'siPx', 'mode', 'edsSel', 'camera', 'beamStop', 'vdet', 'bgsub', 'eelsWin', 'eelsRange', 'eelsDisp', 'eelsOffset', 'eelsExp', 'eelsExpLow', 'eelsCurrent', 'dualEels', 'eelsSource', 'eelsBeta', 'eelsDet', 'eelsPx', 'eelsYScale', 'eelsFit', 'eelsPre', 'eelsDeconv', 'eelsLine', 'holoView', 'ilhView'];
     if (!view.includes(key)) { this.ronch.stale = true; this.cbed.stale = true; this.oah.stale = true; }
     // a focal series takes a while to record, so only restart it when the physics changes
     if (!view.includes(key) && !['damage', 'drift', 'speed', 'biprism', 'sbR', 'numCorr'].includes(key)) this.ilh.stale = true;
@@ -1425,6 +1427,25 @@ export class Sim {
     this.zlpDrift = (this.zlpDrift || 0) + (0.005 + 0.004 * (Math.random() - 0.5)) * dt * this.S.speed;
     if (this.S.mode === 'eels' && this.eels && Math.abs(this.zlpDrift - this.eels.shift) > Math.max(0.02, this.S.eelsDisp / 2)) { this.buildEELS(true); this.version++; }
   }
+  // ------------------------------------------------------------ spectrum-image acquisition (specimage.js)
+  // this.siAcq: the recorded (or recording) datacube for EDS or EELS; it fills row by row in simulated time
+  startSI({ instant = false } = {}) {
+    if (!this.si) this.computeSI();
+    if (this.S.mode === 'eels' && (!this.eels || this.stale.eels)) { this.buildEELS(); this.stale.eels = 0; }
+    this.siAcq = SPI.siStart(this);
+    this.S.siView = 'si';
+    if (instant) SPI.siStep(this, this.siAcq, Infinity);
+    this.version++;
+  }
+  stopSI() { if (this.siAcq?.running) { this.siAcq.running = false; this.siAcq.done = this.siAcq.rows > 0; this.version++; } }
+  stepSI(dt) {
+    const A = this.siAcq;
+    if (!A?.running || this.S.paused || A.plan.mode !== this.S.mode) return;
+    const before = A.rows;
+    SPI.siStep(this, A, dt * this.S.speed);
+    if (A.rows !== before || !A.running) this.version++;
+  }
+
   alignZLP() { this.zlpDrift = 0; if (this.si) { this.buildEELS(true); this.version++; } }
 
   accumulate(dt) {
@@ -1753,6 +1774,7 @@ export class Sim {
     if (m === 'ed3d') this.stepED3D(dt);
     if (m === 'tomo') this.stepTomo(dt);
     if (m === 'spa') this.stepSPA();
+    if (m === 'eds' || m === 'eels') this.stepSI(dt);
     this.stepLiquid(dt);
     this.stepGas(dt);
     this.stepBias(dt);

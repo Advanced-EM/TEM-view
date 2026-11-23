@@ -5,6 +5,7 @@ import { snapshot, activeMods } from './session.js';
 import { footprintFor, summary as fpSummary } from './footprint.js';
 import { OBSERVABLES } from './observables.js';
 import * as KIN from './kinetics.js';
+import * as SPI from './specimage.js';
 
 const A = (data, shape, units) => ({ data, shape, units });
 
@@ -63,11 +64,17 @@ export function collectData(sim, S) {
   } else if ((m === 'cbed' || m === 'ronch') && sim[m === 'cbed' ? 'cbed' : 'ronch'].disp) {
     const d = sim[m === 'cbed' ? 'cbed' : 'ronch'].disp;
     arrays.pattern = A(d.arr, [d.W, d.W], 'intensity');
-  } else if (m === 'eds' && sim.eds) {
+  } else if (m === 'eds' && sim.eds && !(S.siView === 'si' && sim.siAcq?.rows)) {
     arrays.spectrum = A(sim.acc?.total ? sim.acc.spec : sim.eds.spec, [sim.eds.nb], 'counts');
     cal.energy_keV_per_bin = sim.eds.dE;
     for (const [sym, map] of Object.entries(sim.acc?.maps ?? {})) arrays[`map_${sym}`] = A(map, [sim.si.n, sim.si.n], 'counts');
     cal.map_pixel_A = sim.si?.dx;
+  } else if ((m === 'eds' || m === 'eels') && S.siView === 'si' && sim.siAcq?.rows && sim.siAcq.plan.mode === m) {
+    // the recorded spectrum image: [y, x, channel] counts, with HyperSpy-style axes
+    const r = SPI.siArrays(sim.siAcq);
+    arrays.spectrum_image = A(r.data, r.shape, m === 'eels' ? 'electrons per channel' : 'X-ray counts per channel');
+    arrays.mean_spectrum = A(SPI.meanSpectrum(sim.siAcq), [sim.siAcq.plan.nch], 'mean counts per channel');
+    Object.assign(cal, r.calibration, { complete: sim.siAcq.done && sim.siAcq.rows === sim.siAcq.plan.n });
   } else if (m === 'eels' && sim.eels) {
     const rec = (acc, fr, sp) => (acc && fr ? acc.map((v) => v / fr) : sp);
     arrays.spectrum = A(rec(sim.accE?.spec, sim.accE?.frames, sim.eels.ro.ro), [sim.eels.nb], 'electrons per channel per readout');

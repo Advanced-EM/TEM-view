@@ -13,6 +13,9 @@ export const defaultState = () => ({
   camL: 1000, sa: 10, beamStop: true, camera: 'screen',
   vdet: 'adf', vdIn: 14, vdOut: 60, vdX: 0, vdY: 0, vdR: 4, fdSel: -1,
   edsSel: 'all', eelsRange: 'core', eelsWin: 462, eelsWidth: 16, bgsub: true, eelsDisp: 0.25, eelsOffset: 262, eelsExp: 0.5, eelsExpLow: 0.00005, eelsCurrent: 100, dualEels: false,
+  // spectrum-image acquisition (specimage.js), EDS and EELS: scan size (16, 32, 64), dwell per pixel (ms), the EDS probe
+  // current (pA; EELS uses eelsCurrent), the view (live | si) and the pixel whose spectrum is shown ([i, j] or null)
+  siN: 32, siDwell: 20, siCurrent: 200, siView: 'live', siPx: null,
   // EELS source (eels.js ZLP_SOURCES), collection semi-angle β (mrad), detector (ccd | direct), y axis (log | lin |
   // split), background fit on/off and its pre-edge window [eV, eV] (null: automatic), Fourier-ratio deconvolution,
   // probe position as a spectrum-image pixel [i, j] (null: the whole field), line-scan preview
@@ -82,7 +85,7 @@ export const defaultState = () => ({
 export const SESSION_KEYS = [
   'mode', 'clarity', 'spec', 'thick', 'tiltX', 'tiltY', 'fov', 'cx', 'cy', 'kV', 'dose', 'df', 'dfFam', 'corrector', 'csUnc', 'csCor',
   'objAp', 'alpha', 'alpha4d', 'detIn', 'detOut', 'detPreset', 'camL', 'sa', 'beamStop', 'camera', 'vdet', 'vdIn', 'vdOut', 'vdX', 'vdY', 'vdR',
-  'edsSel', 'eelsRange', 'eelsWin', 'eelsWidth', 'bgsub', 'eelsDisp', 'eelsOffset', 'eelsExp', 'eelsExpLow', 'eelsCurrent', 'dualEels',
+  'edsSel', 'eelsRange', 'eelsWin', 'eelsWidth', 'bgsub', 'eelsDisp', 'eelsOffset', 'eelsExp', 'eelsExpLow', 'eelsCurrent', 'dualEels', 'siN', 'siDwell', 'siCurrent', 'siView',
   'eelsSource', 'eelsBeta', 'eelsDet', 'eelsYScale', 'eelsFit', 'eelsPre', 'eelsDeconv', 'eelsPx', 'eelsLine',
   'pedOn', 'pedPhi', 'pedSteps', 'pedDescan', 'zone',
   'edMethod', 'edStart', 'edEnd', 'edSpeed', 'edFps', 'edStep', 'edExp', 'edDoseRate', 'edAxis', 'edMerge', 'edSlice', 'edLayer',

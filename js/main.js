@@ -13,6 +13,7 @@ import { footprintFor, fmtBytes, fmtTime, PLAN_FIELDS, PLAN_KINDS } from './foot
 import { createSpecimenUI } from './specui.js';
 import { defaultBackend } from './compute.js';
 import { SAMPLES } from './spa.js';
+import * as SPI from './specimage.js';
 import * as ENVW from './environment.js';
 import * as LIQ from './liquid.js';
 import * as GASX from './gas.js';
@@ -795,6 +796,15 @@ const CONTROLS = [
   { toggles: [['eelsDeconv', 'Fourier-ratio deconvolution']], modes: 'eels', show: () => S.dualEels && S.eelsFit },
   { pFn: () => (S.eelsFit ? `Drag the orange pre-edge window (or its handles) to fit the background; the blue window is the integration window.${R2.layout.eelsStats ? ` r = ${R2.layout.eelsStats.r.toFixed(2)}, S/B = ${R2.layout.eelsStats.SB.toPrecision(2)}, S/N = ${R2.layout.eelsStats.SN.toPrecision(3)}.` : ' Place the windows on an edge with some background before it.'}` : ''), show: () => S.eelsFit, modes: 'eels' },
   { buttons: [['eelsWhole', 'Whole field'], ['eelsMSA', 'Export spectrum (.msa)']], modes: 'eels' },
+  // spectrum-image acquisition (specimage.js): a full spectrum at every pixel of a scan
+  { sec: 'Spectrum image', modes: 'eds eels' },
+  { chips: 'siN', label: 'Scan', small: true, modes: 'eds eels', opts: SPI.SCAN_SIZES.map((n) => [n, `${n} × ${n}`]) },
+  { slider: 'siDwell', label: 'Dwell per pixel', min: 0.1, max: 1000, log: true, fmt: (v) => (v < 1 ? `${(+v * 1000).toFixed(0)} µs` : `${(+v).toPrecision(3)} ms`), modes: 'eds eels', ends: ['fast, noisy', '', 'slow, more dose'] },
+  { slider: 'siCurrent', label: 'Probe current', min: 5, max: 5000, log: true, fmt: (v) => `${Math.round(v)} pA`, modes: 'eds' },
+  { buttons: [['siStart', 'Acquire spectrum image'], ['siStop', 'Stop'], ['siExport', 'Export cube (.rpl + .raw)']], modes: 'eds eels' },
+  { chips: 'siView', label: 'Show', small: true, modes: 'eds eels', show: () => sim.siAcq?.plan.mode === S.mode, opts: [['live', 'Live spectrum and maps'], ['si', 'The spectrum image']] },
+  { toggles: [['bgsub', 'Subtract background']], modes: 'eds', show: () => S.siView === 'si' && sim.siAcq?.plan.mode === 'eds' },
+  { pFn: () => siNote(), modes: 'eds eels' },
 
   { sec: 'Time' },
   { slider: 'speed', inv: 'none', label: 'Simulation speed', min: 0.1, max: 3, step: 0.05, fmt: (v) => `${v.toFixed(2)}×` },
@@ -1176,6 +1186,9 @@ function action(id, el) {
   if (id === 'tomoCollect') { sim.startTomo(); return; }
   if (id === 'tomoExport') return exportMRC();
   if (id === 'edExport') return exportSMV();
+  if (id === 'siStart') { sim.startSI(); refreshControls(); explainChange('siStart'); return; }
+  if (id === 'siStop') { sim.stopSI(); refreshControls(); return; }
+  if (id === 'siExport') return exportSI();
   if (id === 'eelsWhole') { S.eelsPx = null; sim.invalidate('eelsPx'); return; }
   if (id === 'eelsMSA') return exportMSA();
   if (id === 'loadXYZ') specimenUI().pickFile(); // preview first: check, orient and load from the structure card
@@ -1647,6 +1660,24 @@ async function exportMRC() {
   explainChange('exported');
 }
 // the recorded EELS spectrum (and the low-loss one with Dual EELS) as EMSA/MSA, readable by HyperSpy and DM
+// the spectrum image: what the scan will cost, then its progress and what it holds
+function siNote() {
+  const p = SPI.siPlan(sim), A = sim.siAcq?.plan.mode === S.mode ? sim.siAcq : null, nm = (a) => (a / 10).toPrecision(3);
+  const Dc = sim.spec.beamSensitive ? sim.critDose() : null, parts = [];
+  parts.push(`${p.n} × ${p.n} pixels of ${nm(p.px)} nm, ${p.nch} channels (${p.mode === 'eels' ? `${p.E0.toFixed(0)}–${(p.E0 + p.nch * p.dE).toFixed(0)} eV, ${p.dE} eV each` : `0–${(p.nch * p.dE).toFixed(1)} keV, ${(1000 * p.dE).toFixed(0)} eV each`}). ${p.total_s < 120 ? `${p.total_s.toFixed(1)} s` : `${(p.total_s / 60).toFixed(1)} min`} of scanning; ${p.electrons.toExponential(1)} electrons and ${p.dosePerPx.toPrecision(2)} e⁻/Å² per pixel${Dc ? ` (critical dose ≈ ${Dc.toFixed(0)} e⁻/Å²${p.dosePerPx > Dc ? ': the specimen is damaged before each spectrum ends' : ''})` : ''}. ${(p.bytes / 2 ** 20).toFixed(0)} MB as float32.`);
+  if (A?.running) parts.push(`Recording: row ${A.rows} of ${A.plan.n}.`);
+  else if (A?.rows) {
+    const mean = SPI.meanSpectrum(A); let tot = 0; for (const v of mean) tot += v;
+    parts.push(`${A.rows === A.plan.n ? 'Recorded' : `Stopped after ${A.rows} rows`}: ${Math.round(tot).toLocaleString()} counts per pixel on average${A.sat ? `; ${A.sat} pixels saturated the detector (shorter dwell or lower current)` : ''}. Click the map for a pixel's spectrum. ${A.plan.mode === 'eds' ? 'Choose the element under Map element.' : 'The map is the energy window set above (and its background, if subtracted).'}`);
+  } else parts.push('Acquire records a full spectrum at every pixel: maps for any element or energy window afterwards, and a datacube to export.');
+  return parts.join(' ');
+}
+async function exportSI() {
+  const A = sim.siAcq;
+  if (!A?.rows) { $('#change').hidden = false; $('#change').innerHTML = '<small>Nothing to export</small><p>Acquire a spectrum image first.</p>'; return; }
+  const name = `tem-view-${A.plan.mode}-si-${stamp()}`, { zip } = await import('./npy.js');
+  download(new Blob([zip(SPI.rippleFiles(A, name))], { type: 'application/zip' }), `${name}.zip`);
+}
 function exportMSA() {
   const e = sim.eels, a = sim.accE;
   if (!e) return;
@@ -1838,7 +1869,13 @@ function wire() {
   if (new URLSearchParams(location.search).has('drive')) drive.set(true);
   let drag = null;
   const rel = (e, cv) => { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top, r.width, r.height]; };
-  mainCv.addEventListener('pointerdown', (e) => { if (S.mode === 'ltem' || S.mode === 'lstem') return; drag = { x: e.clientX, y: e.clientY, cx: S.cx, cy: S.cy, tx: S.tiltX, ty: S.tiltY, yaw: S.tomoYaw, pitch: S.tomoPitch }; mainCv.setPointerCapture(e.pointerId); });
+  mainCv.addEventListener('pointerdown', (e) => {
+    if ((S.mode === 'eds' || S.mode === 'eels') && S.siView === 'si' && sim.siAcq?.plan.mode === S.mode && R2.layout.si) { // pick a pixel of the spectrum image
+      const L = R2.layout.si, [x, y] = rel(e, mainCv), d = mainCv.width / mainCv.getBoundingClientRect().width, i = Math.floor(((x * d - L.x0) / L.side) * L.n), j = Math.floor(((y * d - L.y0) / L.side) * L.n);
+      if (i >= 0 && j >= 0 && i < L.n && j < L.n) { S.siPx = [i, j]; sim.version++; }
+      return;
+    }
+    if (S.mode === 'ltem' || S.mode === 'lstem') return; drag = { x: e.clientX, y: e.clientY, cx: S.cx, cy: S.cy, tx: S.tiltX, ty: S.tiltY, yaw: S.tomoYaw, pitch: S.tomoPitch }; mainCv.setPointerCapture(e.pointerId); });
   mainCv.addEventListener('pointermove', (e) => {
     const [x, y, w, h] = rel(e, mainCv);
     if (S.mode === '4d' && sim.fd) {
