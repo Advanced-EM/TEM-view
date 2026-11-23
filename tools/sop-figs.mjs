@@ -111,7 +111,20 @@ if (!only || only === 'spa') {
   const st = SPA.runSPA({ sample: 'apo', count: 2000, dose: 40, df: 1.5, seed: 11 }), o = SPA.spaResult(st);
   const m = o.mic, M = m.M, sc = M / 256;
   png('sop6_micrograph.png', m.img, M, M, { marks: (m.picks ?? []).slice(0, 60).map((p) => [p.x, p.y, 14, p.hit ? [80, 200, 255] : [255, 140, 40]]) });
-  if (m.ps) { const n = Math.round(Math.sqrt(m.ps.length)); const lg = m.ps.map((v) => Math.log(v + 1e-12)); png('sop6_ctf.png', lg, n, n, { scale: Math.max(1, Math.round(300 / n)), lo: range(lg, 0.3, 0.999)[0], hi: range(lg, 0.3, 0.999)[1] }); }
+  if (m.ps) { // as the exhibit's CTF view: centred, log, radial background removed; measured (left) beside the fitted |T|² (right)
+    const n = o.N, h = n / 2, fitm = m.fit, at = (x, y) => Math.log(m.ps[((x + h) % n) + n * ((y + h) % n)] + 1e-30);
+    const lg = new Float64Array(h + 1), cnt = new Float64Array(h + 1);
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) { const r = Math.round(Math.hypot(x - h, y - h)); if (r <= h) { lg[r] += at(x, y); cnt[r]++; } }
+    const bg = Array.from(lg, (v, r) => (cnt[r] ? v / cnt[r] : 0) - (fitm?.profile[r] ?? 0)), img = new Float32Array(n * n);
+    for (let y = 0; y < n; y++) for (let x = 0; x < h; x++) img[x + n * y] = at(x, y) - bg[Math.min(h, Math.round(Math.hypot(x - h, y - h)))];
+    const [plo, phi] = range(img.filter((_, i) => i % n < h), 0.05, 0.98);
+    for (let y = 0; y < n; y++) for (let x = h; x < n; x++) { const r = Math.round(Math.hypot(x - h, y - h)); img[x + n * y] = fitm && r < h && r > 1 ? plo + (phi - plo) * (fitm.model[r] / 4) : plo; }
+    const U = 320, up = new Float32Array(U * U); // bilinear upsampling, so the rings are not drawn as blocks
+    for (let Y = 0; Y < U; Y++) for (let X = 0; X < U; X++) { const fx = Math.min(n - 1.001, Math.max(0, ((X + 0.5) * n) / U - 0.5)), fy = Math.min(n - 1.001, Math.max(0, ((Y + 0.5) * n) / U - 0.5)), i = Math.floor(fx), j = Math.floor(fy), dx = fx - i, dy = fy - j;
+      up[X + U * Y] = (img[i + n * j] * (1 - dx) + img[i + 1 + n * j] * dx) * (1 - dy) + (img[i + n * (j + 1)] * (1 - dx) + img[i + 1 + n * (j + 1)] * dx) * dy; }
+    for (let Y = 0; Y < U; Y++) up[U / 2 + U * Y] = phi; // the divide between measured and fitted
+    png('sop6_ctf.png', up, U, U, { lo: plo, hi: phi });
+    console.log(`  CTF: defocus fitted ${m.dfEst?.toFixed?.(0)} Å, true ${m.dfTrue?.toFixed?.(0)} Å, score ${fitm?.score?.toFixed(2)}`); }
   if (o.gallery) { // 4 × 4 class averages in one tile
     const N = o.N, k = Math.min(16, o.gallery.length), cols = 4, rows = Math.ceil(k / cols), tile = new Float32Array(cols * N * rows * N);
     o.gallery.slice(0, k).forEach((g, i) => { const [lo, hi] = range(g.img); for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) tile[(i % cols) * N + x + cols * N * (Math.floor(i / cols) * N + y)] = (g.img[x + N * y] - lo) / (hi - lo || 1); });
