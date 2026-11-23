@@ -15,6 +15,8 @@ export const SPEC_CARDS = [
   { id: 'gr', name: 'Graphene', tag: '2D crystal' },
   { id: 'mof', name: 'UiO-66 (MOF)', tag: 'porous crystal', sensitive: true },
   { id: 'bio', name: 'Proteins in ice', tag: 'continuum · cryo', sensitive: true },
+  { id: 'apo', name: 'Apoferritin', tag: 'one particle · cryo', sensitive: true },
+  { id: 'bgal', name: 'β-Galactosidase', tag: 'one particle · cryo', sensitive: true },
   { id: 'lib', name: 'NP megalibrary', tag: '10⁶ alloy particles' },
   { id: 'hesi', name: 'He bubbles in Si', tag: 'crystal + voids' },
   { id: 'cspb', name: 'CsPbBr₃ nanocubes', tag: 'nanocrystals', sensitive: true },

@@ -18,12 +18,6 @@ export function collectData(sim, S) {
     arrays.image = A(sim.stemImg.img, [sim.stemImg.c, sim.stemImg.c], `${sim.stemImg.type} signal (a.u.)`);
     cal.pixel_A = sim.stemImg.dx;
     if (sim.probe) { arrays.probe = A(sim.probe.I, [sim.probe.n, sim.probe.n], 'intensity'); cal.probe_pixel_A = sim.probe.dx; }
-  } else if (m === 'ptychotomo' && sim.pt?.out?.fused) {
-    const o = sim.pt.out, N = o.N;
-    arrays.fused = A(o.fused, [N, N, N], 'phase per voxel (rad), all tilts fused; axes z, y, x');
-    arrays.single_tilt = A(o.single, [N, N, N], 'phase per voxel (rad), the 0° view alone');
-    arrays.object = A(o.truth, [N, N, N], 'the test object (rad per voxel)');
-    Object.assign(cal, { voxel_A: o.dx, tilts: o.angles, ...sim.pt.o });
   } else if (m === 'spa' && sim.spa?.out?.mic) {
     // the first micrograph, the class averages and the half maps when processed
     const o = sim.spa.out, N = o.N;

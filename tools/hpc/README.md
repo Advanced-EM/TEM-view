@@ -28,8 +28,8 @@ Engines: an in situ movie (recorded in the exhibit, then exported) is drift-corr
 first frame and aligned (Fourier shift); the result holds the aligned frames, their sum, the measured and true drift and
 each frame's environment. Tomography runs WBP and SIRT in NumPy with the browser's discretisation (results match to ~10⁻⁷), or SIRT in
 ASTRA once its angle convention has been checked against the NumPy projector. TEM, STEM, 4D-STEM, SAED and CBED jobs
-carry a `temview-abtem/1` request (the `full` preset) for abTEM. Cryo-EM SPA, ptychographic tomography and 3D ED jobs
-record their parameters for RELION/cryoSPARC, py4DSTEM/PtyRAD and DIALS/XDS. Exit codes: 0 done, 2 a bad bundle,
+carry a `temview-abtem/1` request (the `full` preset) for abTEM. Cryo-EM SPA and 3D ED jobs
+record their parameters for RELION/cryoSPARC and DIALS/XDS. Exit codes: 0 done, 2 a bad bundle,
 3 the engine is not installed (`result-error.json` names it).
 
 Step-by-step procedures, including an in situ campaign: [SOP.md](SOP.md).

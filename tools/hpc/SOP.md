@@ -15,7 +15,7 @@ bundle contains.
 | [HPC-04](#hpc-04-transfer-and-submit) | Transfer and submit | every job |
 | [HPC-05](#hpc-05-monitor-and-troubleshoot) | Monitor and troubleshoot | while the job runs |
 | [HPC-06](#hpc-06-retrieve-verify-and-load-the-results) | Retrieve, verify and load the results | when the job ends |
-| [HPC-07](#hpc-07-techniques-that-run-in-external-packages) | Techniques that run in external packages | SPA, ptycho-tomography, 3D ED |
+| [HPC-07](#hpc-07-techniques-that-run-in-external-packages) | Techniques that run in external packages | SPA, 3D ED |
 | [HPC-08](#hpc-08-records-and-data-handling) | Records and data handling | every job |
 | [HPC-09](#hpc-09-acquire-an-in-situ-campaign) | Acquire an in situ campaign | heating, gas, liquid or biasing series |
 
@@ -27,7 +27,7 @@ What runs where:
 | In situ series of patterns (SAED, CBED, Ronchigram) | NumPy | packages the frames with their environment (drift does not move a pattern) |
 | Tomography | NumPy (WBP or SIRT); ASTRA for SIRT when installed | reconstructs the recorded tilt series; matches the browser to ~10⁻⁷ with NumPy |
 | TEM, STEM, 4D-STEM, SAED, CBED | abTEM through the `temview-abtem/1` request (`full` preset) | runs the full multislice simulation |
-| Cryo-EM SPA, ptychographic tomography, 3D ED | RELION/cryoSPARC, py4DSTEM/PtyRAD, DIALS/XDS | records the parameters only (exit code 3, [HPC-07](#hpc-07-techniques-that-run-in-external-packages)) |
+| Cryo-EM SPA, 3D ED | RELION/cryoSPARC, DIALS/XDS | records the parameters only (exit code 3, [HPC-07](#hpc-07-techniques-that-run-in-external-packages)) |
 
 ---
 
@@ -190,7 +190,7 @@ What runs where:
 
 ## HPC-07 Techniques that run in external packages
 
-Cryo-EM SPA, ptychographic tomography and 3D ED bundles carry the full-scale parameters in `job.json`
+Cryo-EM SPA and 3D ED bundles carry the full-scale parameters in `job.json`
 (`parameters.full_scale`) and the session, but `run_job.py` does not run them: it exits with code 3 and
 `result-error.json` names the package.
 
@@ -199,7 +199,6 @@ Cryo-EM SPA, ptychographic tomography and 3D ED bundles carry the full-scale par
    | Technique | Package | What to take from `job.json` and `session.json` |
    | --- | --- | --- |
    | Cryo-EM SPA | RELION or cryoSPARC | pixel size, dose and frames per movie, defocus range, particle count, box size |
-   | Ptychographic tomography | py4DSTEM or PtyRAD | tilts, scan, detector, probe semi-angle, slices, iterations |
    | 3D ED / MicroED | DIALS or XDS | rotation range and step, exposure per frame, dose per frame |
 
 2. Run the package with your site's own procedure for it.

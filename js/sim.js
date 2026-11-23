@@ -13,7 +13,6 @@ import * as LAT from './lattice.js';
 import { InlineBackend } from './compute.js';
 import * as TOMO from './tomo.js';
 import * as SPA from './spa.js';
-import * as PT from './ptychotomo.js';
 import * as ENV from './environment.js';
 import * as LIQ from './liquid.js';
 import * as GAS from './gas.js';
@@ -949,33 +948,6 @@ export class Sim {
   // the holder angle now: the tilt being recorded (0 outside a series)
   tomoPhi() { const T = this.tomo; return T?.running && T.ser.proj.length ? T.angles[T.ser.proj.length - 1] : 0; }
 
-  // ------------------------------------------------------------ ptychographic tomography preview (ptychotomo.js)
-  // A test object (atoms in a 16 Å cube, two of them stacked along the beam) scanned at several tilts; each tilt is
-  // reconstructed by MS-ePIE and the slices are fused. Collect runs it on the compute backend (a minute or so).
-  // this.pt: { key, o, out (ptychotomo.ptResult snapshots), task, full, done, t0, ms }
-  ptParams() { const S = this.S, W = ENV.windowsOf(S); return { kV: S.kV, alpha: S.ptAlpha, tilts: Math.round(S.ptTilts), maxTilt: Math.min(S.ptMax, ENV.maxTilt(S)), dose: S.ptDose, iters: Math.round(S.ptIters), fusion: S.ptFusion, winPhase: W ? +(0.02 * Math.sqrt(W.total / 400)).toFixed(4) : 0 }; }
-  stepPT() {
-    const o = this.ptParams(), key = JSON.stringify(o);
-    let A = this.pt;
-    if (!A || A.key !== key) { A?.task?.cancel(); A = this.pt = { key, o, out: {}, task: null, full: false, done: false, truth: PT.phantom(PT.TEST_ATOMS, PT.PT_DEFAULTS.N, PT.PT_DEFAULTS.dx) }; this.version++; }
-    if (A.task && !A.done) {
-      const before = `${A.out.stage}|${A.out.t}|${(A.out.progress ?? 0).toFixed(2)}`;
-      if (A.task.error) { console.warn('compute:', A.task.error, '(running on the main thread)'); A.task = new InlineBackend().run(A.task.job, { out: A.out }); }
-      A.task.pump(this.S.paused ? 0 : 12);
-      if (`${A.out.stage}|${A.out.t}|${(A.out.progress ?? 0).toFixed(2)}` !== before) this.version++;
-      if (A.task.finished && !A.task.queue?.length) { A.done = true; A.ms = now() - A.t0; this.version++; }
-    }
-  }
-  startPT({ instant = false } = {}) {
-    this.stepPT();
-    const A = this.pt;
-    A.task?.cancel();
-    Object.assign(A, { out: {}, full: true, done: false, t0: now(), ms: null });
-    A.task = (instant ? new InlineBackend() : this.compute).run({ kind: 'ptychotomo', params: A.o }, { out: A.out });
-    if (instant) { while (!A.task.finished) A.task.pump(Infinity); A.done = true; A.ms = now() - A.t0; }
-    this.version++;
-  }
-
   // ------------------------------------------------------------ single-particle cryo-EM (spa.js)
   // The grid holds one of the test particles (spa.SAMPLES: apoferritin or β-galactosidase) in the ice of the thickness
   // setting. A preview (the first micrograph, its CTF fit and
@@ -1588,7 +1560,9 @@ export class Sim {
   critDose() { return this.spec.Dc300 * Math.pow(P.betaOf(this.S.kV) / P.betaOf(300), 2) * radiolysisFactor(this.temp(), this.spec.cryoProtect ?? 3); }
   radiolysis(dt) {
     const S = this.S, spec = this.spec;
-    if (!spec.beamSensitive || S.paused || S.mode === 'ronch') return;
+    // tomography, 3D ED and SPA give each series its own dose and damage (the critical dose enters the series), so the
+    // live clock pauses there: otherwise every damage step would rebuild the phantom and discard the series
+    if (!spec.beamSensitive || S.paused || ['ronch', 'tomo', 'ed3d', 'spa'].includes(S.mode)) return;
     this.doseAcc = (this.doseAcc || 0) + S.dose * 0.5 * dt * S.speed;
     // too hot: the framework or the protein decomposes even without the beam (expressed as equivalent dose)
     if (spec.thermalLimit && this.temp() > spec.thermalLimit) this.doseAcc += this.critDose() * 0.08 * Math.exp((this.temp() - spec.thermalLimit) / 40) * dt * S.speed;
@@ -1779,7 +1753,6 @@ export class Sim {
     if (m === 'ed3d') this.stepED3D(dt);
     if (m === 'tomo') this.stepTomo(dt);
     if (m === 'spa') this.stepSPA();
-    if (m === 'ptychotomo') this.stepPT();
     this.stepLiquid(dt);
     this.stepGas(dt);
     this.stepBias(dt);

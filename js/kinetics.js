@@ -78,13 +78,13 @@ export const p = (k) => P[k].v;
 // the precursor metals: rate constant with e⁻aq, its diffusion coefficient, electrons per atom, atomic volume (Å³),
 // a counter-ion that also takes electrons, and the nucleation parameters
 export const METALS = {
-  au: { label: 'Gold (HAuCl₄)', k: 'k_Au_e', D: 'D_Au', ne: 3, vAtom: 16.96, counter: null, nuc: ['nuc_c_au', 'nuc_k_au'] },
-  ag: { label: 'Silver (AgNO₃)', k: 'k_Ag_e', D: 'D_Ag', ne: 1, vAtom: 17.06, counter: 'NO3', nuc: ['nuc_c_ag', 'nuc_k_ag'] },
+  au: { label: 'Gold (HAuCl₄)', name: 'gold', salt: 'HAuCl₄', k: 'k_Au_e', D: 'D_Au', ne: 3, vAtom: 16.96, counter: null, nuc: ['nuc_c_au', 'nuc_k_au'] },
+  ag: { label: 'Silver (AgNO₃)', name: 'silver', salt: 'AgNO₃', k: 'k_Ag_e', D: 'D_Ag', ne: 1, vAtom: 17.06, counter: 'NO3', nuc: ['nuc_c_ag', 'nuc_k_ag'] },
 };
 export const metalOf = (S) => METALS[S?.lcMetal] ?? METALS.au;
 // the parameters a process uses, for notes and export metadata
 export const PROCESS = {
-  radiolysis: { label: 'literature', uses: ['G_eaq', 'G_H', 'G_OH', 'G_H2', 'G_H2O2', 'G_Hp', 'G_OHm', 'D_H2', 'H2_sat', 'O2_air', 'beam_r', 'chip_area'], note: 'reaction network with published rate constants and yields; the cell geometry (beam radius, reservoir) sets the bubble threshold' },
+  radiolysis: { labelBy: ['G_eaq', 'G_H', 'G_OH', 'G_H2', 'G_H2O2', 'G_Hp', 'G_OHm', 'D_H2', 'H2_sat', 'O2_air'], uses: ['G_eaq', 'G_H', 'G_OH', 'G_H2', 'G_H2O2', 'G_Hp', 'G_OHm', 'D_H2', 'H2_sat', 'O2_air', 'beam_r', 'chip_area'], note: 'reaction network with published rate constants and yields; the cell geometry (beam radius, reservoir) sets the bubble threshold' },
   growth: { label: 'trend', uses: ['k_Au_e', 'k_Ag_e', 'k_NO3_e', 'prec_bulk', 'D_Au', 'D_Ag', 'Au_eta'], note: 'reduction by hydrated electrons from the network; the share that deposits on existing particles is a placeholder' },
   nucleation: { label: 'trend', uses: ['nuc_c_ag', 'nuc_k_ag', 'nuc_c_au', 'nuc_k_au'], note: 'reduced atoms accumulate to a critical concentration: a growth-threshold dose rate and an induction dose' },
   sintering: { label: 'trend', uses: ['sinter_A', 'sinter_Ea', 'sinter_O2'], note: 'one Arrhenius rate; the oxygen factor is unverified for gold' },
@@ -94,7 +94,7 @@ export const PROCESS = {
 };
 export const LABEL_TEXT = { literature: 'literature parameters', calibrated: 'calibrated to data', partly: 'partly calibrated', trend: 'trend only' };
 // a process's label follows its parameters: any calibrated and none left at trend → calibrated; both → partly
-export function processLabel(n, keys = PROCESS[n].uses) {
+export function processLabel(n, keys = PROCESS[n].labelBy ?? PROCESS[n].uses) { // labelBy: the process itself, not the setup (cell geometry)
   const L = keys.map((k) => P[k].label), cal = L.includes('calibrated'), tr = L.includes('trend');
   return cal ? (tr ? 'partly' : 'calibrated') : tr ? 'trend' : 'literature';
 }

@@ -20,7 +20,6 @@
 //   compression       sparse counting data (< 1 e⁻ per pixel per frame) 3–10×, dense data 1.2–2×
 //   tomography        a tilt series of scans: tilts·N²·B; volume N³ float32 (N = scan); WBP ≈ tilts·N³·4 flop,
 //                     SIRT ≈ iterations·tilts·N³·8 (a projection and a back-projection per iteration)
-//   ptycho-tomography a 4D scan per tilt: tilts·N²·det²·B; joint multislice ePIE ≈ iters·tilts·N²·(2·slices + 2) FFTs
 //   SPA               movies: N_mic·frames·det²·B (N_mic = particles / per micrograph); stack N_part·box²·4; two half
 //                     volumes (2·box)³·8 for Fourier insertion; ~4 s per micrograph for exposure and stage moves
 //   badge (first match)  browser: working set ≤ 512 MB and processing ≤ 60 s (with WebGPU, ctx.webgpu: ≤ 1.5 GB at
@@ -52,7 +51,6 @@ const DEFAULTS = {
   ltem: { kind: 'camera', det: 4096, bits: 16, exposure_s: 1, frames: 1 },
   ed3d: { kind: 'camera', det: 512, bits: 16, exposure_s: 0.25, frames: 160 }, // a rotation series (frames from the 3D ED settings)
   spa: { kind: 'spa', det: 4096, bits: 8, exposure_s: 4, frames: 40, particles: 2000, perMic: 40, box: 256 }, // dose-fractionated movies of a grid (particles from the SPA settings)
-  ptychotomo: { kind: 'ptychotomo', scan: 256, det: 128, bits: 16, dwell_us: 1000, flyback_us: 0, current_pA: 20, tilts: 31, slices: 20, iters: 20 }, // the full multi-tilt problem (the browser preview is much smaller)
   tomo: { kind: 'tilt', scan: 1024, bits: 16, dwell_us: 10, flyback_us: 100, current_pA: 50, tilts: 71, recon: 'wbp', iters: 20 }, // a HAADF tilt series (tilts, method from the settings)
   lstem: { kind: 'scan', scan: 256, bits: 32, dwell_us: 20, flyback_us: 100, detectors: 4, current_pA: 5 },
 };
@@ -143,18 +141,10 @@ export function footprint(technique, plan, ctx) {
     const I = technique === 'eels' && ctx.current_pA ? ctx.current_pA * 1e-12 : doseLimited || !p.current_pA ? (D * E_CHARGE * dx * dx) / tau : p.current_pA * 1e-12; // A
     f.dose_from = technique === 'eels' ? 'beam current' : doseLimited || !p.current_pA ? 'dose (low-dose)' : 'probe current';
     const Dpix = (I * tau) / (E_CHARGE * dx * dx), ePerPos = (I * tau) / E_CHARGE;
-    const reps = p.kind === 'tilt' || p.kind === 'ptychotomo' ? p.tilts : (p.frames ?? 1);
+    const reps = p.kind === 'tilt' ? p.tilts : (p.frames ?? 1);
     f.time = { acquire_s: tScan * reps };
     f.dose = { total: Dpix * reps, per_image: Dpix, rate: I / (E_CHARGE * field * field), current_pA: I * 1e12, pixel_A: dx, electrons_per_position: ePerPos };
-    if (p.kind === 'ptychotomo') { // a 4D-STEM scan per tilt, reconstructed jointly (multislice ePIE through all tilts)
-      const Kd = p.det, frame = Kd * Kd, dxr = ctx.lambda_A / (4 * ctx.alpha_mrad * 1e-3), Nobj = Math.ceil(field / dxr) + Kd;
-      raw = p.tilts * pos * frame * B;
-      f.shape = [p.tilts, N, N, Kd, Kd];
-      parts.push(['diffraction stacks as float32', p.tilts * pos * frame * 4], ['object volume, slices × tilts (complex64)', 8 * p.slices * Nobj * Nobj * 2], ['probe and gradients', 3 * 8 * frame]);
-      procFlops = p.iters * p.tilts * pos * (2 * p.slices + 2) * fftFlops(Kd);
-      f.object_px = Nobj;
-      eventsPerPixelFrame = ePerPos / frame;
-    } else if (p.kind === 'tilt') {
+    if (p.kind === 'tilt') {
       const V = N * N * N;
       raw = p.tilts * pos * B;
       f.shape = [p.tilts, N, N];
@@ -274,10 +264,6 @@ export function footprintFor(S, sim, extra = {}) {
   if (S.mode === 'ed3d') { // the series: frames, exposure per frame and the dose per frame from the 3D ED settings
     const p = sim.ed?.series?.plan;
     if (p) { Object.assign(plan, { frames: p.frames, exposure_s: +p.exposure.toFixed(4) }); return footprint('ed3d', plan, contextFor(S, sim, { dose: p.dosePerFrame, field_A: 2000, ...extra })); }
-  }
-  if (S.mode === 'ptychotomo') { // the full-scale multi-tilt problem: its α and dose from the preview's settings
-    const p = planFor('ptychotomo', plan);
-    return footprint('ptychotomo', plan, contextFor(S, sim, { alpha_mrad: S.ptAlpha, dose: S.ptDose / p.tilts, field_A: p.scan * 0.4, ...extra }));
   }
   if (S.mode === 'spa') { // the particles and the dose per micrograph from the SPA settings
     Object.assign(plan, { particles: S.spaN });

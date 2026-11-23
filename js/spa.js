@@ -30,92 +30,10 @@ import { fft2 } from './kernels.js';
 const TAU = 2 * Math.PI, DEG = Math.PI / 180;
 
 // ---------------------------------------------------------------- the particle
-// 24 copies (the rotation group of the cube) of one subunit: four α-helices (~40 Å rods, 10 Å apart) lying in a
-// shell between radii ~40 and ~62 Å. Density is the excess potential over ice, in volts.
-export function octahedralGroup() {
-  const out = [], seen = new Set();
-  // all signed permutation matrices with determinant +1
-  for (const p of [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]]) for (let s = 0; s < 8; s++) {
-    const m = [0, 0, 0, 0, 0, 0, 0, 0, 0];
-    for (let r = 0; r < 3; r++) m[3 * r + p[r]] = s & (1 << r) ? -1 : 1;
-    const det = m[0] * (m[4] * m[8] - m[5] * m[7]) - m[1] * (m[3] * m[8] - m[5] * m[6]) + m[2] * (m[3] * m[7] - m[4] * m[6]);
-    const k = m.join();
-    if (det > 0 && !seen.has(k)) { seen.add(k); out.push(m); }
-  }
-  return out;
-}
-const mv = (m, v) => [m[0] * v[0] + m[1] * v[1] + m[2] * v[2], m[3] * v[0] + m[4] * v[1] + m[5] * v[2], m[6] * v[0] + m[7] * v[1] + m[8] * v[2]];
-const norm = (v) => { const l = Math.hypot(...v); return v.map((x) => x / l); };
-const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
-const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+// The particle models (apoferritin, β-galactosidase) live in particles.js, shared with the other techniques.
+import { octahedralGroup, apoferritinRods, apoferritin, d2Group, betaGalParts, renderParts, mv, norm, cross, dot } from './particles.js';
+export { octahedralGroup, apoferritinRods, apoferritin, d2Group, betaGalParts };
 
-// the helices (segments) of the 24 subunits, in Å from the centre
-export function apoferritinRods() {
-  const G = octahedralGroup();
-  // the subunit centre: a general position on the shell (r = 51 Å), long axis tangential
-  const c = norm([0.32, 0.17, 0.93]).map((x) => x * 51), r = norm(c), u = norm(cross(r, [1, 0.4, 0])), v = cross(r, u);
-  const rods = [];
-  for (const [p, q] of [[-5, -4], [5, -4], [-5, 4], [5, 4]]) { // four helices: ±5 Å across, ±4 Å in radius
-    const m = c.map((x, i) => x + p * v[i] + q * r[i]);
-    rods.push([m.map((x, i) => x - 20 * u[i]), m.map((x, i) => x + 20 * u[i])]);
-  }
-  rods.push([c.map((x, i) => x - 9 * r[i] + 12 * u[i]), c.map((x, i) => x - 9 * r[i] + 12 * u[i] + 10 * v[i])]); // the short E helix, inside
-  return G.flatMap((g) => rods.map(([a, b]) => [mv(g, a), mv(g, b)]));
-}
-// the map on an N³ grid of px Å: Gaussian rods (σ 2.3 Å), peak ≈ 3.5 V above the ice
-export function apoferritin(N, px) {
-  const vol = new Float32Array(N ** 3), c = N / 2, s2 = 2 * 2.3 * 2.3, reach = 3 * 2.3;
-  for (const [a, b] of apoferritinRods()) {
-    const ab = b.map((x, i) => x - a[i]), L2 = dot(ab, ab);
-    const lo = a.map((x, i) => Math.max(0, Math.floor((Math.min(x, b[i]) - reach) / px + c))), hi = a.map((x, i) => Math.min(N - 1, Math.ceil((Math.max(x, b[i]) + reach) / px + c)));
-    for (let z = lo[2]; z <= hi[2]; z++) for (let y = lo[1]; y <= hi[1]; y++) for (let x = lo[0]; x <= hi[0]; x++) {
-      const p = [(x - c) * px - a[0], (y - c) * px - a[1], (z - c) * px - a[2]];
-      const t = Math.max(0, Math.min(1, dot(p, ab) / L2)), d = [p[0] - t * ab[0], p[1] - t * ab[1], p[2] - t * ab[2]];
-      vol[x + N * (y + N * z)] += 3.5 * Math.exp(-dot(d, d) / s2);
-    }
-  }
-  return vol;
-}
-
-// β-galactosidase (E. coli, ~465 kDa): a tetramer with D2 symmetry (three perpendicular two-fold axes), about
-// 175 × 135 × 90 Å. Each 116 kDa monomer is five domains (Jacobson et al. 1994): a jelly roll, two
-// immunoglobulin-like domains, a β-sandwich and the central TIM barrel (domain 3, the active site), modelled as
-// soft spheres with the barrel's ring of eight α-helices. z is the shortest axis: lying flat, the particle is seen
-// along z (its preferred orientation on the grid).
-export function d2Group() { return [[1, 0, 0, 0, 1, 0, 0, 0, 1], [1, 0, 0, 0, -1, 0, 0, 0, -1], [-1, 0, 0, 0, 1, 0, 0, 0, -1], [-1, 0, 0, 0, -1, 0, 0, 0, 1]]; }
-export function betaGalParts() {
-  // one monomer, Å from the tetramer centre: [x, y, z, radius]
-  const dom = [[52, 30, 22, 15], [24, 52, 18, 11], [44, 22, -8, 20], [70, 48, 8, 11], [22, 26, 34, 14]];
-  const barrel = [44, 22, -8], blobs = [], rods = [];
-  for (let i = 0; i < 8; i++) { // the TIM barrel's helices, around its axis (along z), 15 Å out, 16 Å long
-    const a = (i * Math.PI) / 4, c = [barrel[0] + 15 * Math.cos(a), barrel[1] + 15 * Math.sin(a), barrel[2]];
-    rods.push([[c[0], c[1], c[2] - 8], [c[0] + 3 * Math.sin(a), c[1] - 3 * Math.cos(a), c[2] + 8]]);
-  }
-  for (const g of d2Group()) { for (const d of dom) blobs.push([...mv(g, d.slice(0, 3)), d[3]]); }
-  return { blobs, rods: d2Group().flatMap((g) => rods.map(([a, b]) => [mv(g, a), mv(g, b)])) };
-}
-// a map from soft spheres (1.6 V, 2 Å edge) and Gaussian rods (σ 2.3 Å, 2 V)
-function renderParts(N, px, { blobs = [], rods = [] }, rodV = 2) {
-  const vol = new Float32Array(N ** 3), c = N / 2;
-  for (const [bx, by, bz, R] of blobs) {
-    const lo = [bx, by, bz].map((x) => Math.max(0, Math.floor((x - R - 4) / px + c))), hi = [bx, by, bz].map((x) => Math.min(N - 1, Math.ceil((x + R + 4) / px + c)));
-    for (let z = lo[2]; z <= hi[2]; z++) for (let y = lo[1]; y <= hi[1]; y++) for (let x = lo[0]; x <= hi[0]; x++) {
-      const r = Math.hypot((x - c) * px - bx, (y - c) * px - by, (z - c) * px - bz);
-      vol[x + N * (y + N * z)] += 1.6 / (1 + Math.exp((r - R) / 1));
-    }
-  }
-  const s2 = 2 * 2.3 * 2.3, reach = 3 * 2.3;
-  for (const [a, b] of rods) {
-    const ab = b.map((x, i) => x - a[i]), L2 = dot(ab, ab);
-    const lo = a.map((x, i) => Math.max(0, Math.floor((Math.min(x, b[i]) - reach) / px + c))), hi = a.map((x, i) => Math.min(N - 1, Math.ceil((Math.max(x, b[i]) + reach) / px + c)));
-    for (let z = lo[2]; z <= hi[2]; z++) for (let y = lo[1]; y <= hi[1]; y++) for (let x = lo[0]; x <= hi[0]; x++) {
-      const p = [(x - c) * px - a[0], (y - c) * px - a[1], (z - c) * px - a[2]];
-      const t = Math.max(0, Math.min(1, dot(p, ab) / L2)), d = [p[0] - t * ab[0], p[1] - t * ab[1], p[2] - t * ab[2]];
-      vol[x + N * (y + N * z)] += rodV * Math.exp(-dot(d, d) / s2);
-    }
-  }
-  return vol;
-}
 // the particles to choose from: name, mass, symmetry, the pixel size that gives a box ≥ 1.5× the particle (64 px)
 export const SAMPLES = {
   apo: { name: 'Apoferritin', kDa: 480, symmetry: 'octahedral (O, 24 copies)', size: '12 nm shell', px: 3.2, use: 'high-resolution alignment, CTF and optics checks, fast benchmarking: stable, compact and highly symmetric' },

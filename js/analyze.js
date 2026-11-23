@@ -111,19 +111,6 @@ export const ANALYSES = {
         result: { edges: found, window_eV: [r(c.energy_start_eV, 1), r(c.energy_start_eV + n * c.energy_eV_per_channel, 1)] }, truth: { elements: present } };
     },
   },
-  // ptychographic tomography preview: depth resolution of one view against the fused tilts
-  ptychotomo_stats: {
-    skill: null, registry: false, label: 'Depth resolution: one view against fused tilts', modes: ['ptychotomo'],
-    run(sim, S) {
-      const A = sim.pt, st = A?.out?.stats;
-      if (!st) throw new Error('scan the tilts and reconstruct first (action collect)');
-      return { summary: `${A.out.tilts} tilts to ±${A.o.maxTilt}°: depth FWHM of an isolated atom ${st.atom.single.z.toFixed(2)} Å from one view, ${st.atom.fused.z.toFixed(2)} Å fused (true ${st.atom.truth.z.toFixed(2)} Å); stacked pair dip ${st.pair.single.toFixed(2)} → ${st.pair.fused.toFixed(2)}`,
-        result: { tilts: A.out.tilts, max_tilt_deg: A.o.maxTilt, alpha_mrad: A.o.alpha, kV: A.o.kV, dose: A.o.dose, iterations: A.o.iters, fusion: A.o.fusion, voxel_A: A.out.dx,
-          depth_fwhm_single_A: r(st.atom.single.z, 3), depth_fwhm_fused_A: r(st.atom.fused.z, 3), lateral_fwhm_fused_A: r(st.atom.fused.x, 3), pair_dip_single: r(st.pair.single, 3), pair_dip_fused: r(st.pair.fused, 3),
-          correlation_single: r(st.corrSingle, 4), correlation_fused: r(st.corrFused, 4), depth_resolution_lambda_over_alpha2_A: r(st.depthRes, 3) },
-        truth: { depth_fwhm_A: r(st.atom.truth.z, 3) } };
-    },
-  },
   // single-particle cryo-EM: resolution by half-map FSC (global and directional), particles kept, CTF and picking
   spa_stats: {
     skill: null, registry: false, label: 'Single-particle resolution (FSC) and data quality', modes: ['spa'],

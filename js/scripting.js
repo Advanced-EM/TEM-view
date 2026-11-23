@@ -22,11 +22,11 @@ import { libGoto, stageMove, stagePos } from './ops.js';
 import * as ML from './megalibrary.js';
 
 export const SCRIPT_API = 1;
-const SPECS = ['au', 'si', 'sto', 'gr', 'mof', 'bio', 'lib', 'hesi', 'cspb', 'mapb'];
+const SPECS = ['au', 'si', 'sto', 'gr', 'mof', 'bio', 'lib', 'hesi', 'cspb', 'mapb', 'apo', 'bgal'];
 // training tasks a script can run as a challenge (the direct-alignment task needs its on-screen controls)
 const CHALLENGES = ['tem-focus-stig', 'corrector-ronch'];
 const SETTINGS = {
-  mode: 'tem, stem, 4d, diff, cbed, eds, eels, ronch, oah, ilh, ltem, lstem, ed3d, tomo, spa, ptychotomo', specimen: 'au, si, sto, gr, mof, bio, lib (nanoparticle megalibrary), hesi (He bubbles in Si), cspb (CsPbBr₃ nanocubes), mapb (MAPbBr₃ nanocubes)', kV: '80, 200 or 300',
+  mode: 'tem, stem, 4d, diff, cbed, eds, eels, ronch, oah, ilh, ltem, lstem, ed3d, tomo, spa', specimen: 'au, si, sto, gr, mof, bio, lib (nanoparticle megalibrary), hesi (He bubbles in Si), cspb (CsPbBr₃ nanocubes), mapb (MAPbBr₃ nanocubes), apo (one apoferritin particle in ice), bgal (one β-galactosidase particle in ice)', kV: '80, 200 or 300',
   defocus_nm: 'C1 in nm, negative is underfocus', fov_nm: 'field of view in nm', dose: 'electrons per Å²', thickness_nm: 'specimen thickness',
   corrector: 'True or False', holder: 'room, ln2, lhe, heat', temperature_K: 'specimen temperature', realistic: 'shot noise and real detectors',
   detector: 'bf, abf, adf, haadf (STEM)', convergence_mrad: 'probe semi-angle', camera_length_mm: 'diffraction camera length',
@@ -37,7 +37,6 @@ const SETTINGS = {
   probe_urad: 'Lorentz-STEM probe semi-angle',
   cell: 'none or liquid', liquid_class: 'sinx, sinxFlow or graphene', liquid_gap_nm: 'spacer, nm', liquid_pressure_bar: 'pressure difference, bar', liquid_dose_rate: 'e⁻/Å²/s', liquid_depth: 'top, middle or bottom (where the particle sits)',
   windows: 'none, sinx, graphene or carbon: membranes above and below the specimen', window_thickness: 'per window, nm (graphene: layers)',
-  pt_tilts: '1, 3, 5, 7 or 9', pt_max_tilt_deg: 'maximum tilt, 10–75°', pt_alpha_mrad: 'probe semi-angle, 10–20 mrad', pt_dose: 'e⁻/Å² for all tilts', pt_iterations: 'MS-ePIE iterations per tilt', pt_fusion: 'sirt or average', pt_view: 'xz, xy or slices',
   spa_sample: 'apo (apoferritin, 480 kDa, octahedral) or bgal (β-galactosidase, 465 kDa, D2)', spa_particles: 'particles to average, 100–20000', spa_dose: 'e⁻/Å² per micrograph', spa_defocus_um: 'mean underfocus, µm', spa_zernike: 'True: Zernike phase plate', spa_preferred: 'fraction lying in one orientation, 0–0.95', spa_alignment_error_deg: 'rms orientation error, °', spa_binning: '1 (3.2 Å pixels) or 2 (6.4 Å)', spa_view: 'mic, ctf, classes or map',
   tomo_object: 'specimen or beads (gold test beads)', tomo_volume: '64, 96, 128 or 256 voxels per side (256: WebGPU in the exhibit; slow in JS)', tomo_signal: 'haadf or bf', tomo_scheme: 'linear or saxton', tomo_max_tilt_deg: 'maximum tilt, 20–80°', tomo_step_deg: 'tilt step (at 0° for saxton)',
   tomo_dose: 'e⁻/Å² for the whole series', tomo_jitter_px: 'rms stage shift between tilts', tomo_align: 'True: centre-of-mass alignment', tomo_method: 'wbp or sirt', tomo_filter: 'ramp or hann (wbp)', tomo_iterations: 'SIRT iterations', tomo_view: 'series, xy, xz or yz', tomo_slice: 'slice position, −0.5–0.5 of the box',
@@ -92,14 +91,11 @@ export function settingsToOps(a) {
   // the environment's windows (environment.js)
   if (a.windows !== undefined) ops.push({ op: 'chip', k: 'envWin', v: String(a.windows) });
   if (a.window_thickness !== undefined) ops.push({ op: 'set', k: 'envWinT', v: +a.window_thickness });
-  // ptychographic tomography
-  const ptMap = { pt_tilts: 'ptTilts', pt_max_tilt_deg: 'ptMax', pt_alpha_mrad: 'ptAlpha', pt_dose: 'ptDose', pt_iterations: 'ptIters', pt_fusion: 'ptFusion', pt_view: 'ptView' };
-  for (const [k, key] of Object.entries(ptMap)) if (a[k] !== undefined) ops.push({ op: 'set', k: key, v: typeof a[k] === 'string' ? a[k] : +a[k] });
   // single-particle cryo-EM
   const spaMap = { spa_sample: 'spaSample', spa_particles: 'spaN', spa_dose: 'spaDose', spa_defocus_um: 'spaDf', spa_zernike: 'spaZpp', spa_preferred: 'spaPref', spa_alignment_error_deg: 'spaAngErr', spa_binning: 'spaBin', spa_view: 'spaView' };
   for (const [k, key] of Object.entries(spaMap)) if (a[k] !== undefined) ops.push({ op: 'set', k: key, v: typeof a[k] === 'string' || typeof a[k] === 'boolean' ? a[k] : +a[k] });
   // tomography
-  const tomoMap = { tomo_object: 'tomoPhantom', tomo_volume: 'tomoN', tomo_signal: 'tomoSignal', tomo_scheme: 'tomoScheme', tomo_max_tilt_deg: 'tomoMax', tomo_step_deg: 'tomoStep', tomo_dose: 'tomoDose', tomo_jitter_px: 'tomoJitter', tomo_align: 'tomoAlign', tomo_method: 'tomoRecon', tomo_filter: 'tomoFilter', tomo_iterations: 'tomoIter', tomo_view: 'tomoView', tomo_slice: 'tomoDepth' };
+  const tomoMap = { tomo_object: 'tomoPhantom', tomo_volume: 'tomoN', tomo_signal: 'tomoSignal', tomo_scheme: 'tomoScheme', tomo_max_tilt_deg: 'tomoMax', tomo_step_deg: 'tomoStep', tomo_dose: 'tomoDose', tomo_jitter_px: 'tomoJitter', tomo_align: 'tomoAlign', tomo_method: 'tomoRecon', tomo_filter: 'tomoFilter', tomo_iterations: 'tomoIter', tomo_view: 'tomoView', tomo_slice: 'tomoDepth', tomo_yaw_deg: 'tomoYaw', tomo_pitch_deg: 'tomoPitch', tomo_render: 'tomoRender' };
   for (const [k, key] of Object.entries(tomoMap)) if (a[k] !== undefined) ops.push({ op: 'set', k: key, v: typeof a[k] === 'string' || typeof a[k] === 'boolean' ? a[k] : +a[k] });
   if (a.ed_range_deg !== undefined) { const [s0, s1] = a.ed_range_deg; ops.push({ op: 'set', k: 'edStart', v: +s0 }, { op: 'set', k: 'edEnd', v: +s1 }); }
   if (a.zone_axis !== undefined) { const z = a.zone_axis; if (z !== null && !(Array.isArray(z) && z.length === 3 && z.every((v) => Number.isInteger(+v)) && z.some((v) => +v !== 0))) throw new Error('zone_axis must be [u, v, w] (integers, not all zero) or None'); ops.push({ op: 'set', k: 'zone', v: z }); }
@@ -145,7 +141,6 @@ export class ScriptCore {
     const full = S.mode === '4d' && steps == null, N = full ? 20000 : n;
     // series techniques: record the whole series (and reconstruct a tomogram) unless steps are given
     if (steps == null && S.mode === 'tomo') { this.sim.update(0); const T = this.sim.tomo; if (T.ser.proj.length < T.angles.length) this.sim.startTomo({ instant: true }); else if (T.recKey !== this.sim.tomoRecKey() || !T.taskDone) this.sim.reconstructTomo({ instant: true }); }
-    if (steps == null && S.mode === 'ptychotomo') { this.sim.update(0); const A = this.sim.pt; if (!A?.full || !A.done) this.sim.startPT({ instant: true }); }
     if (steps == null && S.mode === 'spa') { this.sim.update(0); const A = this.sim.spa; if (!A?.full || !A.done || A.key !== this.sim.spaKey()) this.sim.startSPA({ instant: true }); }
     if (steps == null && S.mode === 'ed3d') { this.sim.update(0); const e = this.sim.ed; if (e && !e.none && e.collected < e.series.plan.frames) { this.sim.startED3D(); this.sim.stepED3D(1e6); } }
     for (let i = 0; i < N; i++) {

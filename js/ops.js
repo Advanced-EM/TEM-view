@@ -20,7 +20,7 @@ export const fam = family;
 export const fovMax = (S) => P.SPECIMENS[S.spec]?.fovMax ?? 120;
 // ±30° where the specimen rotates its own 3D atoms (uploads, zone-axis crystals), ±3° for the projected crystals
 export const tiltLimit = (S) => (S.mode === 'ltem' || S.mode === 'lstem' || P.SPECIMENS[S.spec]?.ownTilt || (S.zone && P.CRYST[S.spec] && !P.CRYST[S.spec].twoD) ? 30 : 3);
-const coreEdge = (spec) => (spec === 'sto' ? 462 : spec === 'si' || spec === 'hesi' ? 102 : spec === 'cspb' ? 726 : spec === 'mapb' ? 401 : spec === 'gr' ? 287 : spec === 'mof' ? 200 : spec === 'bio' ? 405 : spec === 'lib' ? 855 : 100);
+const coreEdge = (spec) => (spec === 'sto' ? 462 : spec === 'si' || spec === 'hesi' ? 102 : spec === 'cspb' ? 726 : spec === 'mapb' ? 401 : spec === 'gr' ? 287 : spec === 'mof' ? 200 : spec === 'bio' || spec === 'apo' || spec === 'bgal' ? 405 : spec === 'lib' ? 855 : 100);
 
 export function resetVdet(S, sim) {
   const a = S.alpha4d, mp = sim.fd?.mradPx ?? (P.wavelength(S.kV) * 1000) / (64 * 0.18);
@@ -47,7 +47,7 @@ export function specState(S, sim, v) {
   S.eelsRange = 'core';
   S.eelsDisp = 0.25; S.eelsOffset = Math.max(50, coreEdge(v) - 200);
   S.eelsWin = coreEdge(v);
-  S.eelsWidth = v === 'si' || v === 'hesi' ? 5 : v === 'cspb' ? 30 : v === 'mapb' ? 20 : v === 'au' ? 24 : v === 'gr' ? 6 : v === 'mof' ? 30 : v === 'bio' ? 20 : 16;
+  S.eelsWidth = v === 'si' || v === 'hesi' ? 5 : v === 'cspb' ? 30 : v === 'mapb' ? 20 : v === 'au' ? 24 : v === 'gr' ? 6 : v === 'mof' ? 30 : v === 'bio' || v === 'apo' || v === 'bgal' ? 20 : 16;
   // a MOF needs low-dose conditions; other specimens go back to a normal dose
   if (v === 'mof') { S.dose = 2; S.kV = 300; S.thick = 20; S.camL = 4000; }
   else if (v === 'xyz') { S.thick = 3; if (S.dose < 20) S.dose = 400; } // thickness: the carbon support
@@ -55,15 +55,16 @@ export function specState(S, sim, v) {
   else if (v === 'cspb') { S.dose = 10; S.kV = 300; S.thick = 3; } // low dose; thickness: the carbon support
   else if (v === 'mapb') { S.dose = 2; S.kV = 300; S.thick = 3; }
   else if (v === 'hesi') { S.thick = 30; if (S.dose < 20) S.dose = 400; }
-  else if (v === 'bio') {
+  else if (P.SPECIMENS[v]?.bio) {
     // single-particle cryo-EM conditions: frozen grid, 300 kV, no corrector, ~1.5 µm underfocus, ~30 e⁻/Å²
     Object.assign(S, { holder: 'ln2', tempSet: 90, kV: 300, dose: 30, thick: 30, corrector: false, csUnc: S.profile.CsUnc, objAp: 'none', camL: 2000 });
     S.dfFam.tem = -1500; S.dfFam.probe = +(P.probeDefocus(S.profile.CsUnc * 1e7, P.wavelength(300)) / 10).toFixed(1);
     S.alpha = Math.min(S.alpha, 10);
     S.df = S.dfFam[fam(S.mode)];
     sim.newGrid(); // fresh vitreous ice; a freshly inserted cryo holder drifts at first
+    if (P.SPECIMENS[v].particle) { S.thick = 40; S.spaSample = P.SPECIMENS[v].particle; } // one particle in thin ice; single-particle analysis follows it
   } else if (S.dose < 20) S.dose = 400;
-  if (v !== 'bio' && prevSpec === 'bio') {
+  if (!P.SPECIMENS[v]?.bio && P.SPECIMENS[prevSpec]?.bio) {
     S.corrector = S.profile.corrector; S.dfFam = { tem: -4, probe: 0 }; S.df = S.dfFam[fam(S.mode)];
     if (S.corrector) S.alpha = 22;
   }
@@ -93,13 +94,12 @@ export function modeState(S, sim, m) {
 export const LOR_LIMITS = { lorDf: [-3000, 3000, 0], lorFov: [0.3, 10, 3], lorThick: [10, 150, 0], lorField: [0, 600, 0], lorDiv: [0.5, 30, 1], lorAlpha: [20, 3000, 0], lorApR: [2, 40, 1],
   pedPhi: [0, 60, 1], pedSteps: [4, 128, 0], pedDescan: [0, 20, 1],
   tomoMax: [20, 80, 0], envWinT: [1, 50, 1], lcA: [10, 500, 0], lcB: [10, 2000, 0], lcGap: [20, 5000, 0], lcDP: [0, 30, 2], lcFlow: [0, 5, 2], lcPocket: [5, 500, 0], lcRate: [0.01, 1000, 2], gcP: [0.01, 2000, 2], gcGap: [1, 100, 1], gcPath: [0.1, 10, 2], bsGap: [2, 10, 2], bsV: [-20, 20, 3], bsI: [-10000, 10000, 3], bsRate: [0.01, 20, 2], bsLimit: [1, 10000, 1], bsRc: [0, 1e6, 1], bsRs: [0, 1e6, 1], bsLeak: [1e5, 1e12, 0], bsEbd: [1, 1000, 1], movDur: [1, 600, 1], tomoStep: [0.5, 10, 1], tomoDose: [1, 1e7, 0], tomoJitter: [0, 5, 1], tomoIter: [1, 100, 0], tomoDepth: [-0.5, 0.5, 2],
-  ptMax: [10, 75, 0], ptAlpha: [10, 20, 1], ptDose: [1e3, 1e7, 0], ptIters: [2, 30, 0],
   spaN: [100, 20000, 0], spaDose: [2, 300, 1], spaDf: [0, 4, 2], spaPref: [0, 0.95, 2], spaAngErr: [0, 10, 1],
-  edStart: [-70, 0, 1], edEnd: [0, 70, 1], edSpeed: [0.1, 10, 2], edStep: [0.1, 5, 2], edExp: [0.05, 5, 3], edDoseRate: [0.001, 2, 4], edAxis: [0, 180, 1], edLayer: [-3, 3, 0],
+  edStart: [-70, 0, 1], edEnd: [0, 70, 1], edSpeed: [0.1, 10, 2], edStep: [0.1, 5, 2], edExp: [0.05, 5, 3], edDoseRate: [0.001, 2, 4], edAxis: [0, 180, 1], edLayer: [-3, 3, 0], tomoYaw: [-180, 180, 0], tomoPitch: [-90, 90, 0], edYaw: [-180, 180, 0], edPitch: [-90, 90, 0],
   eelsBeta: [1, 100, 1], eelsOffset: [-50, 3000, 1], eelsWin: [0, 6000, 2], eelsWidth: [0.5, 80, 1], eelsCurrent: [5, 2000, 0], eelsExp: [1e-4, 10, 5], eelsExpLow: [1e-5, 0.1, 6] };
 export const LOR_CHOICES = { lorView: ['fresnel', 'foucault', 'tie', 'phase'], lstemView: ['color', 'x', 'y', 'sum'], lorFouc: ['+x', '-x', '+y', '-y'],
   eelsSource: ['profile', 'schottky', 'cfeg', 'mono'], eelsDet: ['ccd', 'direct'], eelsYScale: ['log', 'lin', 'split'], eelsDisp: [0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1],
-  pedOn: [true, false], dualEels: [true, false], edMethod: ['cred', 'step', 'pedt'], tomoPhantom: ['specimen', 'beads'], tomoN: [64, 96, 128, 256], gpu: ['auto', 'off'], spaSample: ['apo', 'bgal'], envWin: ['none', 'sinx', 'graphene', 'carbon'], envCell: ['none', 'liquid', 'gas'], gcGeom: ['windowed', 'open'], bsOn: [true, false], bsLayout: ['two', 'four', 'tip'], bsMat: ['metal', 'semi', 'insulator'], bsMode: ['V', 'I'], bsWave: ['dc', 'sweep'], bsStray: [true, false], movFps: [1, 2, 5, 10, 25, 50, 100], movOn: [true, false], gcGas: ['H2', 'O2', 'N2', 'CO', 'H2O', 'Ar'], lcClass: ['sinx', 'sinxFlow', 'graphene'], lcDepth: ['top', 'middle', 'bottom'], lcPrecursor: [true, false], lcMetal: ['au', 'ag'], calib: ['published', 'none', 'user'], lcFilter: [true, false], ptTilts: [1, 3, 5, 7, 9], ptFusion: ['sirt', 'average'], ptView: ['xz', 'xy', 'slices'], spaZpp: [true, false], spaBin: [1, 2], spaView: ['mic', 'ctf', 'classes', 'map'], tomoSignal: ['haadf', 'bf'], tomoScheme: ['linear', 'saxton'], tomoAlign: [true, false], tomoRecon: ['wbp', 'sirt'], tomoFilter: ['ramp', 'hann'], tomoView: ['series', 'xy', 'xz', 'yz'], edFps: [1, 2, 4, 10, 20, 40], edMerge: ['friedel', 'laue'], edSlice: ['hk0', 'h0l', '0kl'], eelsFit: [true, false], eelsDeconv: [true, false], eelsLine: [true, false], bgsub: [true, false] };
+  pedOn: [true, false], dualEels: [true, false], edMethod: ['cred', 'step', 'pedt'], tomoPhantom: ['specimen', 'beads'], tomoN: [64, 96, 128, 256], gpu: ['auto', 'off'], spaSample: ['apo', 'bgal'], envWin: ['none', 'sinx', 'graphene', 'carbon'], envCell: ['none', 'liquid', 'gas'], gcGeom: ['windowed', 'open'], bsOn: [true, false], bsLayout: ['two', 'four', 'tip'], bsMat: ['metal', 'semi', 'insulator'], bsMode: ['V', 'I'], bsWave: ['dc', 'sweep'], bsStray: [true, false], movFps: [1, 2, 5, 10, 25, 50, 100], movOn: [true, false], gcGas: ['H2', 'O2', 'N2', 'CO', 'H2O', 'Ar'], lcClass: ['sinx', 'sinxFlow', 'graphene'], lcDepth: ['top', 'middle', 'bottom'], lcPrecursor: [true, false], lcMetal: ['au', 'ag'], calib: ['published', 'none', 'user'], lcFilter: [true, false], spaZpp: [true, false], spaBin: [1, 2], spaView: ['mic', 'ctf', 'classes', 'map'], tomoSignal: ['haadf', 'bf'], tomoScheme: ['linear', 'saxton'], tomoAlign: [true, false], tomoRecon: ['wbp', 'sirt'], tomoFilter: ['ramp', 'hann'], tomoView: ['series', 'xy', 'xz', 'yz', '3d'], tomoRender: ['mip', 'sum'], edFps: [1, 2, 4, 10, 20, 40], edMerge: ['friedel', 'laue'], edSlice: ['hk0', 'h0l', '0kl', '3d'], eelsFit: [true, false], eelsDeconv: [true, false], eelsLine: [true, false], bgsub: [true, false] };
 // a Lorentz setting from a command, clamped; true if `op` was one
 export function lorSet(S, set, op) {
   // zone axis [u, v, w] of a built-in crystal (null: as built); the field returns to the crystal's centre
@@ -196,7 +196,7 @@ export function chipState(S, sim, key, v) {
     // each preset is a dispersion and an offset, as a microscopist would set them
     [S.eelsDisp, S.eelsOffset, S.eelsExp] = { zlp: [0.01, -5, 0.001], low: [0.05, -5, 0.001], core: [0.25, Math.max(50, coreEdge(S.spec) - 200), 0.5], high: [1, 1300, 2] }[v];
     const [a, b] = sim.eelsRangeBounds();
-    const def = { zlp: [0, 3], low: [22, 12], core: [coreEdge(S.spec), S.spec === 'si' || S.spec === 'hesi' ? 5 : S.spec === 'cspb' ? 30 : S.spec === 'mapb' ? 20 : S.spec === 'gr' ? 6 : S.spec === 'mof' ? 30 : S.spec === 'bio' ? 20 : 16], high: [S.spec === 'au' ? 2260 : S.spec === 'si' || S.spec === 'hesi' ? 1860 : S.spec === 'cspb' || S.spec === 'mapb' ? 1570 : 1960, 60] }[v];
+    const def = { zlp: [0, 3], low: [22, 12], core: [coreEdge(S.spec), S.spec === 'si' || S.spec === 'hesi' ? 5 : S.spec === 'cspb' ? 30 : S.spec === 'mapb' ? 20 : S.spec === 'gr' ? 6 : S.spec === 'mof' ? 30 : P.SPECIMENS[S.spec]?.bio ? 20 : 16], high: [S.spec === 'au' ? 2260 : S.spec === 'si' || S.spec === 'hesi' ? 1860 : S.spec === 'cspb' || S.spec === 'mapb' ? 1570 : 1960, 60] }[v];
     S.eelsWin = clamp(def[0], a, b); S.eelsWidth = def[1];
     sim.invalidate('eelsRange');
     return 'eelsRange';
@@ -225,7 +225,7 @@ export function stagePos(S) {
 }
 
 export const optimalDefocus = (S, sim) => +((fam(S.mode) === 'tem' ? P.scherzerDefocus(sim.CsA(), sim.lam) : P.probeDefocus(sim.CsA(), sim.lam)) / 10).toFixed(1);
-export const dfLimits = (S) => (S.spec === 'hesi' ? [-1500, 1500] : S.corrector ? [-CORR_RANGE.df, CORR_RANGE.df] : S.spec === 'bio' ? [-4000, 500] : [-150, 150]);
+export const dfLimits = (S) => (S.spec === 'hesi' ? [-1500, 1500] : S.corrector ? [-CORR_RANGE.df, CORR_RANGE.df] : P.SPECIMENS[S.spec]?.bio ? [-4000, 500] : [-150, 150]);
 
 // the exhibit's operation vocabulary (voice commands, agent tools, scripts), on the state alone: the headless
 // counterpart of runOp in main.js. Returns false for operations that only make sense with a screen.
@@ -249,7 +249,7 @@ export function runOpState(S, sim, op) {
       if (op.k === 'kV' && [80, 200, 300].includes(op.v)) set('kV', op.v, 'kV');
       else if (['corrector', 'holder', 'detPreset', 'eelsRange', 'vdet', 'magSpec', 'envWin', 'envCell', 'lcClass', 'gcGeom'].includes(op.k) && (!LOR_CHOICES[op.k] || LOR_CHOICES[op.k].includes(op.v))) chipState(S, sim, op.k, op.k === 'corrector' ? !!op.v : op.v);
       return true;
-    case 'nudge': { const st = S.corrector ? 2 : S.spec === 'bio' ? 100 : 10; set('df', +clamp(S.df + op.d * st, ...dfLimits(S)).toFixed(1), 'df'); return true; }
+    case 'nudge': { const st = S.corrector ? 2 : P.SPECIMENS[S.spec]?.bio ? 100 : 10; set('df', +clamp(S.df + op.d * st, ...dfLimits(S)).toFixed(1), 'df'); return true; }
     case 'zoom': set('fov', +clamp(S.fov * op.f, 1.5, fovMax(S)).toFixed(2), 'fov'); return true;
     case 'scale': set(op.k, +clamp(S[op.k] * op.f, 0.5, 20000).toFixed(2), op.k); return true;
     case 'temp': {
@@ -268,7 +268,7 @@ export function runOpState(S, sim, op) {
       if (op.v === 'optfocus') { set('df', optimalDefocus(S, sim), 'df'); return true; }
       if (op.v === 'pause') { S.paused = !S.paused; return true; }
       // record the series of a series technique (3D ED, tomography): at once, for scripts and agents
-      if (op.v === 'collect') { if (S.mode === 'ed3d') { sim.startED3D(); sim.stepED3D(1e6); return true; } if (S.mode === 'tomo') { sim.startTomo({ instant: true }); return true; } if (S.mode === 'spa') { sim.startSPA({ instant: true }); return true; } if (S.mode === 'ptychotomo') { sim.startPT({ instant: true }); return true; } return false; }
+      if (op.v === 'collect') { if (S.mode === 'ed3d') { sim.startED3D(); sim.stepED3D(1e6); return true; } if (S.mode === 'tomo') { sim.startTomo({ instant: true }); return true; } if (S.mode === 'spa') { sim.startSPA({ instant: true }); return true; } return false; }
       if (op.v === 'reconstruct' && S.mode === 'tomo') { sim.reconstructTomo({ instant: true }); return true; }
       return false;
     case 'beam': S.paused = !!op.v; return true;

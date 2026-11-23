@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SOP-06 Single-Particle Cryo-EM · Seeing with Electrons</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Sans:wght@400;600&display=block" rel="stylesheet">
+<link rel="stylesheet" href="guide.css?v=7">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+</head>
+<body>
+
+<!-- 1 · cover -->
+<section class="page cover">
+  <div class="top">
+    <div class="brandline"><span>Standard operating procedure SOP-06</span><span>Cryo-EM</span></div>
+    <h1>Single-particle<br><em>cryo-EM</em></h1>
+    <p class="sub" style="max-width:5.6in">Screen a frozen grid, choose dose, defocus and pixel size, collect and process a single-particle data set, and read its resolution from the Fourier shell correlation. The particle reconstructed here is also a specimen for every other technique.</p>
+  </div>
+  <div class="shot"><img src="fig/sop6_map.png" alt="" style="object-fit:contain;background:#000"></div>
+  <div class="bottom">
+    <div class="doc"><b>SOP-06</b>, version 1.0, November 2026<br>For students and new cryo-EM users, and for planning data collection<br>Simulation only: nothing here controls a real microscope</div>
+    <div class="logo">Seeing with Electrons<small>TEM-view · Advanced-EM</small></div>
+  </div>
+</section>
+
+<!-- 2 · scope -->
+<section class="page">
+  <div class="run"><span>SOP-06 Single-particle cryo-EM</span><span>Scope and overview</span></div>
+  <h2>Scope and overview</h2>
+  <p class="lede">Single-particle analysis (SPA) records thousands of noisy images of one protein frozen in thin vitreous ice, in random orientations, and averages them in 3D. Each image is a central slice of the particle's 3D Fourier transform; the resolution is judged by the Fourier shell correlation (FSC) of two independent half maps at 0.143.</p>
+  <table class="t" style="margin-top:8pt">
+    <tr><th>Particle</th><th>Mass</th><th>Symmetry</th><th>Size</th><th>Pixel size</th></tr>
+    <tr><td><b>Apoferritin</b></td><td>480 kDa</td><td>octahedral (24 subunits)</td><td>12 nm hollow shell</td><td>3.2 Å (6.4 binned)</td></tr>
+    <tr><td><b>β-Galactosidase</b></td><td>465 kDa</td><td>D2 (4 subunits)</td><td>17.5 × 13.5 × 9 nm</td><td>4.0 Å (8.0 binned)</td></tr>
+  </table>
+  <div class="cols">
+    <div>
+      <h3>Steps</h3>
+      <table class="t">
+        <tr><td class="n">1</td><td>Load the grid and look at one particle</td></tr>
+        <tr><td class="n">2</td><td>Screen: a micrograph and its CTF fit</td></tr>
+        <tr><td class="n">3</td><td>Choose dose, defocus and pixel size</td></tr>
+        <tr><td class="n">4</td><td>Collect and process; read the FSC</td></tr>
+        <tr><td class="n">5</td><td>Diagnose preferred orientation</td></tr>
+        <tr><td class="n">6</td><td>Export, and use the particle elsewhere</td></tr>
+      </table>
+      <h3>Terms used</h3>
+      <p>The <b>CTF</b> (contrast transfer function) is how defocus and aberrations turn phase into image contrast; its zeros are the <b>Thon rings</b> of the power spectrum. <b>Picks</b> are the particle positions found on a micrograph. A <b>2D class</b> is the average of particles seen from about the same direction. The <b>directional FSC</b> is the FSC in a cone along, or across, the beam.</p>
+    </div>
+    <div>
+      <h3>Rules</h3>
+      <ul class="plain">
+        <li>Keep the grid below ~140 K. Above it the ice crystallizes; above ~165 K it sublimes and the proteins dry out. Only a fresh grid brings vitreous ice back.</li>
+        <li>Proteins keep their finest (~3 Å) detail for only a few e⁻/Å². Every exposure spends that budget.</li>
+        <li>The orientations come from the simulation plus the alignment error you set; there is no projection-matching search. State this when you show results.</li>
+        <li>Simulated maps are for teaching and pipeline tests, not for structural conclusions.</li>
+      </ul>
+      <div class="note"><b>Note.</b> The same particle models (pseudo-atoms in protein proportions, ~5 Å detail) are loadable as specimens: <b>Apoferritin</b> and <b>β-Galactosidase</b> in the specimen cards. TEM, STEM, EELS, tomography and 3D ED then see the particle SPA reconstructs.</div>
+    </div>
+  </div>
+  <div class="foot"><span>Seeing with Electrons · TEM-view</span><span>2</span></div>
+</section>
+
+<!-- 3 · step 1 -->
+<section class="page">
+  <div class="run"><span>SOP-06 Single-particle cryo-EM</span><span>Step 1 of 6</span></div>
+  <div class="step">Step 1</div>
+  <h2>Load the grid and look at one particle</h2>
+  <div class="side" style="grid-template-columns:1fr 2.9in">
+    <div>
+      <ol class="proc">
+        <li>In <b>The specimen</b>, select the <b>Apoferritin</b> card. The exhibit sets cryo conditions: liquid-nitrogen holder at 90 K, 300 kV, 30 e⁻/Å², 1.5 µm underfocus, no corrector, 40 nm of ice.</li>
+        <li>Select <b>TEM</b>. One particle sits in the centre, in ice. It is a <b>weak phase object</b>: at focus it is almost invisible.</li>
+        <li>Change <b>Defocus</b> between −500 and −3000 nm. Underfocus turns phase into contrast; more underfocus gives more low-resolution contrast and moves the first CTF zero to lower resolution.</li>
+        <li>Tilt the stage (±30°). The particle turns: its four-fold, three-fold and two-fold views appear in turn.</li>
+        <li>Watch the dose readout under the image. At ~5 e⁻/Å² (300 kV, 90 K) the high-resolution detail is half gone. Use <b>Load a fresh grid</b> to start again.</li>
+      </ol>
+      <p class="result"><b>Result.</b> A faint ring, 12 nm across, in ice speckle. The contrast of protein against ice is a few percent: this is why SPA averages thousands of images.</p>
+      <div class="note caution"><b>Caution.</b> Raising the holder temperature above 140 K devitrifies the ice for the rest of the session. The status line says so.</div>
+    </div>
+    <div class="stack">
+      <figure class="fig"><img src="fig/sop6_particle_tem.png" alt=""><figcaption><b>Fig. 1.</b> One apoferritin particle in 40 nm of vitreous ice, TEM at 300 kV and 1.5 µm underfocus (25 nm field).</figcaption></figure>
+    </div>
+  </div>
+  <div class="foot"><span>Seeing with Electrons · TEM-view</span><span>3</span></div>
+</section>
+
+<!-- 4 · step 2 -->
+<section class="page">
+  <div class="run"><span>SOP-06 Single-particle cryo-EM</span><span>Step 2 of 6</span></div>
+  <div class="step">Step 2</div>
+  <h2>Screen: a micrograph and its CTF fit</h2>
+  <ol class="proc">
+    <li>Select the <b>Cryo-EM SPA</b> technique. The particle follows the specimen card (or choose it under <b>Particle</b>).</li>
+    <li>A preview runs at once: one 512 × 512 micrograph with about 40 particles, its CTF fit and the picks. <b>View → Micrograph + picks</b> shows it (Fig. 2a): blue rings are picks on particles, orange ones are false picks on ice.</li>
+    <li>Select <b>View → CTF fit</b> (Fig. 2b). Check that the Thon rings are round and reach well beyond the first zero; the fitted defocus is printed with the true one.</li>
+    <li>Thicken the ice (<b>Thickness</b>, in The specimen) to 80 nm and look again: contrast and ring visibility fall. Return to 30–50 nm.</li>
+  </ol>
+  <div class="cols">
+    <figure class="fig"><img src="fig/sop6_micrograph.png" alt=""><figcaption><b>Fig. 2a.</b> A micrograph at 40 e⁻/Å² and 1.5 µm underfocus, with the picks: precision 0.97, recall 0.97.</figcaption></figure>
+    <figure class="fig"><img src="fig/sop6_ctf.png" alt=""><figcaption><b>Fig. 2b.</b> Its power spectrum: Thon rings from the CTF, used to fit the defocus.</figcaption></figure>
+  </div>
+  <p class="result"><b>Result.</b> Picks with high precision and recall, and a defocus fit within ~±100 Å of the true value. If not, see Troubleshooting.</p>
+  <div class="foot"><span>Seeing with Electrons · TEM-view</span><span>4</span></div>
+</section>
+
+<!-- 5 · step 3 -->
+<section class="page">
+  <div class="run"><span>SOP-06 Single-particle cryo-EM</span><span>Step 3 of 6</span></div>
+  <div class="step">Step 3</div>
+  <h2>Choose dose, defocus and pixel size</h2>
+  <table class="t">
+    <tr><th>Setting</th><th>Start at</th><th>Too low</th><th>Too high</th></tr>
+    <tr><td><b>Dose per micrograph</b></td><td>40 e⁻/Å²</td><td>Too noisy to pick and align</td><td>High-resolution detail burnt away (the damage weighting removes it)</td></tr>
+    <tr><td><b>Underfocus (mean)</b></td><td>1.0–2.0 µm</td><td>Little low-resolution contrast: particles hard to pick</td><td>CTF zeros crowd together; the envelope cuts high resolution</td></tr>
+    <tr><td><b>Zernike phase plate</b></td><td>off; on near focus</td><td></td><td>With the plate, keep underfocus small (≤ 0.5 µm)</td></tr>
+    <tr><td><b>Pixel size</b></td><td>3.2 Å (apoferritin)</td><td></td><td>Binned ×2: Nyquist moves to 12.8 Å, resolution caps there</td></tr>
+    <tr><td><b>Particles</b></td><td>1000–2000</td><td>Map too noisy: low FSC</td><td>Longer processing, small gain past a few thousand</td></tr>
+    <tr><td><b>Alignment error</b></td><td>2° rms</td><td></td><td>Each degree blurs high resolution at the particle's edge</td></tr>
+  </table>
+  <div class="cols">
+    <div>
+      <ol class="proc">
+        <li>Set the values above. Leave <b>Preferred orientation</b> at 0 % for now.</li>
+        <li>Open <b>Data, dose and compute</b>. The estimator shows the data volume, the total dose and where the processing would run.</li>
+        <li>On a slower computer the <b>Particles</b> slider stops at the limit for this device; the full-scale job goes to a lab computer or a cluster (step 6).</li>
+      </ol>
+    </div>
+    <div class="note"><b>Note.</b> Voltage, Cs and the corrector, the focal spread and the convergence all enter the transfer function. A warm holder raises the damage: the same dose loses more high-resolution signal at 120 K than at 90 K.</div>
+  </div>
+  <div class="foot"><span>Seeing with Electrons · TEM-view</span><span>5</span></div>
+</section>
+
+<!-- 6 · step 4 -->
+<section class="page">
+  <div class="run"><span>SOP-06 Single-particle cryo-EM</span><span>Step 4 of 6</span></div>
+  <div class="step">Step 4</div>
+  <h2>Collect and process; read the FSC</h2>
+  <div class="side" style="grid-template-columns:1fr 2.7in">
+    <div>
+      <ol class="proc">
+        <li>Select <b>Collect and process</b>. The pipeline runs in the background: micrographs, CTF per group, picking, the particle stack, 2D classes, then two half maps.</li>
+        <li><b>View → 2D classes</b> (Fig. 3a). Classes should show distinct views with clear internal detail. False picks that do not match their class average are rejected here.</li>
+        <li><b>View → 3D map</b> (Fig. 3b). The right panel shows the FSC and the angular distribution.</li>
+        <li>Read the resolution at FSC = 0.143 (Fig. 3c), and the directional values along and across the beam.</li>
+      </ol>
+      <p class="result"><b>Result.</b> With the settings of step 3: 1975 of 2000 particles kept, 10.8 Å at FSC 0.143 (10.8 Å along z, 11.0 Å across). Write the values in the record.</p>
+      <figure class="fig plot"><img src="fig/sop6_fsc.svg" alt=""><figcaption><b>Fig. 3c.</b> FSC between the half maps: global, and in cones along and across the beam.</figcaption></figure>
+    </div>
+    <div class="stack">
+      <figure class="fig"><img src="fig/sop6_classes.png" alt=""><figcaption><b>Fig. 3a.</b> 2D class averages (protein dark).</figcaption></figure>
+      <figure class="fig"><img src="fig/sop6_map.png" alt=""><figcaption><b>Fig. 3b.</b> The reconstruction, projected along an oblique direction: the 24-subunit shell.</figcaption></figure>
+    </div>
+  </div>
+  <div class="foot"><span>Seeing with Electrons · TEM-view</span><span>6</span></div>
+</section>
+
+<!-- 7 · step 5 + 6 -->
+<section class="page">
+  <div class="run"><span>SOP-06 Single-particle cryo-EM</span><span>Steps 5 and 6 of 6</span></div>
+  <div class="step">Step 5</div>
+  <h2>Diagnose preferred orientation</h2>
+  <div class="side" style="grid-template-columns:1fr 3.1in">
+    <div>
+      <ol class="proc">
+        <li>Set <b>Preferred orientation</b> to 80 % (particles lying flat at the air–water interface) and collect again.</li>
+        <li>Compare the global FSC with the directional ones (Fig. 4). The global value can look <i>better</i> while the map is stretched along the beam.</li>
+        <li>Look at the angular distribution: most views cluster at the top.</li>
+      </ol>
+      <p class="result"><b>Result.</b> Global 9.3 Å, but 12.0 Å along the beam and 9.7 Å across: an anisotropic map. Report the directional FSC whenever views are uneven.</p>
+    </div>
+    <figure class="fig plot"><img src="fig/sop6_pref.svg" alt=""><figcaption><b>Fig. 4.</b> 80 % top views: the FSC along the beam falls first.</figcaption></figure>
+  </div>
+  <div class="step" style="margin-top:10pt">Step 6</div>
+  <h2>Export, and use the particle elsewhere</h2>
+  <div class="cols">
+    <ol class="proc">
+      <li><b>Export maps + classes (.mrc)</b> writes the half maps, the full map, the class averages and a README with every setting.</li>
+      <li>For the full-scale job, export the HPC bundle (<b>Data, dose and compute</b>). It carries the parameters for RELION or cryoSPARC (SOP HPC-07).</li>
+    </ol>
+    <ol class="proc" start="3">
+      <li>Select the <b>Apoferritin</b> or <b>β-Galactosidase</b> card and choose <b>Tomography</b> to record a subtomogram of one particle, <b>3D ED</b> to see its diffuse scattering, or STEM and EELS.</li>
+      <li>In the structure viewer, the same particle turns in 3D with the stage tilt.</li>
+    </ol>
+  </div>
+  <div class="foot"><span>Seeing with Electrons · TEM-view</span><span>7</span></div>
+</section>
+
+<!-- 8 · troubleshooting + record -->
+<section class="page">
+  <div class="run"><span>SOP-06 Single-particle cryo-EM</span><span>Troubleshooting and record</span></div>
+  <h2>Troubleshooting</h2>
+  <table class="t">
+    <tr><th>Symptom</th><th>Likely cause</th><th>Action</th></tr>
+    <tr><td>Particles invisible in TEM</td><td>Near focus, or ice too thick</td><td>1–3 µm underfocus, or the phase plate near focus; 30–50 nm ice</td></tr>
+    <tr><td>Many false picks</td><td>Low dose or little defocus</td><td>Raise the dose per micrograph or the underfocus</td></tr>
+    <tr><td>CTF fit far from the true defocus</td><td>Rings too weak (thick ice, low dose)</td><td>Thinner ice, more dose, more underfocus</td></tr>
+    <tr><td>FSC stops near 12.8 Å</td><td>Binned pixels: Nyquist</td><td>Pixel size back to 3.2 Å</td></tr>
+    <tr><td>Global FSC good, map stretched</td><td>Preferred orientation</td><td>Read the directional FSC; lower the preferred fraction</td></tr>
+    <tr><td>Resolution worse after warming</td><td>Faster damage, or devitrified ice</td><td>Back below 100 K; load a fresh grid</td></tr>
+    <tr><td>“Proteins dried out”</td><td>Above ~165 K the ice sublimed</td><td>Cool, then <b>Load a fresh grid</b></td></tr>
+  </table>
+  <h2 style="margin-top:16pt">Record</h2>
+  <table class="t">
+    <tr><th></th><th>Item</th><th>Value or criterion</th><th>Initials</th></tr>
+    <tr><td class="box"></td><td>Grid cold, ice vitreous</td><td>T ______ K; ice ______ nm</td><td class="line"></td></tr>
+    <tr><td class="box"></td><td>Screening micrograph and CTF</td><td>Precision ____ ; recall ____ ; defocus error ____ Å</td><td class="line"></td></tr>
+    <tr><td class="box"></td><td>Collection settings</td><td>Dose ____ e⁻/Å²; underfocus ____ µm; pixel ____ Å; N ______</td><td class="line"></td></tr>
+    <tr><td class="box"></td><td>Resolution at FSC 0.143</td><td>Global ____ Å; along z ____ Å; across ____ Å</td><td class="line"></td></tr>
+    <tr><td class="box"></td><td>Export</td><td>.mrc saved; bundle ID ____________</td><td class="line"></td></tr>
+  </table>
+  <div class="foot"><span>Seeing with Electrons · TEM-view</span><span>8</span></div>
+</section>
+
+<!-- 9 · back cover -->
+<section class="page back">
+  <h2 style="font-size:32pt;margin-bottom:12pt">Open cryo-EM SPA</h2>
+  <p class="lede" style="color:#c3d3e1">The link opens TEM-view on apoferritin in the Cryo-EM SPA technique. The preview micrograph appears in a few seconds.</p>
+  <div style="display:flex;gap:22pt;align-items:center;margin:22pt 0 28pt">
+    <div class="qr" id="qr"></div>
+    <div>
+      <p style="margin:0 0 4pt;color:#9fb4c6">Cryo-EM SPA on apoferritin</p>
+      <p style="font-size:11pt;margin:0 0 10pt"><a id="link" href=""></a></p>
+      <p style="color:#9fb4c6;margin:0">A computer is best: processing a full data set takes a minute or two.</p>
+    </div>
+  </div>
+  <div class="cols3">
+    <div><h3>Methods</h3><p>Crowther, DeRosier &amp; Klug 1970 (projection-slice); Rosenthal &amp; Henderson 2003 (FSC 0.143); Scheres 2012 (RELION).</p></div>
+    <div><h3>Related procedures</h3><p>SOP-01 TEM alignment. SOP-07 3D ED. HPC-07 for the full-scale job.</p></div>
+    <div><h3>Particles</h3><p>Apoferritin and β-galactosidase: coarse models at ~5 Å, not atomic structures.</p></div>
+  </div>
+  <div class="fine">
+    <div>SOP-06 Single-particle cryo-EM, version 1.0, November 2026<br>Simulation only. Nothing here controls a real microscope.<br>Results from the simulator are not measurements of a real specimen.</div>
+    <div class="logo">Seeing with Electrons<small>TEM-view · Advanced-EM</small></div>
+  </div>
+</section>
+
+<script>
+  const url = 'https://advanced-em.github.io/TEM-view/?spec=apo&mode=spa';
+  const a = document.getElementById('link'); a.href = url; a.textContent = url.replace('https://', '');
+  try { const q = qrcode(0, 'M'); q.addData(url); q.make(); document.getElementById('qr').innerHTML = q.createSvgTag({ cellSize: 4, margin: 0, scalable: true }); } catch { /* offline: link only */ }
+</script>
+</body>
+</html>

@@ -51,7 +51,7 @@ function engineFor(S, sim, f) {
   if (['tem', 'stem', '4d', 'diff', 'cbed'].includes(S.mode)) {
     return { engine: { kind: 'abtem', name: 'abtem' }, parameters: { request: null, full_scale: p }, runnable: true, abtem: true };
   }
-  const ext = { spa: 'RELION or cryoSPARC (particle stack and CTF from the session)', ptychotomo: 'py4DSTEM or PtyRAD (joint multi-tilt multislice ptychography)', ed3d: 'DIALS or XDS (rotation series)' }[S.mode];
+  const ext = { spa: 'RELION or cryoSPARC (particle stack and CTF from the session)', ed3d: 'DIALS or XDS (rotation series)' }[S.mode];
   return { engine: { kind: 'external', name: ext ?? 'your own pipeline' }, parameters: { full_scale: p }, runnable: false };
 }
 

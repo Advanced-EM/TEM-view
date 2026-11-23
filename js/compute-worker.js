@@ -9,13 +9,13 @@
 // Jobs with gpu: true (a 4D-STEM scan without precession, tomography) run on WebGPU (gpu.js) when this worker has
 // it; anything the GPU cannot take, or a GPU error, falls back to the same JS kernels.
 const V = self.location.search; // the page's cache-busting stamp, passed on to the kernels
-let K = null, TOMO = null, SPA = null, PT = null, G = null;
+let K = null, TOMO = null, SPA = null, G = null;
 const pending = [], tasks = new Map(), datasets = new Map();
 const now = () => performance.now();
 self.onmessage = (e) => (K ? handle(e.data) : pending.push(e.data));
 const gpuReady = import(`./gpu.js${V}`).then((m) => m.createGPU()).catch(() => null);
-Promise.all([import(`./kernels.js${V}`), import(`./tomo.js${V}`), import(`./spa.js${V}`), import(`./ptychotomo.js${V}`), gpuReady]).then(([m, t, sp, pt, g]) => {
-  K = m; TOMO = t; SPA = sp; PT = pt; G = g;
+Promise.all([import(`./kernels.js${V}`), import(`./tomo.js${V}`), import(`./spa.js${V}`), gpuReady]).then(([m, t, sp, g]) => {
+  K = m; TOMO = t; SPA = sp; G = g;
   self.postMessage({ type: 'gpu', label: g ? g.label : null });
   for (const d of pending.splice(0)) handle(d);
 });
@@ -34,8 +34,6 @@ function handle(m) {
       while (datasets.size > 2) { const k = datasets.keys().next().value; datasets.delete(k); self.postMessage({ type: 'dropped', id: k }); }
     } else if (job.kind === 'spa') {
       t.st = SPA.spaInit(job.params);
-    } else if (job.kind === 'ptychotomo') {
-      t.st = PT.ptInit(job.params);
     } else if (job.kind !== 'tomo') {
       t.data = job.data ?? datasets.get(job.dataset);
       if (!t.data) throw new Error('the 4D data set is not in the worker any more: restart the scan');
@@ -110,14 +108,6 @@ function schedule(t) { if (!t.scheduled) { t.scheduled = true; setTimeout(() => 
 function work(t) {
   if (t.cancelled || t.paused) return;
   const j = t.job, g = j.geom;
-  if (j.kind === 'ptychotomo') {
-    // the ptychographic tomography preview (ptychotomo.js): everything after each tilt, progress every ~250 ms
-    const before = `${t.st.stage}${t.st.t}`, more = PT.ptStep(t.st, 25, now), changed = `${t.st.stage}${t.st.t}` !== before || !more;
-    if (changed || now() - t.lastPost > 250) { self.postMessage({ id: t.id, type: 'ptychotomo', snap: PT.ptResult(t.st, { light: !changed }), final: !more }); t.lastPost = now(); }
-    if (!more) { tasks.delete(t.id); return; }
-    schedule(t);
-    return;
-  }
   if (j.kind === 'spa') {
     // the SPA pipeline (spa.js) in ~25 ms slices; everything at each new stage, the counters every ~250 ms
     const before = t.st.stage, more = SPA.spaStep(t.st, 25, now), changed = t.st.stage !== before || !more;

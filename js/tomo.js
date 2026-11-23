@@ -301,6 +301,44 @@ export function sirtStep(st, ser, budgetMs = Infinity, now = () => Date.now()) {
 }
 
 // --------------------------------------------------------------- views and measurements
+// the volume seen from any direction: rays along the view axis after turning it by yaw (about y) then pitch (about
+// x), degrees; the brightest voxel on each ray (mip) or their sum (a projection). Trilinear samples, out × out
+// pixels, one sample per voxel along the ray; everything outside the cube is empty. At yaw = pitch = 0 the view
+// is along z (the beam), x across and y down, as in the XY slice.
+export function render3D(vol, N, yawDeg = 0, pitchDeg = 0, { mode = 'mip', out = N } = {}) {
+  const a = (yawDeg * Math.PI) / 180, b = (pitchDeg * Math.PI) / 180, ca = Math.cos(a), sa = Math.sin(a), cb = Math.cos(b), sb = Math.sin(b);
+  // screen axes u (right), v (down) and the ray direction w, in volume coordinates: R = Ry(yaw) · Rx(pitch)
+  const u = [ca, 0, -sa], v = [sa * sb, cb, ca * sb], w = [sa * cb, -sb, ca * cb];
+  const img = new Float32Array(out * out), c = (N - 1) / 2, half = (Math.sqrt(3) * N) / 2, sc = N / out;
+  const at = (x, y, z) => {
+    const i = Math.floor(x), j = Math.floor(y), k = Math.floor(z);
+    if (i < 0 || j < 0 || k < 0 || i >= N - 1 || j >= N - 1 || k >= N - 1) return 0;
+    const fx = x - i, fy = y - j, fz = z - k, o = i + N * (j + N * k), NN = N * N;
+    const c00 = vol[o] * (1 - fx) + vol[o + 1] * fx, c10 = vol[o + N] * (1 - fx) + vol[o + N + 1] * fx;
+    const c01 = vol[o + NN] * (1 - fx) + vol[o + NN + 1] * fx, c11 = vol[o + NN + N] * (1 - fx) + vol[o + NN + N + 1] * fx;
+    return (c00 * (1 - fy) + c10 * fy) * (1 - fz) + (c01 * (1 - fy) + c11 * fy) * fz;
+  };
+  const steps = Math.ceil(2 * half);
+  for (let py = 0; py < out; py++) for (let px = 0; px < out; px++) {
+    const su = (px + 0.5) * sc - N / 2, sv = (py + 0.5) * sc - N / 2;
+    const ox = c + su * u[0] + sv * v[0], oy = c + su * u[1] + sv * v[1], oz = c + su * u[2] + sv * v[2];
+    let acc = mode === 'mip' ? -Infinity : 0, any = false;
+    for (let t = 0; t < steps; t++) {
+      const d = t - half, x = ox + d * w[0], y = oy + d * w[1], z = oz + d * w[2];
+      if (x < 0 || y < 0 || z < 0 || x > N - 1 || y > N - 1 || z > N - 1) continue;
+      const val = at(x, y, z); any = true;
+      if (mode === 'mip') { if (val > acc) acc = val; } else acc += val;
+    }
+    img[px + out * py] = any ? acc : 0;
+  }
+  return img;
+}
+// the view direction's frame (screen right u, down v, ray w) for the same yaw and pitch, to draw the box and axes
+export function viewFrame3D(yawDeg = 0, pitchDeg = 0) {
+  const a = (yawDeg * Math.PI) / 180, b = (pitchDeg * Math.PI) / 180, ca = Math.cos(a), sa = Math.sin(a), cb = Math.cos(b), sb = Math.sin(b);
+  return { u: [ca, 0, -sa], v: [sa * sb, cb, ca * sb], w: [sa * cb, -sb, ca * cb] };
+}
+
 // orthoslices through (ix, iy, iz): XY (top view), XZ and YZ (along the beam: where the missing wedge stretches)
 export function orthoslices(vol, N, ix = N >> 1, iy = N >> 1, iz = N >> 1) {
   const xy = new Float32Array(N * N), xz = new Float32Array(N * N), yz = new Float32Array(N * N);

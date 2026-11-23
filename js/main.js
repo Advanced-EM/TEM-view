@@ -6,7 +6,7 @@ import { VR } from './vr.js';
 import { modeInfo, changeText, dataRows } from './explain.js';
 import { renderComponent } from './components.js';
 import * as N from './narration.js';
-import { DISPLAY, KEYS, family } from './registry.js';
+import { DISPLAY, KEYS, family, isMode } from './registry.js';
 import { defaultState, SESSION_KEYS, CORR_RANGE } from './state.js';
 import { toSession, readSession, isSession } from './session.js';
 import { footprintFor, fmtBytes, fmtTime, PLAN_FIELDS, PLAN_KINDS } from './footprint.js';
@@ -177,7 +177,7 @@ function renderObsPick(el) {
 // ---------------------------------------------------------------- calibration of the kinetics (insitu-cal.js)
 let calFit = null; // the last fit of the user's series: { rows, model, col, profile }
 const escH = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
-const pct = (u) => { const v = 100 * u; return `${v < 1 ? v.toPrecision(1) : v.toFixed(0)} %`; };
+const pct = (u) => { const v = 100 * u; return v >= 100 ? `× ${(1 + u).toFixed(1)}` : `${v < 1 ? v.toPrecision(1) : v.toFixed(0)} %`; }; // large (log-scale) uncertainties as a factor
 const shortRef = (d) => (d?.ref ? `${d.ref.split(',')[0].split(' ')[0]} ${d.ref.match(/(19|20)\d\d/)?.[0] ?? ''}`.trim() : d?.title ?? '');
 function pickFile(accept, then) {
   const inp = document.createElement('input');
@@ -200,9 +200,9 @@ function renderCalib(el) {
     <p class="note">Still at trend, to calibrate with your own data: ${trend.join(', ')}.</p>
     <div class="row"><label>Your own measurements (the digital twin)</label></div>
     <p class="note">Set up the experiment as you ran it (cell, precursor, gas, holder, timeline), download the template, put your measured values in it (t_s and the observable columns; T_K, if present, drives the model), then fit.</p>
-    <div class="row"><label>Parameters to fit</label></div><input class="calKeys" type="text" placeholder="suggested from your columns, e.g. sinter_A, sinter_Ea" value="${escH(keys)}">
+    <div class="row"><label>Parameters to fit</label></div><input class="calKeys" type="text" placeholder="empty: suggested from your columns (e.g. sinter_A, sinter_Ea)" value="${escH(keys)}">
     <div class="ctl buttons"><button class="btn calTpl">Template CSV</button><button class="btn calFit">Fit my series…</button><button class="btn calLoad">Load profile…</button>${user ? '<button class="btn calSave">Save my profile</button>' : ''}</div>
-    ${calFit ? `<canvas class="ivplot calplot" width="560" height="200" aria-label="Your measured series against the calibrated model"></canvas><p class="note">${calFitNote()}</p>` : ''}`;
+    ${calFit ? `<canvas class="ivplot calplot" width="560" height="220" aria-label="Your measured series against the calibrated model"></canvas><p class="note">${calFitNote()}</p>` : ''}`;
   el.querySelector('.calSel').addEventListener('change', (e) => { S.calib = e.target.value; ICAL.syncCalibration(S); sim.invalidate('env'); refreshControls(); });
   el.querySelector('.calKeys').addEventListener('input', (e) => { el.dataset.keys = e.target.value; });
   el.querySelector('.calTpl').addEventListener('click', () => download(new Blob([ICAL.templateCSV(S)], { type: 'text/csv' }), `tem-view-series-template-${stamp()}.csv`));
@@ -237,7 +237,7 @@ function renderCalib(el) {
 }
 function calFitNote() {
   const f = calFit.profile.fit, p = calFit.profile.params;
-  return `Fitted ${calFit.keys.map((k) => `${k} = ${(+p[k].v).toPrecision(3)} ± ${pct(p[k].unc)}`).join(', ')} to ${f.points} points (${calFit.cols.join(', ')}); reduced χ² ${f.reduced_chi2}${f.reduced_chi2 > 3 ? ': the model does not describe these data well (or the σ is too small)' : ''}. Applied as “Mine”; it saves with the session. Points: your data; line: the calibrated model.`;
+  return `Fitted ${calFit.keys.map((k) => `${k} = ${(+p[k].v).toPrecision(3)} ± ${pct(p[k].unc)}`).join(', ')} to ${f.points} points (${calFit.cols.join(', ')}); reduced χ² ${f.reduced_chi2}${f.points < 3 * calFit.keys.length ? `: too few points to judge the fit (${f.points} for ${calFit.keys.length} parameter${calFit.keys.length > 1 ? 's' : ''}; aim for at least ${3 * calFit.keys.length})` : f.reduced_chi2 > 3 ? ': the model does not describe these data well (or the σ is too small)' : ''}. Applied as “Mine”; it saves with the session. Points: your data; line: the calibrated model.`;
 }
 function drawCalFit(cv) {
   const g = cv.getContext('2d'), W = cv.width, H = cv.height, { rows, model, col } = calFit, pad = 34;
@@ -338,10 +338,10 @@ function liquidNote() {
   else parts.push(`Each window bows ${(c.w * 1e6).toFixed(2)} µm at its centre (stress ${(c.stress / 1e9).toFixed(2)} GPa; it bursts at ${(c.burstP / 1e5).toFixed(1)} bar). ${c.onWin ? `Liquid here: ${(c.thicknessA / 1e4).toFixed(2)} µm (spacer ${S.lcGap} nm + bulge).` : 'The stage is on the silicon frame: move onto the window.'}`);
   const rn = LIQ.radiolysisNow(S, S.kV, L?.res ?? 0), sat = rn.sat, thr = LIQ.bubbleThresholdGy(S, S.kV) / LIQ.doseRateGy(1, S.kV);
   const fill = LIQ.reservoirRate(S, S.kV, L?.res ?? 0, n?.tA), toSat = fill > 0 && (L?.res ?? 0) < sat ? (sat - (L?.res ?? 0)) / fill : Infinity;
-  parts.push(`Radiolysis (${(rn.D / 1e6).toPrecision(2)} MGy/s): H₂ in the beam ${(1e6 * rn.ss.H2).toPrecision(2)} µM, ${(100 * rn.ss.H2 / sat).toFixed(0)} % of its solubility; pH ${(-Math.log10(rn.ss.Hp)).toFixed(1)}, H₂O₂ ${(1e6 * rn.ss.H2O2).toPrecision(2)} µM.${c.pockets ? ' The pocket is closed: its products stay in it.' : ` The rest of the cell holds ${(1e6 * (L?.res ?? 0)).toPrecision(2)} µM H₂${S.lcClass === 'sinxFlow' ? ', flushed by the flow' : isFinite(toSat) ? `, saturated in ~${toSat > 120 ? `${(toSat / 60).toFixed(0)} min` : `${toSat.toFixed(0)} s`} at this dose rate` : ''}. Bubbles at once above ${thr.toPrecision(2)} e⁻/Å²/s.`}${(L?.ratio ?? 0) > 1 ? ` Supersaturated: bubbles form (${L?.bubbles.length ?? 0} in view).` : ''}${S.lcPrecursor ? ` The particles have grown ${(L?.grow ?? 0).toFixed(1)} Å.` : ''} [${KIN.LABEL_TEXT[KIN.PROCESS.radiolysis.label]}${S.lcPrecursor ? `; growth: ${KIN.LABEL_TEXT[KIN.PROCESS.growth.label]}` : ''}]`);
+  parts.push(`Radiolysis (${+(rn.D / 1e6).toPrecision(2)} MGy/s): H₂ in the beam ${+(1e6 * rn.ss.H2).toPrecision(2)} µM, ${(100 * rn.ss.H2 / sat).toFixed(0)} % of its solubility; pH ${(-Math.log10(rn.ss.Hp)).toFixed(1)}, H₂O₂ ${+(1e6 * rn.ss.H2O2).toPrecision(2)} µM.${c.pockets ? ' The pocket is closed: its products stay in it.' : ` The rest of the cell holds ${+(1e6 * (L?.res ?? 0)).toPrecision(2)} µM H₂${S.lcClass === 'sinxFlow' ? ', flushed by the flow' : isFinite(toSat) ? `, saturated in ~${toSat > 120 ? `${(toSat / 60).toFixed(0)} min` : `${toSat.toFixed(0)} s`} at this dose rate` : ''}. Bubbles at once above ${+thr.toPrecision(2)} e⁻/Å²/s.`}${(L?.ratio ?? 0) > 1 ? ` Supersaturated: bubbles form (${L?.bubbles.length ?? 0} in view).` : ''}${S.lcPrecursor ? ` The particles have grown ${(L?.grow ?? 0).toFixed(1)} Å.` : ''} [${KIN.LABEL_TEXT[KIN.PROCESS.radiolysis.label]}${S.lcPrecursor ? `; growth: ${KIN.LABEL_TEXT[KIN.PROCESS.growth.label]}` : ''}]`);
   if (S.lcPrecursor) {
     const nt = LIQ.nucleationThreshold(S, S.kV), ind = LIQ.induction(S, S.kV), Mt = KIN.metalOf(S), [ck] = Mt.nuc;
-    parts.push(`Nucleation (${Mt.label.toLowerCase()}): none below ${isFinite(nt) ? `${nt.toPrecision(2)} e⁻/Å²/s` : 'any dose rate here'}; ${isFinite(ind.t_s) ? `at this dose rate after ${ind.t_s.toPrecision(2)} s (${ind.dose_e_A2.toPrecision(3)} e⁻/Å²)` : 'not at this dose rate'}. ${L?.nucleated != null ? `Nucleated at ${L.nucleated.toFixed(1)} s.` : `Reduced metal at ${(100 * (L?.supersat ?? 0)).toFixed(0)} % of what it takes.`} [${KIN.P[ck].label === 'calibrated' ? `calibrated: ${shortRef(KIN.CAL.profile?.datasets?.find((d) => d.id === KIN.CAL.profile.params[ck]?.dataset))}` : KIN.LABEL_TEXT.trend}]`);
+    parts.push(`Nucleation of ${Mt.name} (from ${Mt.salt}): none below ${isFinite(nt) ? `${+nt.toPrecision(2)} e⁻/Å²/s` : 'any dose rate here'}; ${isFinite(ind.t_s) ? `at this dose rate after ${+ind.t_s.toPrecision(2)} s (${+ind.dose_e_A2.toPrecision(3)} e⁻/Å²)` : 'not at this dose rate'}. ${L?.nucleated != null ? `Nucleated at ${L.nucleated.toFixed(1)} s.` : `Reduced metal at ${(100 * (L?.supersat ?? 0)).toFixed(0)} % of what it takes.`} [${KIN.P[ck].label === 'calibrated' ? `calibrated: ${shortRef(KIN.CAL.profile?.datasets?.find((d) => d.id === KIN.CAL.profile.params[ck]?.dataset))}` : KIN.LABEL_TEXT.trend}]`);
   }
   if (n?.tA > 0) {
     const tb = LIQ.temBlur(n.tA, n.below, S.kV, { Cc: (S.profile.Cc ?? 1.4) * 1e7, lambdaA: 10 * P.imfp(S.kV, 7.4) });
@@ -402,39 +402,6 @@ function importNote() {
 }
 document.addEventListener('drop', (e) => { const f = e.dataTransfer?.files?.[0]; if (f && /\.(npz|zip)$/i.test(f.name) && /result/i.test(f.name)) { e.preventDefault(); f.arrayBuffer().then((b) => loadResults(b, f.name)); } });
 
-// the ptychographic tomography status
-function ptNote() {
-  const A = sim.pt, o = A?.out;
-  if (!A) return '';
-  const lam = P.wavelength(S.kV), dr = lam / (S.ptAlpha * 1e-3) ** 2, lr = lam / (2 * S.ptAlpha * 1e-3), parts = [];
-  parts.push(`Browser preview: a 16 Å cube of atoms (two heavy atoms stacked 8 Å apart along the beam), a 24 × 24 scan per tilt, 4 slices, from a flat start. One view resolves ≈ ${lr.toFixed(2)} Å laterally but only ≈ ${dr.toFixed(0)} Å in depth (λ/α²), more than the cube is deep.`);
-  if (A.full && !A.done) parts.push(`Tilt ${Math.min((o.t ?? 0) + 1, o.tilts ?? S.ptTilts)} of ${o.tilts ?? S.ptTilts}: ${o.stage === 'data' ? 'scanning' : o.stage === 'recon' ? 'MS-ePIE' : 'fusing'}…`);
-  const st = o?.stats;
-  if (st?.atom) parts.push(`Depth spread of the isolated atom: ${st.atom.single.z.toFixed(1)} Å from the 0° view, ${st.atom.fused.z.toFixed(1)} Å from ${o.tilts} tilts (the atom itself: ${st.atom.truth.z.toFixed(1)} Å). The stacked pair is ${st.pair.fused > 0.5 ? 'resolved' : 'not resolved'} after fusion (dip ${Math.round(100 * st.pair.fused)} %), ${st.pair.single > 0.5 ? 'and' : 'but not'} from one view (${Math.round(100 * st.pair.single)} %).`);
-  else if (!A.full) parts.push('Press Scan to record the tilts (about a minute).');
-  parts.push('The full problem (joint multi-tilt reconstruction, mixed-state probes, position correction) runs on a GPU or HPC: the export prefills it.');
-  return parts.join(' ');
-}
-// the preview's volumes as MRC files, and the full-scale job (Tier 2/3) with its parameters prefilled
-async function exportPT() {
-  const A = sim.pt, o = A?.out;
-  if (!o?.fused) { $('#change').hidden = false; $('#change').innerHTML = '<small>Nothing to export</small><p>Scan the tilts and reconstruct first.</p>'; return; }
-  const N = o.N, files = [];
-  for (const [name, v] of [['fused.mrc', o.fused], ['single-tilt.mrc', o.single], ['object.mrc', o.truth]]) files.push({ name, bytes: TOMO.mrc(v, N, N, N, o.dx, { label: `TEM-view ptycho-tomography ${name}` }) });
-  const f = footprintFor(S, sim), job = {
-    format: 'temview-ptychotomo/1', note: 'Full-scale parameters prefilled from the browser session; the preview used a 24² scan, 4 slices and the listed tilts.',
-    beam: { kV: S.kV, wavelength_A: +P.wavelength(S.kV).toFixed(6), convergence_semiangle_mrad: S.ptAlpha },
-    scan: { positions: [f.plan.scan, f.plan.scan], detector_px: [f.plan.det, f.plan.det], dwell_us: f.plan.dwell_us },
-    tilts: { count: f.plan.tilts, max_deg: S.ptMax, preview_angles_deg: o.angles, axis: 'x (image rows)' },
-    reconstruction: { method: 'joint multislice ePIE over all tilts', slices: f.plan.slices, iterations: f.plan.iters, mixed_state_probes: 4, position_correction: true, engines: ['py4DSTEM', 'PtyRAD'] },
-    dose_total_e_per_A2: S.ptDose, footprint: { raw_bytes: Math.round(f.raw.bytes), tier: f.badge.tier, reason: f.badge.reason },
-    preview: o.stats ? { depth_fwhm_single_A: o.stats.atom.single.z, depth_fwhm_fused_A: o.stats.atom.fused.z, pair_dip_single: o.stats.pair.single, pair_dip_fused: o.stats.pair.fused } : null,
-  };
-  files.push({ name: 'ptychotomo-job.json', bytes: new TextEncoder().encode(JSON.stringify(job, null, 2)) });
-  files.push({ name: 'README.txt', bytes: new TextEncoder().encode(`TEM-view ptychographic tomography (browser preview)\n${o.tilts} tilts to ±${S.ptMax}°, ${S.kV} kV, α = ${S.ptAlpha} mrad, ${S.ptDose.toExponential(1)} e⁻/Å² in all\nfused.mrc: the volume from all tilts (${S.ptFusion}); single-tilt.mrc: the 0° view alone; object.mrc: the test object (phase per voxel), ${N}³ voxels of ${o.dx} Å\nptychotomo-job.json: the full-scale job (Tier 2/3) with the session's parameters.\nSimulated, qualitative data for teaching and pipeline tests.\n`) });
-  const { zip } = await import('./npy.js');
-  download(new Blob([zip(files)], { type: 'application/zip' }), `tem-view-ptychotomo-${stamp()}.zip`);
-}
 // the SPA status and what the numbers mean
 function spaNote() {
   const A = sim.spa, o = A?.out;
@@ -558,7 +525,7 @@ const logMap = (min, max) => ({ to: (v) => (Math.log(v / min) / Math.log(max / m
 const NOT_RONCH = 'tem stem 4d diff eds eels cbed oah ilh';
 const TILTABLE = 'tem stem 4d diff eds eels cbed oah ilh ltem lstem';
 // the atomic-scale specimens and the objective lens: not in the Lorentz modes (objective off, magnetic specimens)
-const NOT_LOR = 'tem stem 4d diff cbed eds eels ronch oah ilh ed3d tomo spa ptychotomo';
+const NOT_LOR = 'tem stem 4d diff cbed eds eels ronch oah ilh ed3d tomo spa';
 const LOR = 'ltem lstem';
 // acquisition plan (footprint.js): the current technique's plan, and the chip options for one field
 const curPlan = () => { try { return footprintFor(S, sim).plan; } catch { return {}; } };
@@ -587,6 +554,7 @@ const CONTROLS = [
   { buttons: [['restore', 'Fresh as-implanted sample']], modes: NOT_LOR, show: () => !!sim.spec.reset },
   { modes: NOT_LOR, pFn: () => { const ij = ML.nearest(S.cx / 1e4, S.cy / 1e4); return `Stage at (${(S.cx / 1e4).toFixed(3)}, ${(S.cy / 1e4).toFixed(3)}) µm: ${ij ? `particle (${ij[0]}, ${ij[1]}) of 1000 × 1000, pen block (${Math.floor(ij[0] / 100)}, ${Math.floor(ij[1] / 100)}). ${ML.describe(ML.particle(...ij))}` : 'outside the library'}. Thickness is the Si₃N₄ membrane. Script a screen with goto(i, j) in Python.`; }, show: () => S.spec === 'lib' },
   { modes: NOT_LOR, pFn: () => `${sim.spec.name.replace(/[<>&]/g, '')}. Tilt the stage to turn it; the thickness setting is the carbon support underneath.`, show: () => S.spec === 'xyz' },
+  { modes: NOT_LOR, pFn: () => `${sim.spec.name}: the particle single-particle cryo-EM uses, as a structure for every technique. Tilt the stage to turn it (±30°); the thickness setting is the ice. Its pseudo-atoms carry the shape and mass to ~5 Å, not an atomic model.`, show: () => !!sim.spec.particle },
   { buttons: [['libPrev', '← Particle'], ['libNext', 'Particle →'], ['libRow', 'Next row']], modes: NOT_LOR, show: () => S.spec === 'lib' },
   { buttons: [['libRand', 'Random particle'], ['libAuCo', 'Au–Co, phase-separated'], ['libChip', 'Whole chip']], modes: NOT_LOR, show: () => S.spec === 'lib' },
   { chips: 'holder', label: 'Specimen holder', opts: Object.entries(HOLDERS).map(([k, v]) => [k, v.short]) },
@@ -597,6 +565,7 @@ const CONTROLS = [
     fmt: (v) => (winKey() === 'graphene' ? `${Math.round(v)} layer${Math.round(v) > 1 ? 's' : ''} (${(Math.round(v) * 0.335).toFixed(2)} nm)` : `${(+v).toFixed(0)} nm`) },
   { pFn: () => envNote(), show: () => S.envCell === 'none' },
   // the liquid cell (liquid.js)
+  { liqMap: true, show: () => S.envCell === 'liquid' && S.lcClass !== 'graphene' },
   { chips: 'lcClass', label: 'Liquid cell', small: true, show: () => S.envCell === 'liquid', opts: [['sinx', 'SiNₓ static'], ['sinxFlow', 'SiNₓ flow'], ['graphene', 'Graphene pockets']] },
   { slider: 'lcA', label: 'Window short side', min: 10, max: 500, step: 5, fmt: (v) => `${v} µm`, show: () => (S.envCell === 'liquid' && S.lcClass !== 'graphene') || (S.envCell === 'gas' && S.gcGeom !== 'open') },
   { slider: 'lcB', label: 'Window long side', min: 10, max: 2000, step: 10, fmt: (v) => `${v} µm`, show: () => (S.envCell === 'liquid' && S.lcClass !== 'graphene') || (S.envCell === 'gas' && S.gcGeom !== 'open') },
@@ -650,9 +619,9 @@ const CONTROLS = [
   { calib: true, show: () => S.envCell !== 'none' || S.bsOn || S.holder === 'heat' },
   { slider: 'tempSet', label: 'Temperature setpoint', dyn: () => { const H = HOLDERS[S.holder]; return { min: H.min, max: H.max, step: H.step, log: H.log }; }, fmt: (v) => fmtT(v), show: () => S.holder !== 'room' },
   { pFn: () => `Specimen at ${fmtT(sim.temp())}${S.holder === 'room' ? '' : ` (setpoint ${fmtT(S.tempSet)}; the grid runs ${S.holder === 'heat' ? 'about 1 % hotter than the reading' : 'warmer than the holder tip'} and fluctuates by ±${HOLDERS[S.holder].jitter} K)`}. Drift ${sim.driftSpeed().toFixed(2)} Å/s.` },
-  { buttons: [['newGrid', 'Load a fresh grid']], modes: NOT_LOR, show: () => S.spec === 'bio' },
-  { modes: NOT_LOR, p: 'Thickness here is the ice layer. Proteins scatter only slightly more than the ice around them, so they are weak phase objects: use 1–3 µm underfocus in TEM, or the Zernike phase plate near focus.', show: () => S.spec === 'bio' },
-  { modes: NOT_LOR, pFn: () => (sim.ice().t <= 0 ? 'The vitreous ice has sublimed in the vacuum and the proteins have dried out. Cool the grid below ~140 K and load a fresh grid.' : sim.devitrified ? 'The ice has crystallized (it went above ~140 K): crystallites now diffract and add patchy contrast. Only a fresh grid brings vitreous ice back.' : ''), show: () => S.spec === 'bio' && (sim.ice().t <= 0 || sim.devitrified) },
+  { buttons: [['newGrid', 'Load a fresh grid']], modes: NOT_LOR, show: () => !!sim.spec.bio },
+  { modes: NOT_LOR, p: 'Thickness here is the ice layer. Proteins scatter only slightly more than the ice around them, so they are weak phase objects: use 1–3 µm underfocus in TEM, or the Zernike phase plate near focus.', show: () => !!sim.spec.bio },
+  { modes: NOT_LOR, pFn: () => (sim.ice().t <= 0 ? 'The vitreous ice has sublimed in the vacuum and the proteins have dried out. Cool the grid below ~140 K and load a fresh grid.' : sim.devitrified ? 'The ice has crystallized (it went above ~140 K): crystallites now diffract and add patchy contrast. Only a fresh grid brings vitreous ice back.' : ''), show: () => !!sim.spec.bio && (sim.ice().t <= 0 || sim.devitrified) },
   { slider: 'thick', label: 'Thickness', min: 3, max: 150, step: 1, fmt: (v) => `${v} nm`, ends: ['thin', '', 'thick'], modes: NOT_RONCH, show: () => S.spec !== 'gr' },
   { p: 'Graphene is one atom (0.335 nm) thick, so there is no thickness to set. Above ~86 kV the beam knocks carbon atoms out: watch in TEM or STEM at 200–300 kV, then compare 60–80 kV.', modes: NOT_RONCH, show: () => S.spec === 'gr' },
   { buttons: [['restore', 'Restore pristine graphene']], modes: 'tem stem', show: () => S.spec === 'gr' },
@@ -678,7 +647,7 @@ const CONTROLS = [
   { sec: 'The lenses' },
   { chips: 'corrector', modes: NOT_LOR, opts: [[false, 'Uncorrected'], [true, 'Aberration corrector']] },
   { slider: 'cs', label: 'Spherical aberration Cₛ', modes: NOT_LOR, dyn: () => S.corrector ? { key: 'csCor', min: -CORR_RANGE.cs, max: CORR_RANGE.cs, step: 0.5, fmt: (v) => `${v} µm` } : { key: 'csUnc', min: 0.5, max: 2.5, step: 0.05, fmt: (v) => `${v.toFixed(2)} mm` } },
-  { slider: 'df', label: 'Defocus', dyn: () => (S.spec === 'hesi' ? { min: -1500, max: 1500, step: 10 } : S.corrector ? { min: -CORR_RANGE.df, max: CORR_RANGE.df, step: 0.1 } : S.spec === 'bio' ? { min: -4000, max: 500, step: 10 } : { min: -150, max: 150, step: 1 }), fmt: (v) => `${v > 0 ? '+' : ''}${v.toFixed(1)} nm`, ends: ['under', 'focus', 'over'], modes: 'tem stem 4d eds eels ronch oah ilh' },
+  { slider: 'df', label: 'Defocus', dyn: () => (S.spec === 'hesi' ? { min: -1500, max: 1500, step: 10 } : S.corrector ? { min: -CORR_RANGE.df, max: CORR_RANGE.df, step: 0.1 } : !!sim.spec.bio ? { min: -4000, max: 500, step: 10 } : { min: -150, max: 150, step: 1 }), fmt: (v) => `${v > 0 ? '+' : ''}${v.toFixed(1)} nm`, ends: ['under', 'focus', 'over'], modes: 'tem stem 4d eds eels ronch oah ilh' },
   { buttons: [['optfocus', 'Optimal focus']], modes: 'tem stem 4d eds eels ronch oah ilh' },
   { chips: 'objAp', label: 'Objective aperture', modes: 'tem', opts: [['none', 'Open'], ['40', '40 µm'], ['20', '20 µm'], ['10', '10 µm'], ['df', 'Dark field'], ['zpp', 'Zernike phase plate']] },
   { slider: 'stigX', stig: 0, label: 'Objective stigmator X', min: -60, max: 60, step: 0.5, fmt: (v) => `${v.toFixed(1)} nm`, modes: 'tem stem 4d eds eels oah ilh' },
@@ -752,19 +721,11 @@ const CONTROLS = [
   { slider: 'edDoseRate', label: 'Dose rate', min: 0.001, max: 2, log: true, fmt: (v) => `${(+v).toPrecision(2)} e⁻/Å²/s`, modes: 'ed3d', ends: ['low dose', '', 'fast damage'] },
   { slider: 'edAxis', label: 'Rotation axis (in the image)', min: 0, max: 180, step: 1, fmt: (v) => `${v}°`, modes: 'ed3d' },
   { chips: 'edMerge', label: 'Merge equivalent reflections', small: true, modes: 'ed3d', opts: [['friedel', 'Friedel pairs'], ['laue', 'Cubic Laue class']], show: () => sim.ed?.cubic !== false && !sim.ed?.diffuse },
-  { chips: 'edSlice', label: 'Reciprocal-space layer', small: true, modes: 'ed3d', opts: [['hk0', 'hk0'], ['h0l', 'h0l'], ['0kl', '0kl']] },
-  { slider: 'edLayer', label: 'Layer index', min: -3, max: 3, step: 1, fmt: (v) => `${v}`, modes: 'ed3d' },
+  { chips: 'edSlice', label: 'Reciprocal space', small: true, modes: 'ed3d', opts: [['hk0', 'hk0'], ['h0l', 'h0l'], ['0kl', '0kl'], ['3d', '3D · drag to turn']] },
+  { slider: 'edLayer', label: 'Layer index', min: -3, max: 3, step: 1, fmt: (v) => `${v}`, modes: 'ed3d', show: () => S.edSlice !== '3d' },
+  { slider: 'edYaw', label: 'Turn about the vertical', min: -180, max: 180, step: 1, fmt: (v) => `${v}°`, modes: 'ed3d', show: () => S.edSlice === '3d' },
+  { slider: 'edPitch', label: 'Turn about the horizontal', min: -90, max: 90, step: 1, fmt: (v) => `${v}°`, modes: 'ed3d', show: () => S.edSlice === '3d' },
   { pFn: () => { const e = sim.ed; if (!e || e.none) return 'Choose a crystal (SrTiO₃, Au, Si or a perovskite), or load any structure as XYZ or CIF: its lattice is found from the atoms. Set the orientation with the zone axis, or with Align to zone in the structure preview.'; if (e.diffuse) return `${e.series.plan.frames} frames over ${e.series.plan.range}°. No lattice was found in this structure, so the frames show its diffuse scattering (a molecule or amorphous material): there are no reflections to index.`; if (e.lattice) return `Lattice found from the atoms: ${e.name.split('· ')[1]} (${e.lattice.basis.length} atoms per cell, ${e.refl.length} reflections to ${(1 / e.gMax).toFixed(2)} Å). Indices refer to this primitive cell; equivalents merged as Friedel pairs. ${e.series.plan.frames} frames of ${e.series.plan.wedge.toFixed(2)}°: ${(100 * e.full.completeness).toFixed(1)} % complete over ${e.series.plan.range}°.`; const p = e.series.plan, f = e.full; return `${p.frames} frames of ${p.wedge.toFixed(2)}° over ${p.range}°: ${p.time_s.toFixed(0)} s, ${p.totalDose.toPrecision(3)} e⁻/Å² in total${Number.isFinite(e.o.Dc) ? ` (critical dose ≈ ${e.o.Dc.toFixed(0)} e⁻/Å²)` : ''}. Detector edge ${(1 / e.gMax).toFixed(2)} Å. Full series: ${(100 * f.completeness).toFixed(1)} % complete${f.dLimit ? `, ⟨I/σ⟩ ≥ 2 to ${f.dLimit.toFixed(2)} Å` : ''}. With Friedel symmetry only, a range Φ covers Φ/180° of reciprocal space; more range, or a higher-symmetry crystal, fills the rest.`; }, modes: 'ed3d' },
-  { sec: 'Ptychographic tomography · browser preview', modes: 'ptychotomo' },
-  { buttons: [['ptCollect', 'Scan the tilts and reconstruct'], ['ptExport', 'Export volumes + full-scale job']], modes: 'ptychotomo' },
-  { chips: 'ptView', label: 'View', small: true, modes: 'ptychotomo', opts: [['xz', 'XZ (depth)'], ['xy', 'XY (top)'], ['slices', 'Per-tilt slices']] },
-  { chips: 'ptTilts', label: 'Tilts', small: true, modes: 'ptychotomo', dynOpts: () => [[1, '1 (no tomography)'], [3, '3'], [5, '5'], [7, '7'], [9, '9']].filter(([v]) => v <= limitCap('ptTilts') || v === S.ptTilts) },
-  { slider: 'ptMax', label: 'Maximum tilt', min: 10, max: 75, step: 1, fmt: (v) => `±${v}°`, modes: 'ptychotomo' },
-  { slider: 'ptAlpha', label: 'Probe semi-angle α', min: 10, max: 20, step: 0.5, fmt: (v) => `${v} mrad · depth resolution of one view ≈ ${Math.round(P.wavelength(S.kV) / (v * 1e-3) ** 2)} Å`, modes: 'ptychotomo' },
-  { slider: 'ptDose', label: 'Dose for all tilts', min: 1e3, max: 1e7, log: true, fmt: (v) => `${(+v).toExponential(1)} e⁻/Å²`, modes: 'ptychotomo' },
-  { slider: 'ptIters', label: 'MS-ePIE iterations per tilt', min: 2, max: 30, step: 1, dyn: () => ({ max: Math.min(30, limitCap('ptIters')) }), fmt: (v) => `${v}`, modes: 'ptychotomo' },
-  { chips: 'ptFusion', label: 'Fusion', small: true, modes: 'ptychotomo', opts: [['sirt', 'Joint SIRT on the slabs'], ['average', 'Average (back-projection)']] },
-  { pFn: () => ptNote(), modes: 'ptychotomo' },
   { sec: 'Single-particle cryo-EM', modes: 'spa' },
   { buttons: [['spaCollect', 'Collect and process'], ['spaExport', 'Export maps + classes (.mrc)']], modes: 'spa' },
   { chips: 'spaSample', label: 'Particle', small: true, modes: 'spa', opts: [['apo', 'Apoferritin · 480 kDa, octahedral'], ['bgal', 'β-Galactosidase · 465 kDa, D2']] },
@@ -793,8 +754,11 @@ const CONTROLS = [
   { chips: 'tomoN', label: 'Volume', small: true, modes: 'tomo', dynOpts: () => [[64, '64³'], [96, '96³'], [128, '128³'], ...(sim.compute?.gpu || sim.remote || S.tomoN === 256 ? [[256, sim.remote ? '256³' : '256³ (GPU)']] : [])].filter(([v]) => v <= limitCap('tomoN') || v === S.tomoN) },
   { chips: 'gpu', label: 'Compute on', small: true, modes: 'tomo 4d', opts: [['auto', 'GPU (WebGPU)'], ['off', 'CPU (JavaScript)']], show: () => !!sim.compute?.gpu },
   { pFn: () => computeNote('tomo'), modes: 'tomo' },
-  { chips: 'tomoView', label: 'View', small: true, modes: 'tomo', opts: [['series', 'Tilt series'], ['xy', 'XY'], ['xz', 'XZ'], ['yz', 'YZ (across the axis)']] },
-  { slider: 'tomoDepth', label: 'Slice position', min: -0.5, max: 0.5, step: 0.01, fmt: (v) => `${(+v * 100).toFixed(0)} % of the box`, modes: 'tomo', show: () => S.tomoView !== 'series' },
+  { chips: 'tomoView', label: 'View', small: true, modes: 'tomo', opts: [['series', 'Tilt series'], ['xy', 'XY'], ['xz', 'XZ'], ['yz', 'YZ (across the axis)'], ['3d', '3D · drag to turn']] },
+  { slider: 'tomoDepth', label: 'Slice position', min: -0.5, max: 0.5, step: 0.01, fmt: (v) => `${(+v * 100).toFixed(0)} % of the box`, modes: 'tomo', show: () => S.tomoView !== 'series' && S.tomoView !== '3d' },
+  { slider: 'tomoYaw', label: 'Turn about the vertical', min: -180, max: 180, step: 1, fmt: (v) => `${v}°`, modes: 'tomo', show: () => S.tomoView === '3d' },
+  { slider: 'tomoPitch', label: 'Turn about the horizontal', min: -90, max: 90, step: 1, fmt: (v) => `${v}°`, modes: 'tomo', show: () => S.tomoView === '3d' },
+  { chips: 'tomoRender', label: 'Rendering', small: true, modes: 'tomo', show: () => S.tomoView === '3d', opts: [['mip', 'Brightest voxel'], ['sum', 'Sum (a projection)']] },
   { pFn: () => { const T = sim.tomo; if (!T) return ''; const F = T.angles?.length ?? 0, st = T.stats; return `${F} projections from −${S.tomoMax}° to +${S.tomoMax}°. The holder cannot tilt to 90°, so a ${180 - 2 * S.tomoMax}° wedge of Fourier space is never measured and every feature is stretched along the beam by about ${T.pred?.toFixed(2)}× (a point; larger objects stretch less).${st?.meas ? ` Measured on the smallest beads: ${st.meas.toFixed(2)}×.` : ''} HAADF intensity grows with mass and thickness only, so its projections can be reconstructed; bright-field diffraction contrast changes with the tilt and breaks that.${T.o?.Dc ? ` This specimen is beam-sensitive (critical dose ≈ ${T.o.Dc.toFixed(0)} e⁻/Å²): it loses mass during the series, so the projections disagree.` : ''}`; }, modes: 'tomo' },
   { sec: 'Precession (PED)', modes: 'diff cbed 4d' },
   { toggles: [['pedOn', 'Precess the beam (hollow cone)']], modes: 'diff cbed 4d' },
@@ -999,6 +963,11 @@ function build() {
       el = document.createElement('div');
       el.className = 'ctl obspick';
       bound.push({ c, el });
+    } else if (c.liqMap) {
+      el = document.createElement('canvas');
+      el.className = 'ctl liqmap';
+      el.setAttribute('aria-label', 'The liquid cell window seen from above: liquid thickness and the stage position');
+      bound.push({ c, el });
     } else if (c.calib) {
       el = document.createElement('div');
       el.className = 'ctl calib';
@@ -1202,8 +1171,6 @@ function action(id, el) {
     sim.invalidate('magnet'); explainChange('lorReset');
   }
   if (id === 'edCollect') { sim.startED3D(); return; }
-  if (id === 'ptCollect') { sim.startPT(); return; }
-  if (id === 'ptExport') return exportPT();
   if (id === 'spaCollect') { sim.startSPA(); return; }
   if (id === 'spaExport') return exportSPA();
   if (id === 'tomoCollect') { sim.startTomo(); return; }
@@ -1347,7 +1314,6 @@ function updateDetectorHeader() {
     eels: ['Energy-filtered map', 'Electron energy-loss spectrum'],
     ed3d: ['Diffraction frame · rotation series', 'Reciprocal space · completeness by shell'],
     tomo: [`${S.tomoSignal === 'bf' ? 'BF-TEM' : 'HAADF-STEM'} tilt series · tomogram`, 'Across the tilt axis · missing wedge'],
-    ptychotomo: [{ xz: 'Depth section (XZ) · one view against all tilts', xy: 'Top section (XY)', slices: 'Per-tilt MS-ePIE phase slices' }[S.ptView] ?? 'Ptycho-tomography', 'Depth profile through the stacked atoms'],
     spa: [{ mic: 'Cryo-EM micrograph · picks', ctf: 'Power spectrum · CTF fit', classes: '2D class averages', map: '3D reconstruction' }[S.spaView] ?? 'Cryo-EM', 'FSC · angular distribution'],
     ronch: ['Ronchigram · direct electron detector', 'Aberration phase & budget'],
     oah: [`Off-axis hologram · ${({ holo: 'raw hologram', phase: 'reconstructed phase', amp: 'reconstructed amplitude', contour: 'phase contours' })[S.holoView]}`, 'Sideband selection & phase profile'],
@@ -1429,7 +1395,7 @@ function runOp(op) {
       else if (op.k === 'detPreset' && ['bf', 'abf', 'adf', 'haadf'].includes(op.v)) chip('detPreset', op.v);
       else if (op.k === 'eelsRange' && ['zlp', 'low', 'core', 'high'].includes(op.v)) { if (S.mode !== 'eels') setMode('eels'); chip('eelsRange', op.v); }
       break;
-    case 'nudge': { const st = S.corrector ? 2 : S.spec === 'bio' ? 100 : 10; set('df', +clamp(S.df + op.d * st, ...dfLimits()).toFixed(1), 'df'); break; }
+    case 'nudge': { const st = S.corrector ? 2 : !!sim.spec.bio ? 100 : 10; set('df', +clamp(S.df + op.d * st, ...dfLimits()).toFixed(1), 'df'); break; }
     case 'zoom': set('fov', +clamp(S.fov * op.f, 1.5, fovMax(S)).toFixed(2), 'fov'); break;
     case 'scale': set(op.k, +clamp(S[op.k] * op.f, 0.5, 20000).toFixed(2), op.k); break;
     case 'temp': {
@@ -1872,7 +1838,7 @@ function wire() {
   if (new URLSearchParams(location.search).has('drive')) drive.set(true);
   let drag = null;
   const rel = (e, cv) => { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top, r.width, r.height]; };
-  mainCv.addEventListener('pointerdown', (e) => { if (S.mode === 'ltem' || S.mode === 'lstem') return; drag = { x: e.clientX, y: e.clientY, cx: S.cx, cy: S.cy, tx: S.tiltX, ty: S.tiltY }; mainCv.setPointerCapture(e.pointerId); });
+  mainCv.addEventListener('pointerdown', (e) => { if (S.mode === 'ltem' || S.mode === 'lstem') return; drag = { x: e.clientX, y: e.clientY, cx: S.cx, cy: S.cy, tx: S.tiltX, ty: S.tiltY, yaw: S.tomoYaw, pitch: S.tomoPitch }; mainCv.setPointerCapture(e.pointerId); });
   mainCv.addEventListener('pointermove', (e) => {
     const [x, y, w, h] = rel(e, mainCv);
     if (S.mode === '4d' && sim.fd) {
@@ -1883,6 +1849,12 @@ function wire() {
     }
     if (!drag) return;
     const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    if (S.mode === 'tomo') { // the 3D view turns; other views have nothing to drag
+      if (S.tomoView !== '3d') return;
+      S.tomoYaw = Math.round(((drag.yaw + dx * 0.5 + 540) % 360) - 180); S.tomoPitch = Math.round(clamp(drag.pitch + dy * 0.5, -90, 90));
+      sim.version++; refreshControls(); return;
+    }
+    if (S.mode === 'ed3d' || S.mode === 'spa') return;
     if (S.mode === 'diff' || S.mode === 'ronch') {
       if (S.mode !== 'diff') return;
       S.tiltX = clamp(+(drag.tx - dx * 0.006).toFixed(2), -3, 3); S.tiltY = clamp(+(drag.ty - dy * 0.006).toFixed(2), -3, 3);
@@ -1893,7 +1865,7 @@ function wire() {
     S.cx = drag.cx - dx * sc; S.cy = drag.cy - dy * sc;
     sim.invalidate('stage');
   });
-  const end = () => { if (drag && S.mode !== 'diff' && S.mode !== '4d' && (drag.cx !== S.cx || drag.cy !== S.cy)) explainChange('stage'); drag = null; };
+  const end = () => { if (drag && !['diff', '4d', 'tomo', 'ed3d', 'spa'].includes(S.mode) && (drag.cx !== S.cx || drag.cy !== S.cy)) explainChange('stage'); drag = null; };
   mainCv.addEventListener('pointerup', end);
   mainCv.addEventListener('pointercancel', end);
   mainCv.addEventListener('pointerleave', () => { if (S.mode === '4d' && S.fdSel >= 0) { S.fdSel = -1; sim.version++; } });
@@ -1908,6 +1880,7 @@ function wire() {
   let sdrag = null;
   secCv.addEventListener('pointerdown', (e) => {
     const [x, y] = rel(e, secCv);
+    if (S.mode === 'ed3d' && S.edSlice === '3d') { sdrag = { rot: true, x: e.clientX, y: e.clientY, yaw: S.edYaw, pitch: S.edPitch }; secCv.setPointerCapture(e.pointerId); return; }
     if (S.mode === 'eds') {
       const L = R2.layout.eds;
       if (!L) return;
@@ -1967,6 +1940,7 @@ function wire() {
   }
   secCv.addEventListener('pointermove', (e) => {
     const [x, y] = rel(e, secCv);
+    if (sdrag?.rot) { S.edYaw = Math.round(((sdrag.yaw + (e.clientX - sdrag.x) * 0.5 + 540) % 360) - 180); S.edPitch = Math.round(clamp(sdrag.pitch + (e.clientY - sdrag.y) * 0.5, -90, 90)); sim.version++; refreshControls(); return; }
     if (sdrag) moveSec(x, y);
     else if (S.mode === 'eels') { R2.eelsUI.hover = { x, y }; redraw = true; }
   });
@@ -2102,7 +2076,8 @@ function frame(now) {
     for (const b of bound) if (b.c.obsPlot) { const vis = (!b.el.dataset.modes || b.el.dataset.modes.split(' ').includes(S.mode)) && b.c.show(); b.el.hidden = !vis; if (vis) drawObs(b.el); }
     for (const b of bound) if (b.c.obsPick && !b.el.hidden) renderObsPick(b.el);
     for (const b of bound) if (b.c.calib && !b.el.hidden) renderCalib(b.el);
-    if (['eds', '4d', 'eels', 'stem', 'ronch', 'cbed', 'oah', 'ilh', 'ltem', 'lstem', 'ed3d', 'tomo', 'spa', 'ptychotomo'].includes(S.mode)) renderInfo();
+    for (const b of bound) if (b.c.liqMap) { const vis = b.c.show(); b.el.hidden = !vis; if (vis) R2.windowMap(b.el, sim, S); }
+    if (['eds', '4d', 'eels', 'stem', 'ronch', 'cbed', 'oah', 'ilh', 'ltem', 'lstem', 'ed3d', 'tomo', 'spa'].includes(S.mode)) renderInfo();
     $('#status').textContent = `· ${fps} fps`;
   }
   if (!scene.renderer.xr.isPresenting) requestAnimationFrame(frame); else xrLoop = true; // in a headset the XR session drives the frames
@@ -2185,6 +2160,8 @@ resize();
 requestAnimationFrame(() => { resize(); requestAnimationFrame(frame); });
 window.__tem = { S, sim, scene, vr, panel: hwPanel, vpanel: vPanel, scn, voice, agent, runOp, get specUI() { return specUI; } };
 // deep link from the printed guides: ?train=<scenario id> opens that training task's intro
+// ?mode=spa&spec=apo opens a technique on a specimen (links and QR codes in the procedures)
+{ const q = new URLSearchParams(location.search), sp = q.get('spec'), md = q.get('mode'); setTimeout(() => { if (sp && P.SPECIMENS[sp]) setSpec(sp); if (md && isMode(md)) setMode(md); }, 400); }
 { const id = new URLSearchParams(location.search).get('train'); if (id && /^[a-z0-9-]+$/.test(id)) setTimeout(() => { try { scn.start(id); } catch { /* unknown id */ } }, 600); }
 // ?script=<example> opens the Python IDE with that example (tools/temview-py/examples/<example>.py); ?script alone opens it
 { const q = new URLSearchParams(location.search); if (q.has('script')) { const ex = q.get('script'); setTimeout(() => { ide.toggle(true); if (ex && /^[a-z0-9_]+$/.test(ex)) ide.loadExample(`${ex}.py`); }, 800); } }

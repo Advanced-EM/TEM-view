@@ -11,11 +11,11 @@ import { fft2 } from './kernels.js';
 import { findCompute } from './remote.js';
 
 export const PROFILES = {
-  basic: { label: 'Basic', text: 'a phone, a tablet or an older laptop', limits: { tomoN: 64, tomoIter: 30, spaN: 2000, ptTilts: 5, ptIters: 8 } },
-  standard: { label: 'Standard', text: 'a recent laptop or desktop', limits: { tomoN: 128, tomoIter: 60, spaN: 8000, ptTilts: 7, ptIters: 15 } },
-  strong: { label: 'Strong', text: 'WebGPU with large buffers and a fast processor', limits: { tomoN: 256, tomoIter: 100, spaN: 20000, ptTilts: 9, ptIters: 30 } },
+  basic: { label: 'Basic', text: 'a phone, a tablet or an older laptop', limits: { tomoN: 64, tomoIter: 30, spaN: 2000 } },
+  standard: { label: 'Standard', text: 'a recent laptop or desktop', limits: { tomoN: 128, tomoIter: 60, spaN: 8000 } },
+  strong: { label: 'Strong', text: 'WebGPU with large buffers and a fast processor', limits: { tomoN: 256, tomoIter: 100, spaN: 20000 } },
 };
-export const LIMIT_TEXT = { tomoN: ['Tomography volume', (v) => `${v}³`], tomoIter: ['SIRT iterations', (v) => `${v}`], spaN: ['Cryo-EM particles', (v) => v.toLocaleString()], ptTilts: ['Ptycho-tomography tilts', (v) => `${v}`], ptIters: ['MS-ePIE iterations per tilt', (v) => `${v}`] };
+export const LIMIT_TEXT = { tomoN: ['Tomography volume', (v) => `${v}³`], tomoIter: ['SIRT iterations', (v) => `${v}`], spaN: ['Cryo-EM particles', (v) => v.toLocaleString()] };
 
 // a quick benchmark: the median time of a 256 × 256 complex FFT (the kernel behind multislice, 4D-STEM and SPA)
 export function benchFFT(n = 256, reps = 7) {

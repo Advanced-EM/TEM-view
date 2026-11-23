@@ -1,6 +1,7 @@
 // Electron optics, specimen models, FFT and spectroscopy tables.
 // Units: lengths in Ångström unless noted, energies in eV, angles in radians.
 import * as ML from './megalibrary.js';
+import { pseudoAtoms, PARTICLES } from './particles.js';
 
 export const MC2 = 510998.95; // electron rest energy, eV
 
@@ -810,6 +811,8 @@ export function atomSpec(sym, P3, o = {}) {
   for (let k = 0; k < n; k++) { for (let d = 0; d < 3; d++) P3[3 * k + d] -= c[d]; R = Math.max(R, Math.hypot(P3[3 * k], P3[3 * k + 1], P3[3 * k + 2])); }
   const zbar = sym.reduce((a, s) => a + SYMBOLS.indexOf(s) + 1, 0) / n;
   const grid = { bin: 4, map: new Map() }; // atoms per 4 Å column, for the inelastic thickness (EELS)
+  let jitter = null;
+  if (o.damage) { const r = mulberry32(o.damage); jitter = new Float32Array(2 * n); for (let i = 0; i < 2 * n; i++) jitter[i] = r() - 0.5; }
   const spec = {
     id: 'xyz', name: o.name ?? 'structure', short: o.short ?? 'structure', xyz: true,
     alpha: 1e-5, poly: true, noCBED: true, filmOnly: true, ownTilt: true, zExp: 1, period: 1, ver: 0, tk: null, R,
@@ -819,7 +822,9 @@ export function atomSpec(sym, P3, o = {}) {
     labels: [{ x: 0, y: R + 25, text: o.label ?? o.name ?? '' }],
     grainAt() { return -1; },
     amorph() { return 'C'; },
-    thicknessAt(x, y, t) { return t + 15 * (grid.map.get(`${Math.floor(x / grid.bin)},${Math.floor(y / grid.bin)}`) ?? 0) / (grid.bin * grid.bin); },
+    // the structure's own thickness along the beam at (x, y), Å (about 15 Å³ per atom)
+    columnA(x, y) { return 15 * (grid.map.get(`${Math.floor(x / grid.bin)},${Math.floor(y / grid.bin)}`) ?? 0) / (grid.bin * grid.bin); },
+    thicknessAt(x, y, t) { return t + this.columnA(x, y); },
     tauAt(x, y, t, kV) { return t / (10 * imfp(kV, 6)) + (this.thicknessAt(x, y, 0)) / (10 * imfp(kV, zbar)); },
     plasmon: [{ Ep: 22, G: 14, frac: 1 }], zeff: 6,
     locate(cx, cy, tiltX = 0, tiltY = 0) {
@@ -837,6 +842,7 @@ export function atomSpec(sym, P3, o = {}) {
         grid.map.set(key, (grid.map.get(key) ?? 0) + 1);
       }
       A.finalize(Math.ceil(R + 10), Math.max(8, Math.ceil((2 * R) / 400)));
+      if (o.damage) A.jitter = jitter; // radiolysis moves and thins the atoms (projectMaps)
       this.atoms = A; this.tk = tk; this.tilt = [tiltX, tiltY]; this.ver++;
       return true;
     },
@@ -845,6 +851,32 @@ export function atomSpec(sym, P3, o = {}) {
   spec.xyz3 = { sym, P3 }; // the centred 3D coordinates, for the structure viewer
   spec.locate(0, 0);
   for (const g of spec.grains) g.b = reciprocal(g.a1, g.a2);
+  return spec;
+}
+
+// A cryo-EM particle as a specimen of its own (particles.js, the model single-particle cryo-EM reconstructs):
+// apoferritin or β-galactosidase as explicit pseudo-atoms, centred in vitreous ice whose thickness is the slider.
+// The particle displaces the ice it sits in; tilting the stage turns it (±30°), so every technique sees the same
+// 3D structure: TEM and STEM images, EELS, tomography (a subtomogram), 3D ED (diffuse scattering, no lattice),
+// and the structure viewer. Cryo behaviour follows the proteins-in-ice specimen: radiolysis (critical dose
+// ~5 e⁻/Å² at 300 kV for 3 Å detail), the ice crystallizing above ~140 K and subliming above ~165 K.
+function makeParticle(sample) {
+  const P0 = PARTICLES[sample], m = pseudoAtoms(sample);
+  const spec = atomSpec(m.sym, m.P3, {
+    name: `${P0.name} in vitreous ice (${P0.kDa} kDa, ${P0.symmetry} symmetry; ${m.n.toLocaleString('en')} pseudo-atoms)`, short: P0.name, label: P0.name, damage: 4111 + sample.length,
+    spec: {
+      id: sample, particle: sample, xyz: false,
+      bio: true, beamSensitive: true, Dc300: 5, cryoProtect: 4, thermalLimit: 315, dmgJitter: 3, dmgLoss: () => 0.35, smoothAmorph: true,
+      amorphCells: [3.1], rings: [{ d: 3.7, hkl: 'ice' }, { d: 2.14, hkl: 'ice' }],
+      elements: [EI.C, EI.N, EI.O, EI.S],
+      plasmon: [{ Ep: 21, G: 13, frac: 1 }], zeff: 7, dmg: 0, damageVer: 0,
+      // the ice around the particle (it fills the slab except where the protein is)
+      amorph(x, y, ctx) { const t = Math.max(0, (ctx.iceT ?? ctx.thick) - this.columnA(x, y)); return t > 0 ? [['ice', t]] : null; },
+      thicknessAt(x, y, t) { return Math.max(t, this.columnA(x, y)); },
+      tauAt(x, y, t, kV) { return Math.max(t, this.columnA(x, y)) / (10 * imfp(kV, 7)); },
+    },
+  });
+  spec.fov = +Math.min(60, Math.max(20, (3 * spec.R) / 10)).toFixed(0);
   return spec;
 }
 
@@ -1212,7 +1244,7 @@ export function regrowGold(dr) {
   SPECIMENS.au = g;
   return g;
 }
-export const SPECIMENS = { au: makeGold(), si: makeSilicon(), sto: addSTOPhase(makeSTO()), gr: makeGraphene(), mof: makeUiO66(), bio: makeBio(), lib: makeLibrary(), hesi: makeHeSi(), cspb: makeCsPbBr3(), mapb: makeMAPbBr3() };
+export const SPECIMENS = { au: makeGold(), si: makeSilicon(), sto: addSTOPhase(makeSTO()), gr: makeGraphene(), mof: makeUiO66(), bio: makeBio(), lib: makeLibrary(), hesi: makeHeSi(), cspb: makeCsPbBr3(), mapb: makeMAPbBr3(), apo: makeParticle('apo'), bgal: makeParticle('bgal') };
 for (const s of Object.values(SPECIMENS)) {
   for (const g of s.grains) g.b = reciprocal(g.a1, g.a2);
 }

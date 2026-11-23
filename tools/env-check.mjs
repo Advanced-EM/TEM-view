@@ -10,7 +10,6 @@ import { collectData } from '../js/export.js';
 import { chipState } from '../js/ops.js';
 import * as ENV from '../js/environment.js';
 import * as SPA from '../js/spa.js';
-import * as PT from '../js/ptychotomo.js';
 import { readSession, toSession } from '../js/session.js';
 
 let fails = 0;
@@ -77,11 +76,6 @@ for (const [mode, arr, steps] of [['ronch', 'pattern', 6], ['oah', 'phase', 6], 
   const mic = (window) => { const st = SPA.spaInit({ count: 0, stopAfter: 'pick', window }); SPA.spaStep(st); return { nPix: st.nPix, sd: Math.sqrt(mean(st.mic.img.map((v) => v * v))) }; };
   const a = mic(null), b = mic({ t: 400, dens: 0.096, zeff: 10.4 });
   ok(b.nPix < a.nPix && b.sd > a.sd, `cryo-EM SPA: electrons per pixel ${a.nPix.toFixed(0)} → ${b.nPix.toFixed(0)}, micrograph rms ${a.sd.toFixed(4)} → ${b.sd.toFixed(4)}`); }
-{ // ptychographic tomography: the windows' phase in the top and bottom slices
-  const top = (winPhase) => { const st = PT.ptInit({ tilts: 1, winPhase }); PT.ptStep(st, 0); const tr = PT.slabProject(st.truth, st.N, st.p.K, 0)[0]; return st.cur ? null : tr; };
-  void top;
-  const S = defaultState(); S.mode = 'ptychotomo'; const sim = new Sim(S); chipState(S, sim, 'envWin', 'sinx');
-  ok(sim.ptParams().winPhase > 0 && sim.ptParams().winPhase < 0.1, `ptycho-tomography: windows add ${sim.ptParams().winPhase} rad rms to the top and bottom slices`); }
 // ---- tilt limits
 {
   const S = defaultState(); S.mode = 'tomo'; S.tomoMax = 70; const sim = new Sim(S);

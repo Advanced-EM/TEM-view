@@ -182,7 +182,7 @@ export function draw(sim, S, mainCv, secCv, hover) {
   const m = fit(mainCv), s = fit(secCv);
   m.ctx.fillStyle = C.bg; m.ctx.fillRect(0, 0, m.W, m.H);
   s.ctx.fillStyle = C.bg; s.ctx.fillRect(0, 0, s.W, s.H);
-  const fn = { ptychotomo: drawPT, spa: drawSPA, tomo: drawTomo, ed3d: drawED3D, tem: drawTEM, stem: drawSTEM, diff: drawDiff, '4d': draw4D, eds: drawEDS, eels: drawEELS, ronch: drawRonch, cbed: drawCBED, oah: drawOAH, ilh: drawILH, ltem: drawLTEM, lstem: drawLSTEM }[S.mode];
+  const fn = { spa: drawSPA, tomo: drawTomo, ed3d: drawED3D, tem: drawTEM, stem: drawSTEM, diff: drawDiff, '4d': draw4D, eds: drawEDS, eels: drawEELS, ronch: drawRonch, cbed: drawCBED, oah: drawOAH, ilh: drawILH, ltem: drawLTEM, lstem: drawLSTEM }[S.mode];
   fn(sim, S, m, s, performance.now() / 1000);
   cryoLabel(m.ctx, sim, S, m.W, m.H, m.dpr);
   liquidInset(m.ctx, sim, S, m.W, m.H, m.dpr);
@@ -198,21 +198,23 @@ export function draw(sim, S, mainCv, secCv, hover) {
 
 const real = (S) => S.clarity === 'real';
 
-// liquid cell overlay (liquid.js): the window seen from above with its bulge (liquid thickness, colour) and where
-// the stage is; a burst window blanks the image
+// liquid cell: a burst window blanks the image (the window map itself sits in the side panel, windowMap below)
 function liquidInset(ctx, sim, S, W, H, dpr) {
-  if (S.envCell !== 'liquid' || typeof LIQX === 'undefined') return;
-  const c = LIQX.cellOf(S);
-  if (!c) return;
-  if (sim.liq?.burst) {
-    ctx.fillStyle = 'rgba(6,8,11,0.86)'; ctx.fillRect(0, 0, W, H);
-    label(ctx, 'WINDOW BURST · beam blanked', W / 2, H / 2 - 10 * dpr, dpr, { color: C.warm, align: 'center', size: 11 });
-    label(ctx, 'liquid in the column: load a new cell', W / 2, H / 2 + 12 * dpr, dpr, { color: C.muted, align: 'center', size: 9 });
-    return;
-  }
-  if (c.pockets) return;
-  const iw = 70 * dpr, ih = Math.min(iw * (S.lcB / S.lcA), 90 * dpr), x0 = W - iw - 10 * dpr, y0 = 40 * dpr, n = 24;
-  ctx.fillStyle = 'rgba(5,7,10,0.7)'; ctx.fillRect(x0 - 4 * dpr, y0 - 4 * dpr, iw + 8 * dpr, ih + 30 * dpr);
+  if (S.envCell !== 'liquid' || !sim.liq?.burst) return;
+  ctx.fillStyle = 'rgba(6,8,11,0.86)'; ctx.fillRect(0, 0, W, H);
+  label(ctx, 'WINDOW BURST · beam blanked', W / 2, H / 2 - 10 * dpr, dpr, { color: C.warm, align: 'center', size: 11 });
+  label(ctx, 'liquid in the column: load a new cell', W / 2, H / 2 + 12 * dpr, dpr, { color: C.muted, align: 'center', size: 9 });
+}
+// the liquid cell's window seen from above, for the side panel: its bulge as liquid thickness (colour), where the
+// stage is (the ring), and the readouts; drawn on its own canvas so it never covers the image
+export function windowMap(cv, sim, S) {
+  const c = S.envCell === 'liquid' ? LIQX.cellOf(S) : null;
+  const dpr = window.devicePixelRatio || 1, cw = cv.clientWidth || 280, chh = 120;
+  if (cv.width !== Math.round(cw * dpr)) { cv.width = Math.round(cw * dpr); cv.height = Math.round(chh * dpr); }
+  const ctx = cv.getContext('2d'), W = cv.width, H = cv.height;
+  ctx.fillStyle = C.bg; ctx.fillRect(0, 0, W, H);
+  if (!c || c.pockets) return;
+  const ih = H - 16 * dpr, iw = Math.min(W * 0.45, ih * (S.lcA / S.lcB)), x0 = 8 * dpr, y0 = 8 * dpr, n = 24;
   for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
     const u = (i + 0.5) / n * 2 - 1, v = (j + 0.5) / n * 2 - 1, f = (1 - u * u) * (1 - v ** 8), t = c.gap + 2 * c.w * f, k = Math.min(1, t / (c.gap + 2 * c.w || 1));
     const col = LUT.ice, q = Math.round(k * 255) * 3;
@@ -221,8 +223,11 @@ function liquidInset(ctx, sim, S, W, H, dpr) {
   }
   const sx = x0 + iw / 2 + (S.cx / 1e4 / (S.lcA / 2)) * (iw / 2), sy = y0 + ih / 2 + (S.cy / 1e4 / (S.lcB / 2)) * (ih / 2);
   ctx.strokeStyle = C.warm; ctx.lineWidth = 1.5 * dpr; ctx.beginPath(); ctx.arc(Math.max(x0, Math.min(x0 + iw, sx)), Math.max(y0, Math.min(y0 + ih, sy)), 3 * dpr, 0, 2 * Math.PI); ctx.stroke();
-  label(ctx, `bulge ${(c.w * 1e6).toFixed(2)} µm`, x0, y0 + ih + 10 * dpr, dpr, { color: C.muted, size: 7 });
-  label(ctx, c.onWin ? `liquid ${(c.thicknessA / 1e4).toFixed(2)} µm` : 'on the frame', x0, y0 + ih + 22 * dpr, dpr, { color: c.onWin ? C.accent : C.warm, size: 7 });
+  const tx = x0 + iw + 14 * dpr;
+  label(ctx, `window ${S.lcA} × ${S.lcB} µm, seen from above`, tx, y0 + 10 * dpr, dpr, { color: C.muted, size: 9 });
+  label(ctx, `bulge ${(c.w * 1e6).toFixed(2)} µm at the centre`, tx, y0 + 30 * dpr, dpr, { color: C.muted, size: 9 });
+  label(ctx, c.onWin ? `liquid here ${(c.thicknessA / 1e4).toFixed(2)} µm` : 'stage on the frame', tx, y0 + 50 * dpr, dpr, { color: c.onWin ? C.accent : C.warm, size: 9 });
+  label(ctx, 'ring: the stage · colour: liquid thickness', tx, y0 + 70 * dpr, dpr, { color: C.muted, size: 8 });
 }
 
 // shared overlay: specimen temperature, a holder that is still drifting, and what heat has done to ice
@@ -416,6 +421,7 @@ function drawED3D(sim, S, m, s) {
   if (e.diffuse) { label(s.ctx, 'no lattice found in this structure: the series shows diffuse scattering (amorphous or molecular); there are no reflections to index', 10 * s.dpr, 20 * s.dpr, s.dpr, { color: C.warm, size: 9 }); return; }
   const q = s.ctx, dq = s.dpr, Ws = s.W, Hs = s.H, side = Math.min(Hs - 30 * dq, Ws * 0.55), x0 = 10 * dq, y0 = 22 * dq;
   q.fillStyle = '#06080b'; q.fillRect(x0, y0, side, side);
+  if (S.edSlice === '3d') { drawRecip3D(e, S, s, x0, y0, side); } else {
   const pts = ED.layer(e.refl, e.series, S.edSlice, S.edLayer, Math.ceil(e.collected));
   const maxuv = Math.max(1, ...pts.map((t) => Math.max(Math.abs(t.u), Math.abs(t.v)))), sc = (side / 2 - 8 * dq) / maxuv, cx = x0 + side / 2, cy = y0 + side / 2;
   let Imax = 0; for (const t of pts) Imax = Math.max(Imax, t.I);
@@ -428,6 +434,7 @@ function drawED3D(sim, S, m, s) {
   const axes = { hk0: ['h', 'k'], h0l: ['h', 'l'], '0kl': ['k', 'l'] }[S.edSlice];
   label(q, `${S.edSlice.replace('0', String(S.edLayer))} layer · hollow: not recorded`, x0, y0 - 8 * dq, dq, { color: C.muted, size: 9 });
   label(q, axes[0], x0 + side - 8 * dq, cy - 8 * dq, dq, { color: C.muted, size: 9 }); label(q, axes[1], cx + 6 * dq, y0 + 10 * dq, dq, { color: C.muted, size: 9 });
+  }
   // shells: completeness bars and ⟨I/σ⟩
   const st = e.stats, bx = x0 + side + 18 * dq, bw = Ws - bx - 10 * dq, n = st.shells.length, rowH = Math.min(18 * dq, (Hs - 70 * dq) / n);
   label(q, `${(100 * st.completeness).toFixed(1)} % complete${e.merge === 'friedel' && !e.cubic ? ' (Friedel)' : ''} · ${st.observed}/${st.unique}`, bx, y0 - 8 * dq, dq, { color: C.text, size: 9 });
@@ -441,62 +448,6 @@ function drawED3D(sim, S, m, s) {
   });
   label(q, 'd (Å) · complete · median I/σ', bx, y0 + 12 * dq + n * rowH, dq, { color: C.muted, size: 9 });
   label(q, st.dLimit ? `resolution ≈ ${st.dLimit.toFixed(2)} Å (median I/σ ≥ 2)` : 'no shell at median I/σ ≥ 2', bx, y0 + 26 * dq + n * rowH, dq, { color: st.dLimit ? C.accent : C.warm, size: 9 });
-}
-
-// electron tomography: the tilt series or a slice of the reconstruction (main); across the beam, the phantom
-// beside the reconstruction and the Fourier plane each tilt fills (secondary)
-// ptychographic tomography preview: depth (XZ) or top (XY) sections of the object, the 0° view alone and the fused
-// volume side by side, or the per-tilt MS-ePIE slices; the depth profile through the stacked atoms below
-function drawPT(sim, S, m, s) {
-  const A = sim.pt, { ctx, W, H, dpr } = m;
-  if (!A) return;
-  const o = A.out ?? {}, N = 64, dx = 0.25, truth = o.truth ?? A.truth, lut = real(S) ? LUT.gray : LUT.magma, c = N / 2 - 0.5;
-  let what;
-  if (S.ptView === 'slices' && o.slices?.length) {
-    const rows = o.slices.length, cols = o.K, gap = 3 * dpr, tile = Math.min((W - (cols + 2) * gap - 50 * dpr) / cols, (H - 60 * dpr - (rows + 1) * gap) / rows);
-    o.slices.forEach((d, r) => d.slabs.forEach((sl, k) => { const [lo, hi] = range(sl, 0.01, 0.995); paint(ctx, sl, N, N, [50 * dpr + k * (tile + gap), 46 * dpr + r * (tile + gap), tile, tile], { lo, hi, lut }); }));
-    o.slices.forEach((d, r) => label(ctx, `${d.th >= 0 ? '+' : ''}${d.th.toFixed(0)}°`, 8 * dpr, 46 * dpr + r * (tile + gap) + tile / 2, dpr, { color: C.muted, size: 8 }));
-    what = `MS-ePIE phase slices · ${rows} tilts × ${cols} slices (top to bottom of the tilted beam)`;
-  } else {
-    // three sections: the object, one view (0°), all tilts fused
-    const xy = S.ptView === 'xy', iz = Math.round(c), iy = Math.round(c), sec = (v) => (v ? TOMO.orthoslices(v, N, Math.round(c), iy, iz)[xy ? 'xy' : 'xz'] : null);
-    const panes = [[truth, 'object'], [o.single, 'one view (0°)'], [o.fused, `${o.tilts ?? S.ptTilts} tilts fused`]];
-    const wide = W > 1.5 * H, gap = 8 * dpr, tile = wide ? Math.min((W - 4 * gap) / 3, H - 70 * dpr) : Math.min((W - 3 * gap) / 2, (H - 70 * dpr - gap) / 2);
-    panes.forEach(([v, name], i) => {
-      const px = wide ? gap + i * (tile + gap) : gap + (i % 2) * (tile + gap), py = 46 * dpr + (wide ? 0 : Math.floor(i / 2) * (tile + gap + 14 * dpr));
-      const a = sec(v);
-      if (a) { const [lo, hi] = range(a, 0.01, 0.999); paint(ctx, a, N, N, [px, py, tile, tile], { lo: Math.min(0, lo), hi: hi || 1, lut }); }
-      else { ctx.fillStyle = '#06080b'; ctx.fillRect(px, py, tile, tile); label(ctx, A.full && !A.done ? 'reconstructing…' : 'press Scan', px + tile / 2, py + tile / 2, dpr, { color: C.muted, size: 8, align: 'center' }); }
-      label(ctx, name, px + 4 * dpr, py + 10 * dpr, dpr, { color: C.muted, size: 8 });
-      if (!xy) label(ctx, '↓ z (beam at 0°)', px + 4 * dpr, py + tile - 10 * dpr, dpr, { color: C.muted, size: 7 });
-    });
-    what = xy ? 'top sections (XY) through the middle' : 'depth sections (XZ) through the stacked atoms';
-  }
-  label(ctx, what, 10 * dpr, 16 * dpr, dpr, { color: C.accent, size: 9 });
-  label(ctx, 'BROWSER PREVIEW · qualitative', W - 10 * dpr, 16 * dpr, dpr, { color: C.warm, size: 8, align: 'right' });
-  const p = A.o;
-  label(ctx, `16 Å cube · ${p.kV} kV · α ${p.alpha} mrad · ${p.tilts} tilt${p.tilts > 1 ? 's' : ''} to ±${p.maxTilt}° · ${p.dose.toExponential(0)} e⁻/Å²`, 10 * dpr, 32 * dpr, dpr, { color: C.muted, size: 8 });
-  if (A.full && !A.done) label(ctx, `tilt ${Math.min((o.t ?? 0) + 1, o.tilts ?? p.tilts)}/${o.tilts ?? p.tilts} · ${o.stage === 'recon' ? 'MS-ePIE' : o.stage ?? ''} · ${Math.round(100 * (o.progress ?? 0))} %`, 10 * dpr, H - 14 * dpr, dpr, { color: C.warm, size: 9 });
-
-  // ---- secondary: the depth profile through the stacked pair (each normalised to its maximum) and readouts
-  const q = s.ctx, dq = s.dpr, top = 24 * dq, gx = 30 * dq, gw = s.W - gx - 12 * dq, gh = Math.min(s.H * 0.55, s.H - 110 * dq);
-  q.fillStyle = '#06080b'; q.fillRect(gx, top, gw, gh);
-  const st = o.stats, prof = st?.pair?.profiles ?? { truth: (() => { const v = new Float32Array(N); for (let z = 0; z < N; z++) v[z] = truth[Math.round(c) + N * (Math.round(c) + N * z)]; return v; })() };
-  const X = (z) => gx + (z / (N - 1)) * gw;
-  for (const [k, col, w] of [['truth', C.dim, 1], ['single', C.warm, 1.4], ['fused', C.accent, 1.8]]) {
-    const v = prof[k]; if (!v) continue;
-    let mx = 0; for (const a of v) mx = Math.max(mx, a);
-    q.strokeStyle = col; q.lineWidth = w * dq; q.beginPath();
-    v.forEach((a, z) => { const y = top + gh - (Math.max(0, a) / (mx || 1)) * gh * 0.9 - 4 * dq; z ? q.lineTo(X(z), y) : q.moveTo(X(z), y); }); q.stroke();
-  }
-  q.lineWidth = 1 * dq;
-  for (const z of [-4, 4]) { q.strokeStyle = 'rgba(255,255,255,0.18)'; q.setLineDash([3 * dq, 3 * dq]); q.beginPath(); q.moveTo(X(c + z / dx), top); q.lineTo(X(c + z / dx), top + gh); q.stroke(); q.setLineDash([]); }
-  label(q, 'depth profile through the stacked atoms (8 Å apart)', gx, top - 10 * dq, dq, { color: C.muted, size: 8 });
-  label(q, 'z →', gx + gw - 26 * dq, top + gh + 10 * dq, dq, { color: C.muted, size: 7, bg: 'rgba(0,0,0,0)' });
-  const lines = [['object', C.dim], ['one view (0°)', C.warm], ['all tilts fused', C.accent]];
-  if (st?.atom) lines.push([`isolated atom, depth FWHM: ${st.atom.single.z.toFixed(1)} → ${st.atom.fused.z.toFixed(1)} Å (true ${st.atom.truth.z.toFixed(1)})`, C.text], [`lateral FWHM ${st.atom.fused.x.toFixed(2)} Å · λ/α² ≈ ${st.depthRes.toFixed(0)} Å`, C.muted], [`correlation with the object ${st.corrSingle.toFixed(2)} → ${st.corrFused.toFixed(2)}`, C.muted]);
-  if (A.ms) lines.push([`computed in ${(A.ms / 1000).toFixed(0)} s`, C.muted]);
-  lines.forEach(([t, col], i) => label(q, t, gx, top + gh + 24 * dq + i * 14 * dq, dq, { color: col, size: 8 }));
 }
 
 // single-particle cryo-EM: the micrograph with picks, the CTF fit, 2D classes or the 3D map; the FSC and the
@@ -614,6 +565,57 @@ function drawSPA(sim, S, m, s) {
   lines.forEach(([t, col], i) => label(q, t, narrow ? ax + aw + 34 * dq : ax, narrow ? ay + i * 14 * dq : ay + ah + 18 * dq + i * 14 * dq, dq, { color: col, size: 8 }));
 }
 
+// 3D ED: every reflection in reciprocal space (its g vector, Å⁻¹, in the crystal frame at φ = 0), turned by the
+// yaw and pitch (drag, or the sliders): recorded ones filled and sized by their summed counts, the rest hollow;
+// the rotation axis drawn through the origin, so the missing cone around it shows as an empty region when turned
+function drawRecip3D(e, S, s, x0, y0, side) {
+  const q = s.ctx, dq = s.dpr, f = TOMO.viewFrame3D(S.edYaw, S.edPitch), upTo = Math.ceil(e.collected), acc = new Map();
+  e.series.frames.forEach((fr, k) => { if (k < upTo) for (const o of fr) acc.set(o.i, (acc.get(o.i) ?? 0) + o.n); });
+  let gm = 0, Imax = 0; for (const R of e.refl) gm = Math.max(gm, Math.hypot(...R.v)); for (const v of acc.values()) Imax = Math.max(Imax, v);
+  const cx = x0 + side / 2, cy = y0 + side / 2, sc = (side / 2 - 10 * dq) / (gm || 1);
+  const pts = e.refl.map((R, i) => { const g = R.v; return { x: cx + sc * (g[0] * f.u[0] + g[1] * f.u[1] + g[2] * f.u[2]), y: cy + sc * (g[0] * f.v[0] + g[1] * f.v[1] + g[2] * f.v[2]), z: g[0] * f.w[0] + g[1] * f.w[1] + g[2] * f.w[2], I: acc.get(i) ?? 0, seen: acc.has(i) }; });
+  pts.sort((a, b) => b.z - a.z); // far ones first
+  q.save(); q.beginPath(); q.rect(x0, y0, side, side); q.clip();
+  for (const t of pts) {
+    const depth = 0.45 + 0.55 * (0.5 - 0.5 * t.z / (gm || 1)), r = t.seen ? (1.3 + 3.2 * Math.sqrt(t.I / (Imax || 1))) * dq : 1.3 * dq;
+    q.beginPath(); q.arc(t.x, t.y, r, 0, 2 * Math.PI);
+    if (t.seen) { q.globalAlpha = depth; q.fillStyle = C.accent; q.fill(); } else { q.globalAlpha = 0.6 * depth; q.strokeStyle = 'rgba(255,255,255,0.35)'; q.lineWidth = 1 * dq; q.stroke(); }
+  }
+  q.globalAlpha = 1;
+  // the goniometer axis: in the detector plane at edAxis° (the frames turn the crystal about it)
+  const ax = [Math.cos((S.edAxis * Math.PI) / 180), Math.sin((S.edAxis * Math.PI) / 180), 0], L = side / 2;
+  const pu = ax[0] * f.u[0] + ax[1] * f.u[1] + ax[2] * f.u[2], pv = ax[0] * f.v[0] + ax[1] * f.v[1] + ax[2] * f.v[2];
+  q.strokeStyle = C.warm; q.setLineDash([4 * dq, 4 * dq]); q.beginPath(); q.moveTo(cx - L * pu, cy - L * pv); q.lineTo(cx + L * pu, cy + L * pv); q.stroke(); q.setLineDash([]);
+  q.restore();
+  drawCube(q, f, cx, cy, side * 0.12, dq, { x: 'x', y: 'y', z: 'beam' });
+  label(q, `reciprocal space · yaw ${S.edYaw}°, pitch ${S.edPitch}° · drag to turn · hollow: not recorded · dashed: rotation axis`, x0, y0 - 8 * dq, dq, { color: C.muted, size: 9 });
+}
+
+// the outline of a cube of half-size h (pixels) seen in frame f (tomo.viewFrame3D), centred at (cx, cy), with its
+// axes labelled; edges at the back are dimmer
+function drawCube(ctx, f, cx, cy, h, dpr, names) {
+  const P = (p) => [cx + h * (p[0] * f.u[0] + p[1] * f.u[1] + p[2] * f.u[2]), cy + h * (p[0] * f.v[0] + p[1] * f.v[1] + p[2] * f.v[2]), p[0] * f.w[0] + p[1] * f.w[1] + p[2] * f.w[2]];
+  const s = 1 / Math.sqrt(3), corners = [];
+  for (const x of [-s, s]) for (const y of [-s, s]) for (const z of [-s, s]) corners.push([x, y, z]);
+  ctx.save(); ctx.lineWidth = 1 * dpr;
+  for (let i = 0; i < 8; i++) for (let j = i + 1; j < 8; j++) {
+    const a = corners[i], b = corners[j], d = Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]);
+    if (Math.abs(d - 2 * s) > 1e-6) continue;
+    const A = P(a), B = P(b), back = A[2] + B[2] > 0;
+    ctx.strokeStyle = back ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.35)';
+    ctx.beginPath(); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); ctx.stroke();
+  }
+  const o = P([-s, s, -s]);
+  [[[1, 0, 0], names.x, C.accent], [[0, -1, 0], names.y, C.muted], [[0, 0, 1], names.z, C.warm]].forEach(([d, t, col]) => {
+    const e = P([-s + 0.35 * d[0], s + 0.35 * d[1], -s + 0.35 * d[2]]);
+    ctx.strokeStyle = col; ctx.beginPath(); ctx.moveTo(o[0], o[1]); ctx.lineTo(e[0], e[1]); ctx.stroke();
+    label(ctx, t, e[0] + 3 * dpr, e[1] - 3 * dpr, dpr, { color: col, size: 8 });
+  });
+  ctx.restore();
+}
+
+// electron tomography: the tilt series or a slice of the reconstruction (main); across the beam, the phantom
+// beside the reconstruction and the Fourier plane each tilt fills (secondary)
 function drawTomo(sim, S, m, s, t) {
   const T = sim.tomo, { ctx, W, H, dpr } = m;
   if (!T) return;
@@ -631,6 +633,14 @@ function drawTomo(sim, S, m, s, t) {
     const [lo, hi] = range(arr, 0.01, 0.998);
     paint(ctx, arr, N, N, dst, { lo: S.tomoSignal === 'bf' ? hi : lo, hi: S.tomoSignal === 'bf' ? lo : hi, lut });
     what = T.running ? `recording · ${done}/${F} · tilt ${th.toFixed(1)}°` : done === F ? `tilt series · ${i + 1}/${F} · ${th.toFixed(1)}°` : 'press Collect · the projection at 0°';
+  } else if (S.tomoView === '3d') {
+    // the reconstruction turned to any direction (drag on the image, or the sliders): brightest voxel or sum
+    const out = Math.min(N, 160), key = `${S.tomoYaw}|${S.tomoPitch}|${S.tomoRender}|${T.rec.iter}`;
+    if (T._r3?.vol !== vol || T._r3.key !== key) T._r3 = { vol, key, img: TOMO.render3D(vol, N, S.tomoYaw, S.tomoPitch, { mode: S.tomoRender, out }), out };
+    const img = T._r3.img, [lo, hi] = range(img, 0.01, 0.999);
+    paint(ctx, img, out, out, dst, { lo, hi, lut: real(S) ? LUT.gray : LUT.magma });
+    drawCube(ctx, TOMO.viewFrame3D(S.tomoYaw, S.tomoPitch), x0 + side / 2, y0 + side / 2, side / 2, dpr, { x: 'x · tilt axis', y: 'y', z: 'z · beam' });
+    what = `3D · ${S.tomoRender === 'mip' ? 'brightest voxel' : 'sum'} along the view · yaw ${S.tomoYaw}°, pitch ${S.tomoPitch}° · drag to turn`;
   } else {
     const k = Math.max(0, Math.min(N - 1, Math.round(N / 2 + S.tomoDepth * N))), sl = TOMO.orthoslices(vol, N, k, k, k)[S.tomoView];
     const [lo, hi] = range(sl, 0.01, 0.999);

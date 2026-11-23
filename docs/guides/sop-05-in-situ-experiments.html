@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SOP-05 In Situ Experiments · Seeing with Electrons</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Sans:wght@400;600&display=block" rel="stylesheet">
+<link rel="stylesheet" href="guide.css?v=8">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+</head>
+<body>
+
+<!-- 1 · cover -->
+<section class="page cover">
+  <div class="top">
+    <div class="brandline"><span>Standard operating procedure SOP-05</span><span>In situ microscopy</span></div>
+    <h1>In situ<br><em>experiments</em></h1>
+    <p class="sub" style="max-width:5.6in">Plan and run liquid, gas, heating and biasing experiments: set up the cell within its safe margins, choose the dose rate against radiolysis, design a timeline, record a movie with its measurements, and calibrate the kinetics to your own data so the simulator becomes a digital twin of your instrument.</p>
+  </div>
+  <div class="shot"><img src="fig/sop5_nucleation.svg" alt="" style="object-fit:contain;background:#fff"></div>
+  <div class="bottom">
+    <div class="doc"><b>SOP-05</b>, version 1.0, November 2026<br>For users planning in situ sessions, and for teaching in situ methods<br>Simulation only: nothing here controls a real microscope or holder</div>
+    <div class="logo">Seeing with Electrons<small>TEM-view · Advanced-EM</small></div>
+  </div>
+</section>
+
+<!-- 2 · scope -->
+<section class="page">
+  <div class="run"><span>SOP-05 In situ experiments</span><span>Scope and overview</span></div>
+  <h2>Scope and overview</h2>
+  <p class="lede">In situ microscopy watches a specimen change while its environment is controlled: a liquid between two membranes, a gas at the specimen, a heating chip, or a voltage across electrodes. The holders here are generic and described by their parameters (window material and size, spacer, gas path, electrode gap), not by product.</p>
+  <table class="t" style="margin-top:8pt">
+    <tr><th>Environment</th><th>Set in</th><th>Watch for</th></tr>
+    <tr><td><b>Liquid cell</b></td><td>Cell around the specimen → Liquid cell</td><td>Window bulge and burst margin; radiolysis (H₂, pH, bubbles); nucleation and growth</td></tr>
+    <tr><td><b>Gas cell / ETEM</b></td><td>Cell around the specimen → Gas cell / ETEM</td><td>Scattering by the gas (contrast loss); reactions; coarsening</td></tr>
+    <tr><td><b>Heating</b></td><td>Specimen holder → heating chip</td><td>Thermal drift; onset temperatures; the chip runs ~1 % hot</td></tr>
+    <tr><td><b>Biasing</b></td><td>The biasing chip controls</td><td>Compliance current; breakdown field; Joule heating; electrochemistry</td></tr>
+  </table>
+  <div class="cols">
+    <div>
+      <h3>Steps</h3>
+      <table class="t">
+        <tr><td class="n">1</td><td>Set up the cell within its margins</td></tr>
+        <tr><td class="n">2</td><td>Choose the dose rate</td></tr>
+        <tr><td class="n">3</td><td>Design the experiment and its timeline</td></tr>
+        <tr><td class="n">4</td><td>Record the movie and its measurements</td></tr>
+        <tr><td class="n">5</td><td>Read the kinetics and their labels</td></tr>
+        <tr><td class="n">6</td><td>Calibrate to your own data</td></tr>
+        <tr><td class="n">7</td><td>Export, and process on a cluster</td></tr>
+      </table>
+    </div>
+    <div>
+      <h3>Rules</h3>
+      <ul class="plain">
+        <li>Check the burst pressure before raising the pressure difference across liquid-cell windows. A burst window puts liquid in the column; the exhibit blanks the beam.</li>
+        <li>The electron beam is a reactant in liquid: every dose rate is also a radiation chemistry experiment.</li>
+        <li>Every kinetic parameter carries a label: <b>literature</b>, <b>calibrated</b> (fitted to a named dataset) or <b>trend</b> (a placeholder reproducing a published trend). Plan with trend values; do not report them as predictions.</li>
+        <li>On a real instrument, follow the holder manufacturer's limits and your facility's procedures; they take precedence over anything here.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="foot"><span>Seeing with Electrons · TEM-view</span><span>2</span></div>
+</section>
+
+<!-- 3 · step 1 -->
+<section class="page">
+  <div class="run"><span>SOP-05 In situ experiments</span><span>Step 1 of 7</span></div>
+  <div class="step">Step 1</div>
+  <h2>Set up the cell within its margins</h2>
+  <div class="side" style="grid-template-columns:1fr 1.6in">
+    <div>
+      <ol class="proc">
+        <li>In <b>The specimen</b>, choose the specimen, then under <b>Cell around the specimen</b> choose <b>Liquid cell</b> or <b>Gas cell / ETEM</b>.</li>
+        <li><b>Liquid.</b> Choose the cell class (SiNₓ static, SiNₓ flow, graphene pockets), the window size (<b>Window short side</b>, <b>Window long side</b>), the <b>Spacer</b>, and the <b>Pressure difference</b>. The window map in the side panel (Fig. 1) shows the liquid thickness across the window and where the stage is; the note gives the bulge at the centre, the stress and the burst pressure.</li>
+        <li>Move the stage towards a window corner: the liquid thins, and the image improves. Stay on the window: on the frame there is no image.</li>
+        <li><b>Gas.</b> Choose the geometry (windowed cell, or the open pole-piece gap), the gas and the <b>Pressure at the specimen</b>. The note gives the electrons lost to the gas.</li>
+        <li><b>Heating.</b> Choose the heating holder and a <b>Temperature setpoint</b>; watch the drift readout settle after each step.</li>
+        <li><b>Biasing.</b> Set the electrode layout and gap, the source and waveform, and the <b>Compliance</b>; the I–V plot and the breakdown field appear under the controls.</li>
+      </ol>
+      <p class="result"><b>Result.</b> The note reports a burst margin above 2 (pressure difference well under the burst pressure), liquid of the thickness you planned at the stage position, and an image through the cell.</p>
+      <div class="note caution"><b>Caution.</b> A 50 × 200 µm, 20 nm SiNₓ window at 1 bar bows 1.6 µm at its centre and bursts at about 6 bar. Larger windows bow more and burst sooner.</div>
+    </div>
+    <figure class="fig plot"><img src="fig/sop5_window.png" alt="" style="background:#000;height:3.4in;width:auto;margin:0 auto"><figcaption><b>Fig. 1.</b> Liquid thickness across a 50 × 200 µm window at 1 bar (200 nm spacer): thinnest at the edges, 3.3 µm at the centre.</figcaption></figure>
+  </div>
+  <div class="foot"><span>Seeing with Electrons · TEM-view</span><span>3</span></div>
+</section>
+
+<!-- 4 · step 2 -->
+<section class="page">
+  <div class="run"><span>SOP-05 In situ experiments</span><span>Step 2 of 7</span></div>
+  <div class="step">Step 2</div>
+  <h2>Choose the dose rate</h2>
+  <div class="side" style="grid-template-columns:1fr 3.2in">
+    <div>
+      <ol class="proc">
+        <li>Set the <b>Dose rate</b> (liquid cell). The note gives the radiolysis products at the beam (hydrated electrons, H₂, H₂O₂, pH) and whether H₂ is above saturation (bubbles).</li>
+        <li>With <b>Metal precursor in the liquid</b> on, choose the precursor. The beam reduces the metal; when enough has accumulated, the first nucleus forms (Fig. 2).</li>
+        <li>Find the threshold dose rate in the note: below it nothing nucleates however long you wait. Above it, the time to the first nucleus falls as the dose rate rises, while the dose to nucleation stays about the same.</li>
+        <li>For imaging without reaction, stay below the threshold. For a nucleation study, choose a rate above it and plan the movie to start before the induction time.</li>
+      </ol>
+      <p class="result"><b>Result.</b> Silver from 1 mM AgNO₃ in 800 nm of liquid at 200 kV: threshold 0.5 e⁻/Å²/s; at 3.37 e⁻/Å²/s the first nucleus appears after ~8.5 s (~29 e⁻/Å²). Both are calibrated to a published liquid-cell series.</p>
+      <div class="note"><b>Note.</b> A gas or a heated specimen has no radiolysis, but the beam still heats, charges and damages beam-sensitive materials; the dose readout under the image applies there too.</div>
+    </div>
+    <figure class="fig plot"><img src="fig/sop5_nucleation.svg" alt=""><figcaption><b>Fig. 2.</b> Reduced silver, as a fraction of what it takes to nucleate, at three dose rates. Below the threshold it levels off short of 1.</figcaption></figure>
+  </div>
+  <div class="foot"><span>Seeing with Electrons · TEM-view</span><span>4</span></div>
+</section>
+
+<!-- 5 · steps 3 and 4 -->
+<section class="page">
+  <div class="run"><span>SOP-05 In situ experiments</span><span>Steps 3 and 4 of 7</span></div>
+  <div class="step">Step 3</div>
+  <h2>Design the experiment and its timeline</h2>
+  <ol class="proc">
+    <li>Turn on <b>In situ experiment</b> (TEM, STEM or diffraction). The designer opens.</li>
+    <li>Under <b>Start from</b>, pick a worked design (E1–E9: radiolysis, gold growth, sintering in O₂ or N₂, gas contrast, redox cycling, helium bubbles on annealing, a biased gap, electrochemistry, silver nucleation), or keep your own settings.</li>
+    <li>Write the <b>Experiment name</b> and <b>The question it answers</b>.</li>
+    <li>Add ramps to the <b>Timeline (from the movie's start)</b> with <b>Add ramp</b>: a quantity (temperature, dose rate, pressure, voltage), its target and the start and end times.</li>
+    <li>Set the <b>Movie length</b> and <b>Frames per second</b>. Under <b>Measure each frame</b>, choose what to record (radius, H₂, pH, nucleation, current…).</li>
+    <li>Check the estimate in <b>Data, dose and compute</b>: the data volume and dose of the whole movie.</li>
+  </ol>
+  <div class="step" style="margin-top:8pt">Step 4</div>
+  <h2>Record the movie and its measurements</h2>
+  <div class="cols">
+    <ol class="proc">
+      <li>Select <b>Record movie</b>. Frames are recorded with drift and the timeline running; the observables plot fills as it goes.</li>
+      <li><b>Stop</b> ends early; <b>Discard movie</b> clears it.</li>
+    </ol>
+    <ol class="proc" start="3">
+      <li>Save the design with <b>Save session</b>. The session carries the settings, the timeline and the calibration profile, so the experiment reopens exactly.</li>
+      <li>Read the movie note: events (first bubble, nucleation, onset) are listed with their times.</li>
+    </ol>
+  </div>
+  <p class="result"><b>Result.</b> A movie and a table of measurements per frame, with the events and the total dose.</p>
+  <div class="foot"><span>Seeing with Electrons · TEM-view</span><span>5</span></div>
+</section>
+
+<!-- 6 · steps 5 and 6 -->
+<section class="page">
+  <div class="run"><span>SOP-05 In situ experiments</span><span>Steps 5 and 6 of 7</span></div>
+  <div class="step">Step 5</div>
+  <h2>Read the kinetics and their labels</h2>
+  <div class="side" style="grid-template-columns:1fr 3.0in">
+    <div>
+      <ol class="proc">
+        <li>Each process in the notes carries its label: <b>calibrated</b> (fitted to a named published series), <b>partly</b>, <b>literature</b> or <b>trend</b>.</li>
+        <li>Under <b>Kinetics calibrated to</b>, compare <b>Published in situ series (default)</b> with <b>Nothing: the uncalibrated defaults</b>, and watch the onset move.</li>
+      </ol>
+      <p class="result"><b>Result.</b> Gold on a heating chip coarsens from ~1145 K in O₂ and ~1205 K in N₂ (Fig. 3). The thermal rate is calibrated to a published series; the oxygen factor is still a trend.</p>
+    </div>
+    <figure class="fig plot"><img src="fig/sop5_coarsening.svg" alt=""><figcaption><b>Fig. 3.</b> Radius gained on a ramp to 1250 K in 500 mbar O₂ and N₂.</figcaption></figure>
+  </div>
+  <div class="step" style="margin-top:8pt">Step 6</div>
+  <h2>Calibrate to your own data</h2>
+  <div class="side" style="grid-template-columns:1fr 3.0in">
+    <div>
+      <ol class="proc">
+        <li>Set up the experiment as you ran it (step 1–3), then <b>Template CSV</b>: the columns that apply, sampled from the model.</li>
+        <li>Replace the values with your measurements: <code>t_s</code> is required; <code>T_K</code>, <code>lcRate</code>, <code>gcP</code> and <code>bsV</code> drive the model when present; <code>&lt;column&gt;_sd</code> gives σ per point.</li>
+        <li><b>Fit my series…</b>; name the <b>Parameters to fit</b> or leave it empty for the suggestions. Aim for at least 3 points per parameter.</li>
+        <li>Check the plot and reduced χ² (Fig. 4), then <b>Save my profile</b>. The kinetics run as <b>Mine</b>, and the profile saves with the session.</li>
+      </ol>
+      <p class="result"><b>Result.</b> A profile fitted to your instrument: here Eₐ 1.351 eV (true 1.35) and reduced χ² 0.86.</p>
+    </div>
+    <figure class="fig plot"><img src="fig/sop5_calfit.svg" alt=""><figcaption><b>Fig. 4.</b> A measured series (dots), the published profile (dashed) and the fit to your data.</figcaption></figure>
+  </div>
+  <div class="foot"><span>Seeing with Electrons · TEM-view</span><span>6</span></div>
+</section>
+
+<!-- 7 · step 7 + troubleshooting -->
+<section class="page">
+  <div class="run"><span>SOP-05 In situ experiments</span><span>Step 7 of 7, troubleshooting</span></div>
+  <div class="step">Step 7</div>
+  <h2>Export, and process on a cluster</h2>
+  <ol class="proc">
+    <li>Export the movie data, or the HPC bundle from <b>Data, dose and compute</b>, for drift correction and full-scale processing (SOP HPC-09, an in situ campaign).</li>
+    <li>Headless: <code>node tools/calibrate/calibrate.mjs --session my-session.json --series my-series.csv --out my-calibration.json</code> fits the same series without the browser.</li>
+  </ol>
+  <h2 style="margin-top:12pt">Troubleshooting</h2>
+  <table class="t">
+    <tr><th>Symptom</th><th>Likely cause</th><th>Action</th></tr>
+    <tr><td>“Window burst · beam blanked”</td><td>Pressure difference above the burst pressure</td><td><b>Load a new cell</b>; smaller window, thicker membrane, lower ΔP</td></tr>
+    <tr><td>No image, “on the frame”</td><td>Stage outside the window</td><td>Move back onto the window (the ring in the window map)</td></tr>
+    <tr><td>Image washed out in liquid</td><td>Liquid too thick at the centre</td><td>Work near the window edge; smaller spacer or ΔP; energy filter</td></tr>
+    <tr><td>Bubbles appear early</td><td>H₂ above saturation (dose rate, static cell)</td><td>Lower the dose rate; flow</td></tr>
+    <tr><td>Nothing nucleates</td><td>Below the threshold dose rate</td><td>Raise the dose rate above the threshold in the note</td></tr>
+    <tr><td>Contrast lost in gas</td><td>Pressure × path too large</td><td>Lower pressure, shorter gas gap, windowed cell</td></tr>
+    <tr><td>Biased gap fails</td><td>Field above breakdown, or no compliance</td><td>Set compliance; lower the voltage; <b>Load a new chip</b></td></tr>
+    <tr><td>Fit warns “too few points”</td><td>Fewer than 3 points per parameter</td><td>Fit fewer parameters, or add points</td></tr>
+  </table>
+  <div class="foot"><span>Seeing with Electrons · TEM-view</span><span>7</span></div>
+</section>
+
+<!-- 8 · record -->
+<section class="page">
+  <div class="run"><span>SOP-05 In situ experiments</span><span>Record</span></div>
+  <h2>Record</h2>
+  <table class="t">
+    <tr><th></th><th>Item</th><th>Value or criterion</th><th>Initials</th></tr>
+    <tr><td class="box"></td><td>Environment and holder</td><td>Liquid / gas / heating / biasing: __________</td><td class="line"></td></tr>
+    <tr><td class="box"></td><td>Cell margins</td><td>Window ____ × ____ µm; ΔP ____ bar; burst ____ bar</td><td class="line"></td></tr>
+    <tr><td class="box"></td><td>Dose rate and radiolysis</td><td>____ e⁻/Å²/s; threshold ____ ; H₂ saturated? Y / N</td><td class="line"></td></tr>
+    <tr><td class="box"></td><td>Design</td><td>Name ____________ ; question ____________</td><td class="line"></td></tr>
+    <tr><td class="box"></td><td>Timeline</td><td>Ramps ______________________________</td><td class="line"></td></tr>
+    <tr><td class="box"></td><td>Movie</td><td>Length ____ s; ____ fps; data ____ GB; dose ____ e⁻/Å²</td><td class="line"></td></tr>
+    <tr><td class="box"></td><td>Events</td><td>________________________________</td><td class="line"></td></tr>
+    <tr><td class="box"></td><td>Calibration in use</td><td>Published / none / mine: ____________</td><td class="line"></td></tr>
+    <tr><td class="box"></td><td>Own-data fit</td><td>Parameters ____ ; reduced χ² ____ ; points ____</td><td class="line"></td></tr>
+    <tr><td class="box"></td><td>Session and export saved</td><td>File ____________ ; bundle ID ____________</td><td class="line"></td></tr>
+  </table>
+  <h3 style="margin-top:14pt">Before the real session</h3>
+  <ul class="plain">
+    <li>Keep the plan (movie length, frame rate, detector, dose rate) and the timeline from the design, and check the estimator's data volume and dose before booking time.</li>
+    <li>Silver nucleation and gold coarsening are calibrated to published series. The other rates follow published trends: use them to plan, not to predict values.</li>
+    <li>After the run, fit your measured series (step 6); the next design then runs on your instrument's numbers.</li>
+  </ul>
+  <div class="foot"><span>Seeing with Electrons · TEM-view</span><span>8</span></div>
+</section>
+
+<!-- 9 · back cover -->
+<section class="page back">
+  <h2 style="font-size:32pt;margin-bottom:12pt">Open the in situ designer</h2>
+  <p class="lede" style="color:#c3d3e1">The link opens TEM-view in TEM. Turn on In situ experiment and choose a design under Start from.</p>
+  <div style="display:flex;gap:22pt;align-items:center;margin:22pt 0 28pt">
+    <div class="qr" id="qr"></div>
+    <div>
+      <p style="margin:0 0 4pt;color:#9fb4c6">TEM-view in TEM</p>
+      <p style="font-size:11pt;margin:0 0 10pt"><a id="link" href=""></a></p>
+      <p style="color:#9fb4c6;margin:0">A computer is best: movies are recorded in the browser.</p>
+    </div>
+  </div>
+  <div class="cols3">
+    <div><h3>Designs and calibration</h3><p>tools/insitu/EXPERIMENTS.md (E1–E9) and tools/calibrate/README.md in the repository.</p></div>
+    <div><h3>Related procedures</h3><p>SOP-01 TEM alignment. HPC-09 an in situ campaign on a cluster.</p></div>
+    <div><h3>Calibration data</h3><p>Silver nucleation and gold coarsening, each fitted to a published in situ series; the datasets are named in the exhibit.</p></div>
+  </div>
+  <div class="fine">
+    <div>SOP-05 In situ experiments, version 1.0, November 2026<br>Simulation only. Nothing here controls a real microscope or holder.<br>Results from the simulator are not measurements of a real specimen.</div>
+    <div class="logo">Seeing with Electrons<small>TEM-view · Advanced-EM</small></div>
+  </div>
+</section>
+
+<script>
+  const url = 'https://advanced-em.github.io/TEM-view/?mode=tem';
+  const a = document.getElementById('link'); a.href = url; a.textContent = url.replace('https://', '');
+  try { const q = qrcode(0, 'M'); q.addData(url); q.make(); document.getElementById('qr').innerHTML = q.createSvgTag({ cellSize: 4, margin: 0, scalable: true }); } catch { /* offline: link only */ }
+</script>
+</body>
+</html>

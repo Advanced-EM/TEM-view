@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SOP-07 3D Electron Diffraction · Seeing with Electrons</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Sans:wght@400;600&display=block" rel="stylesheet">
+<link rel="stylesheet" href="guide.css?v=8">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+</head>
+<body>
+
+<!-- 1 · cover -->
+<section class="page cover">
+  <div class="top">
+    <div class="brandline"><span>Standard operating procedure SOP-07</span><span>Diffraction</span></div>
+    <h1>3D electron<br><em>diffraction</em></h1>
+    <p class="sub" style="max-width:5.6in">Record a rotation series from a nanocrystal (3D ED, MicroED), plan it against the crystal's dose budget, judge completeness shell by shell, turn the reciprocal lattice in 3D to see what was missed, and export the frames for DIALS or XDS.</p>
+  </div>
+  <div class="shot"><img src="fig/sop7_frame.png" alt="" style="object-fit:contain;background:#000"></div>
+  <div class="bottom">
+    <div class="doc"><b>SOP-07</b>, version 1.0, November 2026<br>For students and new users of 3D ED, and for planning data collection<br>Simulation only: nothing here controls a real microscope</div>
+    <div class="logo">Seeing with Electrons<small>TEM-view · Advanced-EM</small></div>
+  </div>
+</section>
+
+<!-- 2 · scope -->
+<section class="page">
+  <div class="run"><span>SOP-07 3D electron diffraction</span><span>Scope and overview</span></div>
+  <h2>Scope and overview</h2>
+  <p class="lede">A single diffraction pattern samples only the reciprocal-lattice points on one slightly curved plane (the Ewald sphere). Rotating the crystal sweeps that plane through reciprocal space, so a series of frames over a tilt range Φ samples the 3D lattice. With Friedel symmetry only, a range Φ covers about Φ/180° of it; the rest is a <b>missing cone</b> around the rotation axis.</p>
+  <table class="t" style="margin-top:8pt">
+    <tr><th>Collection</th><th>How</th><th>Good for</th></tr>
+    <tr><td><b>Continuous (cRED)</b></td><td>The stage rotates at constant speed while the camera reads frames</td><td>Speed and low dose; each frame integrates a wedge</td></tr>
+    <tr><td><b>Stepwise stills</b></td><td>Tilt, stop, expose, repeat</td><td>Simple stages; gaps between the steps</td></tr>
+    <tr><td><b>Precession stills (PEDT)</b></td><td>Stills with a precessing beam (angle φ)</td><td>Fills the gaps; more kinematical intensities</td></tr>
+  </table>
+  <div class="cols">
+    <div>
+      <h3>Steps</h3>
+      <table class="t">
+        <tr><td class="n">1</td><td>Choose the crystal and its orientation</td></tr>
+        <tr><td class="n">2</td><td>Plan the dose</td></tr>
+        <tr><td class="n">3</td><td>Set the collection</td></tr>
+        <tr><td class="n">4</td><td>Collect; read completeness</td></tr>
+        <tr><td class="n">5</td><td>Turn reciprocal space in 3D</td></tr>
+        <tr><td class="n">6</td><td>Export to DIALS or XDS</td></tr>
+      </table>
+    </div>
+    <div>
+      <h3>Rules</h3>
+      <ul class="plain">
+        <li>Beam-sensitive crystals (MOFs, hybrid perovskites, proteins) tolerate a critical dose D<sub>c</sub>. Plan the whole series inside it.</li>
+        <li>Completeness and ⟨I/σ⟩ are judged per resolution shell, not only overall.</li>
+        <li>A structure without a lattice (a molecule, a protein particle, amorphous material) gives diffuse scattering only: there is nothing to index.</li>
+        <li>Intensities are kinematical with a mosaic spread; dynamical effects are not modelled.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="foot"><span>Seeing with Electrons · TEM-view</span><span>2</span></div>
+</section>
+
+<!-- 3 · steps 1 and 2 -->
+<section class="page">
+  <div class="run"><span>SOP-07 3D electron diffraction</span><span>Steps 1 and 2 of 6</span></div>
+  <div class="step">Step 1</div>
+  <h2>Choose the crystal and its orientation</h2>
+  <ol class="proc">
+    <li>In <b>The specimen</b>, choose a crystal (SrTiO₃, Au, Si, a perovskite, the MOF), or load your own structure as XYZ or CIF: its lattice is found from the atoms.</li>
+    <li>Set the starting orientation with the zone axis, or with <b>Align to zone</b> in the structure preview. Avoid starting on a low-index zone: the series then begins with many strong, dynamical reflections.</li>
+    <li>Select the <b>3D ED</b> technique. The note under the controls names the lattice, the number of reflections and the resolution at the detector edge.</li>
+  </ol>
+  <div class="step" style="margin-top:8pt">Step 2</div>
+  <h2>Plan the dose</h2>
+  <div class="side" style="grid-template-columns:1fr 3.1in">
+    <div>
+      <ol class="proc">
+        <li>Read the critical dose in the 3D ED note, for example D<sub>c</sub> ≈ 25 e⁻/Å² for MAPbBr₃ at room temperature. Cooling (liquid-nitrogen holder) raises it several-fold.</li>
+        <li>Set the <b>Dose rate</b>. The total dose is the dose rate × the series time; both are shown in the note.</li>
+        <li>Too little dose is counting-limited: weak high-angle reflections drown in noise. Too much destroys the crystal before the series ends (Fig. 1).</li>
+      </ol>
+      <p class="result"><b>Result.</b> A dose rate where the total dose is about the critical dose, or a little below. For a robust crystal, more dose never hurts.</p>
+    </div>
+    <figure class="fig plot"><img src="fig/sop7_dose.svg" alt=""><figcaption><b>Fig. 1.</b> Resolution reached (median I/σ ≥ 2) against the dose rate, ±40° in 80 s: counting-limited on the left, damage-limited on the right for the beam-sensitive crystal.</figcaption></figure>
+  </div>
+  <div class="foot"><span>Seeing with Electrons · TEM-view</span><span>3</span></div>
+</section>
+
+<!-- 4 · steps 3 and 4 -->
+<section class="page">
+  <div class="run"><span>SOP-07 3D electron diffraction</span><span>Steps 3 and 4 of 6</span></div>
+  <div class="step">Step 3</div>
+  <h2>Set the collection</h2>
+  <table class="t">
+    <tr><th>Setting</th><th>Start at</th><th>Notes</th></tr>
+    <tr><td><b>Collection</b></td><td>Continuous (cRED)</td><td>Stepwise stills leave gaps; precession stills fill them</td></tr>
+    <tr><td><b>Tilt range: start, end</b></td><td>−40° to +40°</td><td>Wider range: more complete; check the holder's limit</td></tr>
+    <tr><td><b>Rotation speed</b>, <b>Frame rate</b></td><td>1–2 °/s, 4–10 fps</td><td>The wedge per frame = speed ÷ frame rate; keep it below ~0.5°</td></tr>
+    <tr><td><b>Rotation axis (in the image)</b></td><td>as calibrated</td><td>Needed by the processing software; written into the frame headers</td></tr>
+    <tr><td><b>Camera length</b></td><td>so the detector edge is past the expected resolution</td><td>The edge resolution is in the note</td></tr>
+    <tr><td><b>Merge equivalent reflections</b></td><td>Friedel pairs</td><td>Cubic Laue class merges more for cubic crystals</td></tr>
+  </table>
+  <div class="step" style="margin-top:8pt">Step 4</div>
+  <h2>Collect; read completeness</h2>
+  <div class="side" style="grid-template-columns:1fr 3.0in">
+    <div>
+      <ol class="proc">
+        <li>Select <b>Collect the series</b>. The main view plays the frames as the crystal turns, over a dim stack of every frame so far (the cover shows the stack after the series: the empty band is the missing cone); the dose and real time run underneath.</li>
+        <li>The right panel shows completeness and median I/σ per shell (Fig. 2) and a reciprocal-space layer (hk0, h0l or 0kl; choose the layer index).</li>
+        <li>Note the overall completeness and the resolution where median I/σ falls below 2.</li>
+      </ol>
+      <p class="result"><b>Result.</b> SrTiO₃ along [125], ±45°: 180 frames, 52 % complete overall (Friedel), to 0.58 Å. A wider range, or merging by the cubic Laue class, fills the rest.</p>
+    </div>
+    <figure class="fig plot"><img src="fig/sop7_shells.svg" alt=""><figcaption><b>Fig. 2.</b> Completeness per resolution shell after the series.</figcaption></figure>
+  </div>
+  <div class="foot"><span>Seeing with Electrons · TEM-view</span><span>4</span></div>
+</section>
+
+<!-- 5 · steps 5 and 6 -->
+<section class="page">
+  <div class="run"><span>SOP-07 3D electron diffraction</span><span>Steps 5 and 6 of 6</span></div>
+  <div class="step">Step 5</div>
+  <h2>Turn reciprocal space in 3D</h2>
+  <div class="side" style="grid-template-columns:1fr 3.0in">
+    <div>
+      <ol class="proc">
+        <li>Under <b>Reciprocal space</b>, select <b>3D · drag to turn</b>. Every reflection appears in 3D: recorded ones filled and sized by their counts, unrecorded ones hollow. The dashed line is the rotation axis.</li>
+        <li>Drag on the right panel, or use <b>Turn about the vertical</b> and <b>Turn about the horizontal</b>.</li>
+        <li>Turn until you look along the rotation axis. The missing cone shows as an empty double wedge; its opening is 180° minus the tilt range.</li>
+        <li>Collect again with a wider range, or another start orientation, and compare.</li>
+      </ol>
+      <p class="result"><b>Result.</b> You can name the directions in reciprocal space the series did not reach, and choose the next crystal's orientation to cover them (merging several crystals is how incomplete data are completed in practice).</p>
+      <div class="note"><b>Note.</b> Tomography has the same view: <b>View → 3D · drag to turn</b> turns the reconstructed volume (brightest voxel or sum along the view).</div>
+    </div>
+    <figure class="fig"><img src="fig/sop7_recip3d.svg" alt=""><figcaption><b>Fig. 3.</b> Reciprocal space turned 30° and 20°: recorded reflections (blue), unrecorded (hollow), the rotation axis (dashed).</figcaption></figure>
+  </div>
+  <div class="step" style="margin-top:8pt">Step 6</div>
+  <h2>Export to DIALS or XDS</h2>
+  <ol class="proc">
+    <li><b>Export frames (.img)</b> writes SMV frames with headers (wavelength, camera length, oscillation start and range, rotation axis, exposure), ready for DIALS or XDS.</li>
+    <li>For a full-scale job, export the HPC bundle from <b>Data, dose and compute</b>; it records the parameters for the external package (SOP HPC-07).</li>
+  </ol>
+  <div class="foot"><span>Seeing with Electrons · TEM-view</span><span>5</span></div>
+</section>
+
+<!-- 6 · troubleshooting + record -->
+<section class="page">
+  <div class="run"><span>SOP-07 3D electron diffraction</span><span>Troubleshooting and record</span></div>
+  <h2>Troubleshooting</h2>
+  <table class="t">
+    <tr><th>Symptom</th><th>Likely cause</th><th>Action</th></tr>
+    <tr><td>“3D ED needs a crystal”</td><td>Continuum specimen selected</td><td>Choose a crystal, or load an XYZ or CIF</td></tr>
+    <tr><td>Diffuse frames, nothing to index</td><td>No lattice in the structure (molecule, protein particle, amorphous)</td><td>Expected; use a crystal for indexing</td></tr>
+    <tr><td>High-angle shells fade late in the series</td><td>Dose past D<sub>c</sub></td><td>Lower the dose rate, shorten the range, or cool the crystal</td></tr>
+    <tr><td>Every shell noisy</td><td>Counting-limited</td><td>Raise the dose rate within the budget</td></tr>
+    <tr><td>Completeness stuck near Φ/180°</td><td>Missing cone</td><td>Wider range; merge crystals in other orientations</td></tr>
+    <tr><td>Gaps between frames</td><td>Stepwise stills</td><td>Continuous rotation, or precession stills</td></tr>
+  </table>
+  <h2 style="margin-top:16pt">Record</h2>
+  <table class="t">
+    <tr><th></th><th>Item</th><th>Value or criterion</th><th>Initials</th></tr>
+    <tr><td class="box"></td><td>Crystal and start orientation</td><td>__________ ; zone [ ___ ]</td><td class="line"></td></tr>
+    <tr><td class="box"></td><td>Dose plan</td><td>D<sub>c</sub> ____ e⁻/Å²; total ____ e⁻/Å²</td><td class="line"></td></tr>
+    <tr><td class="box"></td><td>Collection</td><td>Method ____ ; range ____ ° to ____ °; wedge ____ °</td><td class="line"></td></tr>
+    <tr><td class="box"></td><td>Result</td><td>Completeness ____ %; d (median I/σ ≥ 2) ____ Å</td><td class="line"></td></tr>
+    <tr><td class="box"></td><td>Missing cone checked in 3D</td><td>Next orientation ____</td><td class="line"></td></tr>
+    <tr><td class="box"></td><td>Frames exported</td><td>Folder ____________</td><td class="line"></td></tr>
+  </table>
+  <div class="foot"><span>Seeing with Electrons · TEM-view</span><span>6</span></div>
+</section>
+
+<!-- 7 · back cover -->
+<section class="page back">
+  <h2 style="font-size:32pt;margin-bottom:12pt">Open 3D ED</h2>
+  <p class="lede" style="color:#c3d3e1">The link opens TEM-view on the SrTiO₃ crystal in the 3D ED technique. Select Collect the series.</p>
+  <div style="display:flex;gap:22pt;align-items:center;margin:22pt 0 28pt">
+    <div class="qr" id="qr"></div>
+    <div>
+      <p style="margin:0 0 4pt;color:#9fb4c6">3D ED on SrTiO₃</p>
+      <p style="font-size:11pt;margin:0 0 10pt"><a id="link" href=""></a></p>
+      <p style="color:#9fb4c6;margin:0">Works on a tablet; a computer is easier for turning reciprocal space.</p>
+    </div>
+  </div>
+  <div class="cols3">
+    <div><h3>Software</h3><p>DIALS (dials.github.io) and XDS read the exported SMV frames.</p></div>
+    <div><h3>Related procedures</h3><p>SOP-06 Single-particle cryo-EM. SOP-05 In situ. HPC-07 for external packages.</p></div>
+    <div><h3>Methods</h3><p>Continuous rotation, stepwise and precession-assisted (PEDT) collection.</p></div>
+  </div>
+  <div class="fine">
+    <div>SOP-07 3D electron diffraction, version 1.0, November 2026<br>Simulation only. Nothing here controls a real microscope.<br>Results from the simulator are not measurements of a real specimen.</div>
+    <div class="logo">Seeing with Electrons<small>TEM-view · Advanced-EM</small></div>
+  </div>
+</section>
+
+<script>
+  const url = 'https://advanced-em.github.io/TEM-view/?spec=sto&mode=ed3d';
+  const a = document.getElementById('link'); a.href = url; a.textContent = url.replace('https://', '');
+  try { const q = qrcode(0, 'M'); q.addData(url); q.make(); document.getElementById('qr').innerHTML = q.createSvgTag({ cellSize: 4, margin: 0, scalable: true }); } catch { /* offline: link only */ }
+</script>
+</body>
+</html>

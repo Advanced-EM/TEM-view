@@ -86,6 +86,7 @@ table.t td.line { width: 1in; }
 
 /* screenshots and code (SOP-03) */
 .fig.ui img { aspect-ratio: auto; object-fit: contain; border: 0.5pt solid var(--rule); }
+.fig.plot img { aspect-ratio: auto; object-fit: contain; background: #fff; border: 0.5pt solid var(--rule); }
 pre { font: 400 7.6pt/1.45 ui-monospace, 'SF Mono', Menlo, monospace; background: #f3f5f7; border-left: 2pt solid var(--rule); padding: 6pt 8pt; margin: 4pt 0 8pt; white-space: pre-wrap; word-break: break-word; }
 code { font: 400 8.2pt ui-monospace, 'SF Mono', Menlo, monospace; background: #f3f5f7; padding: 0 2pt; }
 pre code { background: none; padding: 0; font-size: inherit; }
